@@ -1,7 +1,7 @@
 name: Story
 description: A higher level Story mapping to a one or more Epics from TWG
 title: "[Story: ]"
-labels: ["STORY", "DRAFT"]
+label: ["STORY", "DRAFT"]
 projects: ["Margo Dev Team Project"]
 assignees:
   - nilanjan-samajdar
