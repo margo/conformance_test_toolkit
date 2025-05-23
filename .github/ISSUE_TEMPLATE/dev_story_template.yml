@@ -2,7 +2,7 @@ name: Story
 description: "A higher level Story mapping to a one or more Epics from TWG"
 title: "[Story: ]"
 assignees:
-  - nilanjan-samajdar
+- nilanjan-samajdar
 body:
   - type: markdown
     id: description
