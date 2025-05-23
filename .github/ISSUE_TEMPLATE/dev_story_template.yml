@@ -6,7 +6,6 @@ assignees:
   - "nilanjan-samajdar"
 body:
   - type: markdown
-    id: description
     attributes:
       value: |
          "Describe the use-case to be implemented from the user-persona point of view. 
@@ -40,10 +39,8 @@ body:
     validations:
       required: true
   - type: markdown
-    id: definitionofdone
     attributes:
-      label: "Definition of Done"
-      description: "What is needed to complete this Story ?"
+
       value: |
         "Describe the "Definition of Done", which might be a use-case demonstrated to the TWG
         * The required technical documentation should be updated
@@ -56,7 +53,7 @@ body:
     attributes:
       label: "story-points"
       description: "Estimated days per person needed to implement this Story"
-      placeholder: 0
+      placeholder: "0"
     validations:
       required: true
   - type: checkboxes
