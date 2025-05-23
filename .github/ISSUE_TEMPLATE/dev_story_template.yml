@@ -1,6 +1,7 @@
-name: Story
+name: "Story"
 description: "A higher level Story mapping to a one or more Epics from TWG"
 title: "[Story: ]"
+labels: ["DRAFT"]
 assignees:
 - nilanjan-samajdar
 body:
