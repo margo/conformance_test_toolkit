@@ -3,27 +3,27 @@ description: "A higher level Story mapping to a one or more Epics from TWG"
 title: "[Story: ]"
 labels: ["DRAFT"]
 assignees:
-- nilanjan-samajdar
+  - "nilanjan-samajdar"
 body:
   - type: markdown
     id: description
     attributes:
       value: |
-        Describe the use-case to be implemented from the user-persona point of view.
-        There can be multiple workflows which achieve the use-case
+         "Describe the use-case to be implemented from the user-persona point of view. 
+         There can be multiple workflows which achieve the use-case"
   - type: input
     id: raisedby
     attributes:
-      label: email-id
-      description: How can we get in touch with you if we need more info?
-      placeholder: ex.email@example.com
+      label: "email-id"
+      description: "How can we get in touch with you if we need more info?"
+      placeholder: "ex.email@example.com"
     validations:
       required: false
   - type: dropdown
     id: type
     attributes:
       label: type
-      description: Is this an Story for feature implementation / prototyping / learning ?
+      description: "Is this an Story for feature implementation / prototyping / learning ?"
       options:
         - Implementation
         - Prototyping
@@ -34,42 +34,42 @@ body:
   - type: textarea
     id: requirements
     attributes:
-      label: related product requirements 
-      description: Which PM requirements in Github will this Story fulfill ?
-      placeholder: Requirement-Id
+      label: "related product requirements" 
+      description: "Which PM requirements in Github will this Story fulfill ?"
+      placeholder: "Requirement-Id"
     validations:
       required: true
   - type: markdown
     id: definitionofdone
     attributes:
-      label: Definition of Done
-      description: What is needed to complete this Story ?
+      label: "Definition of Done"
+      description: "What is needed to complete this Story ?"
       value: |
-        Describe the "Definition of Done", which might be a use-case demonstrated to the TWG
+        "Describe the "Definition of Done", which might be a use-case demonstrated to the TWG
         * The required technical documentation should be updated
         * In case of any prototyping activity, the evaluation, design and outcomes need to be documented 
         * API updates need to be updated in swagger (or other) files
         * Test automation should be done to demonstrate the use-case
-        * Code and documentation should be pulled into the release branch and the pull-request approved by the TWG
+        * Code and documentation should be pulled into the release branch and the pull-request approved by the TWG"
   - type: input
     id: storypoints
     attributes:
-      label: story-points
-      description: Estimated days per person needed to implement this Story
+      label: "story-points"
+      description: "Estimated days per person needed to implement this Story"
       placeholder: 0
     validations:
       required: true
   - type: checkboxes
     id: impact
     attributes:
-      label: Impacted artifacts
-      description: What all artifacts are impacted ? 
+      label: "Impacted artifacts"
+      description: "What all artifacts are impacted ?" 
       options:
-        - label: API Documentation (Swagger)
+        - label: "API Documentation (Swagger)"
           required: false
-        - label: Design
+        - label: "Design"
           required: false
-        - label: Reference Implementation Code
+        - label: "Reference Implementation Code"
           required: false
-        - label: Test Automation
+        - label: "Test Automation"
           required: false
