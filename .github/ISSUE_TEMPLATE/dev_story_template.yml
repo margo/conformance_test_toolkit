@@ -13,15 +13,15 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: "Describe the use-case to be implemented, use the MARGO defined Personas to describe the use-case"
+      label: "Description"
       description: "Describe the use-case to be implemented, use the MARGO defined Personas to describe the use-case" 
-      placeholder: "Describe the use-case to be implemented, use the MARGO defined Personas to describe the use-case"
+      placeholder: "As a <MARGO-persona>, I want to <action> so that <outcome>"
     validations:
       required: true
   - type: input
     id: raisedby
     attributes:
-      label: "email-id"
+      label: "Raised by (email-id)"
       description: "How can we get in touch with you if we need more info?"
       placeholder: "ex.email@example.com"
     validations:
@@ -29,7 +29,7 @@ body:
   - type: dropdown
     id: type
     attributes:
-      label: type
+      label: Type of Story
       description: "Is this an Story for feature implementation / prototyping / learning ?"
       options:
         - Implementation
@@ -41,38 +41,37 @@ body:
   - type: textarea
     id: requirements
     attributes:
-      label: "related product requirements" 
+      label: "Related product requirements" 
       description: "Which PM requirements in Github will this Story fulfill ?"
-      placeholder: "Requirement-Id"
+      placeholder: "GitHub issue #1234"
     validations:
       required: true
   - type: markdown
     attributes:
-
       value: |
-        "Describe the "Definition of Done", which might be a use-case demonstrated to the TWG
+        Describe the "Definition of Done", which might be a use-case demonstrated to the TWG
         * The required technical documentation should be updated
         * In case of any prototyping activity, the evaluation, design and outcomes need to be documented 
         * API updates need to be updated in swagger (or other) files
         * Test automation should be done to demonstrate the use-case
-        * Code and documentation should be pulled into the release branch and the pull-request approved by the TWG"
+        * Code and documentation should be pulled into the release branch and the pull-request approved by the TWG
   - type: textarea
     id: done
     attributes:
       label: "Definition of Done"
       description: "Describe the Definition of Done, which might be a use-case demonstrated to the TWG"
       placeholder: |
-        "* The required technical documentation should be updated
+         * The required technical documentation should be updated
          * In case of any prototyping activity, the evaluation, design and outcomes need to be documented 
          * API updates need to be updated in swagger (or other) files
          * Test automation should be done to demonstrate the use-case
-         * Code and documentation should be pulled into the release branch and the pull-request approved by the TWG""
+         * Code and documentation should be pulled into the release branch and the pull-request approved by the TWG
     validations:
       required: true
   - type: input
     id: storypoints
     attributes:
-      label: "story-points"
+      label: "Estimated Story-points"
       description: "Estimated days per person needed to implement this Story"
       placeholder: "0"
     validations:
@@ -85,7 +84,7 @@ body:
       options:
         - label: "API Documentation (Swagger)"
           required: false
-        - label: "Design"
+        - label: "User Docmentation"
           required: false
         - label: "Reference Implementation Code"
           required: false
