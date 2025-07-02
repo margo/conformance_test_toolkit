@@ -1,4 +1,4 @@
-name: Testing Symphony pipeline
+name: Testing pipeline
 
 on:
   workflow_dispatch:
