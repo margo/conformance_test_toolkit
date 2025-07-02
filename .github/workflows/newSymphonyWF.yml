@@ -1,3 +1,5 @@
+name: test WF
+
 on:
   workflow_dispatch:
 
