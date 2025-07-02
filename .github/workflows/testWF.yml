@@ -1,4 +1,4 @@
-name: Deploy Symphony Application
+name: Testing Symphony pipeline
 
 on:
   # Manual trigger
