@@ -1,47 +1,47 @@
-name: test WF
+name: Install and Build Symphony API
 
 on:
   workflow_dispatch:
 
 jobs:
-  install_symphony:
-    name: Symphony Install via SSH
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Symphony installation
-        shell: bash
+      - name: Checkout this repo
+        uses: actions/checkout@v3
+
+      - name: Install Go
         run: |
-          # Install dependencies
           sudo apt update -y
-          sudo apt install -y golang-go git curl build-essential
+          sudo apt install golang-go -y
+          go version
 
-          # Install Rust (non-interactive)
+      - name: Install Rust
+        run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          source $HOME/.cargo/env
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-          # Clone Symphony repository
+      - name: Clone Symphony repository
+        run: |
           git clone https://github.com/eclipse-symphony/symphony.git
+          ls symphony
 
-          # Build native Rust library
-          cd symphony/api/pkg/apis/v1alpha1/providers/target/rust
+      - name: Build native Rust library
+        working-directory: symphony/api/pkg/apis/v1alpha1/providers/target/rust
+        run: |
+          source $HOME/.cargo/env
           cargo build --release
 
-          # Set library path so Go can link against Rust lib
-          export LD_LIBRARY_PATH=$(pwd)/target/release:$LD_LIBRARY_PATH
-
-          # Build symphony-api Go binary
-          cd ../../../..  # back to symphony/api
+      - name: Build symphony-api Go binary
+        working-directory: symphony/api
+        run: |
+          export LD_LIBRARY_PATH=$(pwd)/pkg/apis/v1alpha1/providers/target/rust/target/release
           go build -o symphony-api
 
-          # Create basic configuration if it doesn't exist
-          if [ ! -f symphony-api-no-k8s.json ]; then
-            cat > symphony-api-no-k8s.json <<EOF
-{
-  "port": "8082",
-  "logLevel": "Debug",
-  "providers": []
-}
-EOF
-          fi
-./symphony-api --config symphony-api-no-k8s.json
+      - name: Run symphony-api
+        working-directory: symphony/api
+        run: |
+          export SYMPHONY_API_URL="http://localhost:8082/v1alpha2/"
+          export USE_SERVICE_ACCOUNT_TOKENS="false"
+          ./symphony-api -c ./symphony-api-no-k8s.json -l Debug
