@@ -1,7 +1,6 @@
 name: Testing Symphony pipeline
 
 on:
-  # Manual trigger
   workflow_dispatch:
 
 jobs:
@@ -14,82 +13,50 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check and install Go and Rust
-        uses: actions/checkout@v4
-        with:
-          script: |
-            # Install Go if not present
-            if ! command -v go &> /dev/null; then
-              sudo apt update -y
-              sudo apt install golang-go -y
-            else
-              echo "Go already installed."
-            fi
-            
-            # Install Rust if not present
-            if ! command -v cargo &> /dev/null; then
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-              source $HOME/.cargo/env
-            else
-              echo "Rust already installed."
-            fi
+        run: |
+          if ! command -v go &> /dev/null; then
+            sudo apt update -y
+            sudo apt install golang-go -y
+          else
+            echo "Go already installed."
+          fi
+
+          if ! command -v cargo &> /dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            source $HOME/.cargo/env
+          else
+            echo "Rust already installed."
+          fi
 
       - name: Clone or update Symphony repository
-        uses: actions/checkout@v4
-        with:
-          script: |
-            if [ ! -d "$HOME/symphony/.git" ]; then
-              git clone https://github.com/margo/symphony.git
-            else
-              cd $HOME/symphony
-              git pull
-              echo "Symphony repo updated."
-            fi
+        run: |
+          if [ ! -d "$HOME/symphony/.git" ]; then
+            git clone https://github.com/margo/symphony.git $HOME/symphony
+          else
+            cd $HOME/symphony
+            git pull
+            echo "Symphony repo updated."
+          fi
 
       - name: Build native Rust library
-        uses: actions/checkout@v4
-        with:
-          script: |
-            source $HOME/.cargo/env
-            cd $HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust
-            
-            # Only build if the output does not exist or is older than the source
-            if [ ! -f target/release/libsymphony_provider.so ] || [ $(find src -type f -newer target/release/libsymphony_provider.so 2>/dev/null | wc -l) -gt 0 ]; then
-              cargo build --release
-              echo "Rust library built."
-            else
-              echo "Rust library is up-to-date, skipping build."
-            fi
+        run: |
+          source $HOME/.cargo/env
+          cd $HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust
+          if [ ! -f target/release/libsymphony_provider.so ] || [ $(find src -type f -newer target/release/libsymphony_provider.so 2>/dev/null | wc -l) -gt 0 ]; then
+            cargo build --release
+            echo "Rust library built."
+          else
+            echo "Rust library is up-to-date, skipping build."
+          fi
 
       - name: Build symphony-api Go binary
-        uses: actions/checkout@v4
-        with:
-          script: |
-            export LD_LIBRARY_PATH=$HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust/target/release
-            cd $HOME/symphony/api
-            go build -o symphony-api
+        run: |
+          export LD_LIBRARY_PATH=$HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust/target/release
+          cd $HOME/symphony/api
+          go build -o symphony-api
 
       - name: Run symphony-api in background
-        uses: actions/checkout@v4
-        with:
-          script: |
-            cd $HOME/symphony/api
-            
-            # Kill existing symphony-api process if running
-            pkill -f symphony-api || true
-            
-            # Start symphony-api in background
-            nohup env SYMPHONY_API_URL="http://localhost:8082/v1alpha2/" USE_SERVICE_ACCOUNT_TOKENS="false" ./symphony-api -c ./symphony-api-no-k8s.json -l Debug > symphony-api.log 2>&1 &
-            echo "symphony-api started in background."
-            
-            # Wait a moment and check if it's running
-            sleep 5
-            if pgrep -f symphony-api > /dev/null; then
-              echo "symphony-api is running successfully."
-            else
-              echo "Failed to start symphony-api."
-              exit 1
-            fi
-
-      
-
-    
+        run: |
+          cd $HOME/symphony/api
+          pkill -f symphony-api || true
+          nohup env SYMPHONY_API_URL="http://localhost:8082/v1alpha2/" USE_SERVICE_ACCOUNT_TOK
