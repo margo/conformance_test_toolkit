@@ -11,7 +11,7 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v3
 
-      - name: Install Symphony API
+      - name: Installing dependencies
         run: |
             # Install Go
               sudo apt update -y
@@ -35,9 +35,17 @@ jobs:
       - name: Build Rust library
         run: |
             # Build Rust library
-            source $HOME/.cargo/env
-            cd ~/symphony/api/pkg/apis/v1alpha1/providers/target/rust
+      - name: Build Rust Library (if exists)
+        shell: bash
+        run: |
+          set -e
+          RUST_PATH="$HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust"
+          if [ -d "$RUST_PATH" ]; then
+            cd "$RUST_PATH"
             cargo build --release
+          else
+            echo "Rust directory not found. Skipping Rust build."
+          fi
 
       - name: Build Go binary
         run: |
