@@ -8,54 +8,65 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v3
+      - name: Checkout workflow repo
+        uses: actions/checkout@v4
 
-      - name: Installing dependencies
+      - name: Set up Rust
         run: |
-            # Install Go
-              sudo apt update -y
-              sudo apt install golang-go -y
-  
-      - name: Install Rust
-        run: |
-            # Install Rust
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-              source $HOME/.cargo/env
-
+               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: Clone Symphony repo
-        run: |
-            # Clone or update Symphony repo
-            if [ ! -d "$HOME/symphony/.git" ]; then
-              git clone https://github.com/eclipse-symphony/symphony.git
-            else
-              cd $HOME/symphony && git pull
-            fi
-
-      - name: Build Rust library
-        run: |
-            # Build Rust library
-      - name: Build Rust Library (if exists)
         shell: bash
         run: |
           set -e
-          RUST_PATH="$HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust"
-          if [ -d "$RUST_PATH" ]; then
-            cd "$RUST_PATH"
+          git clone https://github.com/eclipse-symphony/symphony.git $HOME/symphony
+      - name: Inspect repo structure
+        shell: bash
+        run: |
+          echo "Directory structure of symphony repo:"
+          ls -laR $HOME/symphony
+      - name: Build Rust Library
+        shell: bash
+        run: |
+          set -e
+          RUST_DIR="$HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust"
+          if [ -d "$RUST_DIR" ]; then
+            echo "Rust directory found. Building Rust library..."
+            cd "$RUST_DIR"
             cargo build --release
           else
             echo "Rust directory not found. Skipping Rust build."
           fi
-
       - name: Build Go binary
+        shell: bash
         run: |
-            # Build Go binary
+          set -e
+          GO_DIR="$HOME/symphony/api"
+          if [ -d "$GO_DIR" ]; then
+            echo "Go directory found. Building Go binary..."
             export LD_LIBRARY_PATH=$HOME/symphony/api/pkg/apis/v1alpha1/providers/target/rust/target/release
-            cd ~/symphony/api
+            cd "$GO_DIR"
             go build -o symphony-api
-
+          else
+            echo "Go directory not found. Skipping Go build."
+          fi
       - name: Run symphony-api
+        shell: bash
         run: |
-            # Run symphony-api in background
-            nohup env SYMPHONY_API_URL="http://localhost:8082/v1alpha2/" USE_SERVICE_ACCOUNT_TOKENS="false" ./symphony-api -c ./symphony-api-no-k8s.json -l Debug > symphony-api.log 2>&1 &
+          set -e
+          API_BIN="$HOME/symphony/api/symphony-api"
+          if [ -f "$API_BIN" ]; then
+            echo "Starting symphony-api in background..."
+            cd $HOME/symphony/api
+            nohup env SYMPHONY_API_URL="http://localhost:8082/v1alpha2/" USE_SERVICE_ACCOUNT_TOKENS="false" \
+              ./symphony-api -c ./symphony-api-no-k8s.json -l Debug > symphony-api.log 2>&1 &
             echo "symphony-api started."
+          else
+            echo "symphony-api binary not found. Skipping startup."
+          fi
+          
+      - name: Upload symphony-api log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: symphony-api-log
+          path: $HOME/symphony/api/symphony-api.log
