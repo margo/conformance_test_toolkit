@@ -1,4 +1,4 @@
-name: Run Symphony Application
+name: Deploying Symphony
 
 on:
   workflow_dispatch:
@@ -11,9 +11,12 @@ jobs:
       - name: Checkout workflow repo
         uses: actions/checkout@v4
 
+      - name: Print home directory
+        run: echo "HOME is $HOME"
+
       - name: Set up Rust
         run: |
-               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: Clone Symphony repo
         shell: bash
         run: |
@@ -51,22 +54,29 @@ jobs:
           fi
       - name: Run symphony-api
         shell: bash
+        working-directory: /home/runner/symphony/api
         run: |
           set -e
-          API_BIN="$HOME/symphony/api/symphony-api"
+          API_BIN="./symphony-api"
           if [ -f "$API_BIN" ]; then
             echo "Starting symphony-api in background..."
-            cd $HOME/symphony/api
             nohup env SYMPHONY_API_URL="http://localhost:8082/v1alpha2/" USE_SERVICE_ACCOUNT_TOKENS="false" \
               ./symphony-api -c ./symphony-api-no-k8s.json -l Debug > symphony-api.log 2>&1 &
             echo "symphony-api started."
           else
             echo "symphony-api binary not found. Skipping startup."
           fi
-          
+      - name: Check if log file exists
+        shell: bash
+        working-directory: /home/runner/symphony/api
+        run: |
+          if [ -f "symphony-api.log" ]; then
+            echo "Log file created."
+          else
+            echo "Log file not found."
+          fi
       - name: Upload symphony-api log
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: symphony-api-log
-          path: $HOME/symphony/api/symphony-api.log
+          path: /home/runner/symphony/api/symphony-api.log
