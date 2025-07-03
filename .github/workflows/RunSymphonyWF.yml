@@ -9,9 +9,7 @@ jobs:
 
     steps:
       - name: Setup Environment and deploy Symphony API
-        uses: actions/checkout@v4
-        with:
-          script: |
+        run: |
             # Install Go
               sudo apt update -y
               sudo apt install golang-go -y
