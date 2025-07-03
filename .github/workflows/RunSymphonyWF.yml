@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - name: Setup Environment and deploy Symphony API
-        uses: appleboy/ssh-action@v0.1.8
+        uses: actions/checkout@v4
         with:
           script: |
             # Install Go
