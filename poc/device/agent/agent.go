@@ -42,26 +42,37 @@ func NewDeviceAgent(
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
 
-	// if database == nil {
-	// 	logger.Error("Database is nil, cannot create DeviceAgent")
-	// 	return nil, fmt.Errorf("database cannot be nil")
-	// }
-
 	if apiClientFactory == nil {
-		logger.Error("API client factory is nil, cannot create DeviceAgent")
-		return nil, fmt.Errorf("apiClientFactory cannot be nil")
+		logger.Error("API client object is nil, cannot create DeviceAgent")
+		return nil, fmt.Errorf("apiClient object cannot be nil")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	helmClient := &workloads.HelmClient{}
-	dockerComposeClient := &workloads.DockerComposeClient{}
 	var database database.AgentDatabase = database.NewAgentInMemoryDatabase(ctx, "./data")
-	var stateSeeker AppStateSeeker = NewAppStateSeeker(ctx, logger, config, database, apiClientFactory)
-	var workloadManager WorkloadManager = NewWorkloadManager(ctx, logger, database, helmClient, dockerComposeClient)
-	var capabilityManager CapabilitiesManager = NewManualCapabilitiesManager(ctx, logger, config, apiClientFactory)
-	var workloadWatcher WorkloadWatcher = NewWorkloadWatcher(ctx, logger, database, helmClient, dockerComposeClient)
-	var onboardingManager OnboardingManager = NewOAuthBasedOnboardingManager(ctx, logger, config, database, apiClientFactory)
+	var onboardingManager OnboardingManager = NewOAuthBasedOnboardingManager(logger, config, database, apiClientFactory)
+	var stateSeeker AppStateSeeker = NewAppStateSeeker(logger, config, database, apiClientFactory)
+	var capabilityManager CapabilitiesManager = NewManualCapabilitiesManager(logger, config, apiClientFactory)
+	var workloadManager WorkloadManager
+	var workloadWatcher WorkloadWatcher
+	if config.RuntimeInfo.Type == "kubernetes" {
+		helmClient, err := workloads.NewHelmClient(config.RuntimeInfo.Kubernetes.KubeconfigPath)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		workloadManager = NewWorkloadManager(logger, database, helmClient, nil)
+		workloadWatcher = NewWorkloadWatcher(logger, database, helmClient, nil)
+	}
+
+	if config.RuntimeInfo.Type == "docker" {
+		dockerComposeClient, err := workloads.NewDockerComposeClient()
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		workloadManager = NewWorkloadManager(logger, database, nil, dockerComposeClient)
+		workloadWatcher = NewWorkloadWatcher(logger, database, nil, dockerComposeClient)
+	}
 	logger.Debug("Created context for DeviceAgent lifecycle management")
 
 	agent := &DeviceAgent{
@@ -111,7 +122,7 @@ func (da *DeviceAgent) Start() error {
 
 	// Report Device Capabilities
 	da.log.Info("Reporting device capabilities...")
-	if err := da.capabilitiesManager.ReportCapabilities(); err != nil {
+	if err := da.capabilitiesManager.ReportCapabilities(context.Background()); err != nil {
 		da.log.Errorw("Failed to report device capabilities", "error", err)
 		// Note: Not returning error here as per original code comment
 	} else {
@@ -156,36 +167,44 @@ func (da *DeviceAgent) Stop() error {
 	var shutdownErrors []error
 
 	// Stop components in reverse order of startup
-	da.log.Debug("Stopping workload watcher...")
-	if err := da.workloadWatcher.Stop(); err != nil {
-		da.log.Errorw("Failed to stop workload watcher", "error", err)
-		shutdownErrors = append(shutdownErrors, fmt.Errorf("workload watcher: %w", err))
-	} else {
-		da.log.Info("Workload watcher stopped successfully")
+	if da.workloadWatcher != nil {
+		da.log.Debug("Stopping workload watcher...")
+		if err := da.workloadWatcher.Stop(); err != nil {
+			da.log.Errorw("Failed to stop workload watcher", "error", err)
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("workload watcher: %w", err))
+		} else {
+			da.log.Info("Workload watcher stopped successfully")
+		}
 	}
 
-	da.log.Debug("Stopping workload manager...")
-	if err := da.workloadManager.Stop(); err != nil {
-		da.log.Errorw("Failed to stop workload manager", "error", err)
-		shutdownErrors = append(shutdownErrors, fmt.Errorf("workload manager: %w", err))
-	} else {
-		da.log.Info("Workload manager stopped successfully")
+	if da.workloadManager != nil {
+		da.log.Debug("Stopping workload manager...")
+		if err := da.workloadManager.Stop(); err != nil {
+			da.log.Errorw("Failed to stop workload manager", "error", err)
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("workload manager: %w", err))
+		} else {
+			da.log.Info("Workload manager stopped successfully")
+		}
 	}
 
-	da.log.Debug("Stopping state syncer...")
-	if err := da.stateSyncer.Stop(); err != nil {
-		da.log.Errorw("Failed to stop state syncer", "error", err)
-		shutdownErrors = append(shutdownErrors, fmt.Errorf("state syncer: %w", err))
-	} else {
-		da.log.Info("State syncer stopped successfully")
+	if da.stateSyncer != nil {
+		da.log.Debug("Stopping state syncer...")
+		if err := da.stateSyncer.Stop(); err != nil {
+			da.log.Errorw("Failed to stop state syncer", "error", err)
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("state syncer: %w", err))
+		} else {
+			da.log.Info("State syncer stopped successfully")
+		}
 	}
 
 	da.log.Debug("Stopping database...")
-	if err := da.database.Stop(); err != nil {
-		da.log.Errorw("Failed to stop database", "error", err)
-		shutdownErrors = append(shutdownErrors, fmt.Errorf("database: %w", err))
-	} else {
-		da.log.Info("Database stopped successfully")
+	if da.database != nil {
+		if err := da.database.Stop(); err != nil {
+			da.log.Errorw("Failed to stop database", "error", err)
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("database: %w", err))
+		} else {
+			da.log.Info("Database stopped successfully")
+		}
 	}
 
 	// Cancel context

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/kr/pretty"
@@ -19,85 +20,126 @@ const (
 	appStateSeekingInterval = time.Second * 10
 )
 
-// AppStateSeeker interface
+// AppStateSeeker interface - all methods should accept context where needed
 type AppStateSeeker interface {
 	Start() error
 	Stop() error
-	ExplicityTriggerSync() error
+	ExplicitlyTriggerSync(ctx context.Context) error
 }
 
-// appStateSeeker struct
+// appStateSeeker struct - no context storage
 type appStateSeeker struct {
 	config           *Config
-	ctx              context.Context
-	operationStopper context.CancelFunc
 	database         database.AgentDatabase
 	log              *zap.SugaredLogger
 	apiClientFactory APIClientInterface
+
+	// Lifecycle management
+	started  bool
+	stopChan chan struct{}
+	wg       sync.WaitGroup
 }
 
 // NewAppStateSeeker creates a new StateSyncer
-func NewAppStateSeeker(ctx context.Context, log *zap.SugaredLogger, config *Config, database database.AgentDatabase, apiClientFactory APIClientInterface) AppStateSeeker {
-	localCtx, localCanceller := context.WithCancel(ctx)
+func NewAppStateSeeker(log *zap.SugaredLogger, config *Config, database database.AgentDatabase, apiClientFactory APIClientInterface) AppStateSeeker {
 	return &appStateSeeker{
 		config:           config,
-		ctx:              localCtx,
-		operationStopper: localCanceller,
 		database:         database,
 		log:              log,
 		apiClientFactory: apiClientFactory,
+		stopChan:         make(chan struct{}),
 	}
 }
 
 func (ss *appStateSeeker) Start() error {
-	go ss.syncAppStates(ss.ctx)
+	ss.log.Info("Starting AppStateSeeker")
+
+	if ss.started {
+		ss.log.Warn("AppStateSeeker already started")
+		return nil
+	}
+
+	ss.started = true
+
+	// Start sync loop in goroutine with proper lifecycle management
+	ss.wg.Add(1)
+	go func() {
+		defer ss.wg.Done()
+		ss.syncAppStatesLoop()
+	}()
+
+	ss.log.Info("AppStateSeeker started successfully")
 	return nil
 }
 
 func (ss *appStateSeeker) Stop() error {
-	ss.operationStopper()
+	ss.log.Info("Stopping AppStateSeeker")
+
+	if !ss.started {
+		ss.log.Warn("AppStateSeeker not started")
+		return nil
+	}
+
+	// Signal stop
+	close(ss.stopChan)
+
+	// Wait for goroutines to finish
+	ss.wg.Wait()
+
+	ss.started = false
+	ss.log.Info("AppStateSeeker stopped successfully")
 	return nil
 }
 
-func (ss *appStateSeeker) ExplicityTriggerSync() error {
-	return ss.syncAppStates(ss.ctx)
+// ExplicitlyTriggerSync manually triggers a sync operation
+func (ss *appStateSeeker) ExplicitlyTriggerSync(ctx context.Context) error {
+	ss.log.Info("Explicitly triggering state sync")
+
+	// Check if context is cancelled
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	return ss.performStateSync(ctx)
 }
 
-// syncAppStates runs a continuous loop that periodically syncs application states
-// with the orchestration service. It sends current states and receives desired states.
-func (ss *appStateSeeker) syncAppStates(ctx context.Context) error {
+// syncAppStatesLoop runs the continuous sync loop
+func (ss *appStateSeeker) syncAppStatesLoop() {
 	ss.log.Info("Starting app state sync loop")
 
 	// Create ticker for consistent intervals
 	ticker := time.NewTicker(appStateSeekingInterval)
-	defer ticker.Stop() // Important: always stop ticker to prevent goroutine leak
+	defer ticker.Stop()
 
 	// Perform initial sync before starting the loop
-	// This ensures we sync immediately on startup rather than waiting for first tick
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := ss.performStateSync(ctx); err != nil {
 		ss.log.Errorw("Initial state sync failed", "error", err)
-		// Don't return error here - continue with periodic sync
 	}
+	cancel()
 
 	for {
 		select {
 		case <-ticker.C:
-			// Perform periodic state synchronization
-			if err := ss.performStateSync(ctx); err != nil {
+			// Create context with timeout for each sync operation
+			syncCtx, syncCancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+			if err := ss.performStateSync(syncCtx); err != nil {
 				ss.log.Errorw("Failed to sync app states", "error", err)
-				// Continue loop even on error - don't break the sync cycle
-				// Individual sync failures shouldn't stop the entire sync process
 			}
 
-		case <-ctx.Done():
-			// Graceful shutdown requested
+			syncCancel()
+
+		case <-ss.stopChan:
 			ss.log.Info("App state sync loop shutting down")
-			return nil
+			return
 		}
 	}
 }
 
-// performStateSync handles the actual state synchronization logic.
+// performStateSync handles the actual state synchronization logic
 func (ss *appStateSeeker) performStateSync(ctx context.Context) error {
 	ss.log.Debug("Syncing app states...")
 
@@ -123,13 +165,12 @@ func (ss *appStateSeeker) performStateSync(ctx context.Context) error {
 	}
 
 	// Send current states and receive desired states
-	// Using the provided context to allow cancellation
 	resp, err := client.State(ctx, currentAppStates)
 	if err != nil {
 		ss.log.Errorw("Failed to send state sync request", "error", err)
 		return fmt.Errorf("failed to send state sync request: %w", err)
 	}
-	defer resp.Body.Close() // Always close response body to prevent resource leaks
+	defer resp.Body.Close()
 
 	// Parse the response from orchestration service
 	desiredStateResp, err := sbi.ParseStateResponse(resp)
@@ -149,7 +190,7 @@ func (ss *appStateSeeker) performStateSync(ctx context.Context) error {
 		if desiredStateResp.JSON200 != nil {
 			ss.log.Debugw("Processing desired states", "response", pretty.Sprint(desiredStateResp.JSON200))
 
-			if err := ss.mergeAppStates(*desiredStateResp.JSON200); err != nil {
+			if err := ss.mergeAppStates(ctx, *desiredStateResp.JSON200); err != nil {
 				ss.log.Errorw("Failed to merge app states", "error", err)
 				return fmt.Errorf("failed to merge app states: %w", err)
 			}
@@ -161,14 +202,13 @@ func (ss *appStateSeeker) performStateSync(ctx context.Context) error {
 		return nil
 
 	default:
-		// Handle error responses from orchestration service
 		ss.log.Errorw("Received error response from orchestrator",
 			"statusCode", desiredStateResp.StatusCode())
 		return ss.handleErrorResponse(desiredStateResp.Body, desiredStateResp.StatusCode(), "sync app state")
 	}
 }
 
-// handleErrorResponse processes error responses consistently.
+// handleErrorResponse processes error responses consistently
 func (ss *appStateSeeker) handleErrorResponse(errBody []byte, statusCode int, operation string) error {
 	body, err := io.ReadAll(bytes.NewReader(errBody))
 	if err != nil {
@@ -180,8 +220,8 @@ func (ss *appStateSeeker) handleErrorResponse(errBody []byte, statusCode int, op
 	return fmt.Errorf("%s request failed with status %d: %s", operation, statusCode, string(body))
 }
 
-// mergeAppStates merges the desired app states with the current app states.
-func (ss *appStateSeeker) mergeAppStates(states sbi.DesiredAppStates) error {
+// mergeAppStates merges the desired app states with the current app states
+func (ss *appStateSeeker) mergeAppStates(ctx context.Context, states sbi.DesiredAppStates) error {
 	ss.log.Debugw("Merging desired app states", "desiredStates", pretty.Sprint(states))
 
 	for _, state := range states {

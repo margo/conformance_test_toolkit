@@ -16,9 +16,19 @@ type Config struct {
 	Auth             AuthConfig  `mapstructure:"auth"`
 }
 
+type KubernetesConfig struct {
+	KubeconfigPath string `mapstructure:"kubeconfigPath"`
+}
+
+type DockerConfig struct {
+	Host string `mapstructure:"host"`
+	Port uint16 `mapstructure:"port"`
+}
+
 type RuntimeInfo struct {
-	Type string                 `mapstructure:"type"`
-	Info map[string]interface{} `mapstructure:"info"`
+	Type       string            `mapstructure:"type"`
+	Kubernetes *KubernetesConfig `mapstructure:"kubernetes,omitempty"`
+	Docker     *DockerConfig     `mapstructure:"docker,omitempty"`
 }
 
 type AuthConfig struct {

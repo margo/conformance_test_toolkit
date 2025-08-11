@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
 )
 
 type CapabilitiesManager interface {
-	GetCapabilities() (sbi.Properties, error)
-	ReportCapabilities() error
+	Start() error
+	Stop() error
+
+	GetCapabilities(ctx context.Context) (sbi.Properties, error)
+	ReportCapabilities(ctx context.Context) error
 }
 
 // manualCapabilitiesManager struct
@@ -20,34 +23,84 @@ type manualCapabilitiesManager struct {
 	config           *Config
 	log              *zap.SugaredLogger
 	apiClientFactory APIClientInterface
-	// device           *database.DeviceModel // Access to device ID
-	ctx context.Context
+
+	// Lifecycle management
+	started  bool
+	stopChan chan struct{}
 }
 
 // NewManualCapabilitiesManager creates a new CapabilitiesManager
-func NewManualCapabilitiesManager(ctx context.Context, log *zap.SugaredLogger, config *Config, apiClientFactory APIClientInterface) *manualCapabilitiesManager {
+func NewManualCapabilitiesManager(log *zap.SugaredLogger, config *Config, apiClientFactory APIClientInterface) CapabilitiesManager {
 	return &manualCapabilitiesManager{
 		config:           config,
 		log:              log,
 		apiClientFactory: apiClientFactory,
-		// device:           device,
-		ctx: ctx,
+		stopChan:         make(chan struct{}),
 	}
 }
 
-// GetCapabilities discovers and reports the device's capabilities to the WFM.
-func (cm *manualCapabilitiesManager) GetCapabilities() (sbi.Properties, error) {
-	cm.log.Info("Reporting device capabilities...")
-	deviceCapabilities, err := cm.discoverCapabilities()
-	return *deviceCapabilities, err
+// Start initializes the capabilities manager
+func (cm *manualCapabilitiesManager) Start() error {
+	cm.log.Info("Starting CapabilitiesManager")
+
+	// Validate configuration
+	if cm.config.CapabilitiesFile == "" {
+		return fmt.Errorf("capabilities file path is required")
+	}
+
+	// Check if capabilities file exists
+	if _, err := os.Stat(cm.config.CapabilitiesFile); os.IsNotExist(err) {
+		return fmt.Errorf("capabilities file does not exist: %s", cm.config.CapabilitiesFile)
+	}
+
+	cm.started = true
+	cm.log.Info("CapabilitiesManager started successfully")
+	return nil
 }
 
-// ReportCapabilities discovers and reports the device's capabilities to the WFM.
-func (cm *manualCapabilitiesManager) ReportCapabilities() error {
+// Stop gracefully shuts down the capabilities manager
+func (cm *manualCapabilitiesManager) Stop() error {
+	cm.log.Info("Stopping CapabilitiesManager")
+
+	if !cm.started {
+		cm.log.Warn("CapabilitiesManager not started, hence no need for stop operation")
+		return nil
+	}
+
+	close(cm.stopChan)
+	cm.started = false
+	cm.log.Info("CapabilitiesManager stopped successfully")
+	return nil
+}
+
+// GetCapabilities discovers and returns the device's capabilities
+func (cm *manualCapabilitiesManager) GetCapabilities(ctx context.Context) (sbi.Properties, error) {
+	cm.log.Info("Getting device capabilities...")
+
+	// Check if manager is started
+	if !cm.started {
+		return sbi.Properties{}, fmt.Errorf("capabilities manager not started")
+	}
+
+	deviceCapabilities, err := cm.discoverCapabilities(ctx)
+	if err != nil {
+		return sbi.Properties{}, err
+	}
+
+	return *deviceCapabilities, nil
+}
+
+// ReportCapabilities discovers and reports the device's capabilities to the WFM
+func (cm *manualCapabilitiesManager) ReportCapabilities(ctx context.Context) error {
 	cm.log.Info("Reporting device capabilities...")
 
+	// Check if manager is started
+	if !cm.started {
+		return fmt.Errorf("capabilities manager not started")
+	}
+
 	// 1. Discover Device Capabilities
-	deviceCapabilities, err := cm.discoverCapabilities()
+	deviceCapabilities, err := cm.discoverCapabilities(ctx)
 	if err != nil {
 		cm.log.Errorw("Failed to discover device capabilities", "error", err)
 		return fmt.Errorf("failed to discover device capabilities: %w", err)
@@ -61,14 +114,13 @@ func (cm *manualCapabilitiesManager) ReportCapabilities() error {
 	}
 
 	// 3. Send Capabilities to WFM
-	// Construct the request body
 	requestBody := sbi.DeviceCapabilities{
-		ApiVersion: "device.margo/v1", // Replace with your actual API version
+		ApiVersion: "device.margo/v1",
 		Kind:       "DeviceCapabilities",
 		Properties: *deviceCapabilities,
 	}
 
-	resp, err := client.PostDeviceDeviceIdCapabilities(cm.ctx, deviceCapabilities.Id, requestBody)
+	resp, err := client.PostDeviceDeviceIdCapabilities(ctx, deviceCapabilities.Id, requestBody)
 	if err != nil {
 		cm.log.Errorw("Failed to send device capabilities", "error", err)
 		return fmt.Errorf("failed to send device capabilities: %w", err)
@@ -85,12 +137,12 @@ func (cm *manualCapabilitiesManager) ReportCapabilities() error {
 	return nil
 }
 
-// discoverCapabilities reads the device capabilities from the specified file.
-func (cm *manualCapabilitiesManager) discoverCapabilities() (*sbi.Properties, error) {
+// discoverCapabilities reads the device capabilities from the specified file
+func (cm *manualCapabilitiesManager) discoverCapabilities(ctx context.Context) (*sbi.Properties, error) {
 	cm.log.Infow("Reading device capabilities from file", "file", cm.config.CapabilitiesFile)
 
 	// 1. Read the file
-	data, err := ioutil.ReadFile(cm.config.CapabilitiesFile)
+	data, err := os.ReadFile(cm.config.CapabilitiesFile)
 	if err != nil {
 		cm.log.Errorw("Failed to read capabilities file", "file", cm.config.CapabilitiesFile, "error", err)
 		return nil, fmt.Errorf("failed to read capabilities file: %w", err)

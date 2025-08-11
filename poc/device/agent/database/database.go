@@ -32,6 +32,7 @@ type AgentDatabase interface {
 	UpsertDeviceCapabilities(capabilities *sbi.DeviceCapabilities) error
 	UpsertDeviceAuth(auth *sbi.OnboardingResponse) error
 	Subscribe(subscriber WorkloadDatabaseSubscriber) error
+	Unsubscribe(subscriberId string) error
 }
 
 // DeviceStatus represents device operational status.
@@ -496,6 +497,18 @@ func (db *AgentInMemoryDatabase) Subscribe(subscriber WorkloadDatabaseSubscriber
 	// TODO: Consider checking for duplicate subscribers based on ID
 	db.workloadChangeSubscribers = append(db.workloadChangeSubscribers, subscriber)
 	return nil
+}
+
+func (db *AgentInMemoryDatabase) Unsubscribe(subscriberId string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for i, subscriber := range db.workloadChangeSubscribers {
+		if subscriber.GetSubscriberID() == subscriberId {
+			db.workloadChangeSubscribers = append(db.workloadChangeSubscribers[:i], db.workloadChangeSubscribers[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("subscriber with id %s not found", subscriberId)
 }
 
 // publishEvent sends an event to the event channel for distribution to subscribers.
