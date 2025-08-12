@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kr/pretty"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
 )
@@ -120,6 +121,8 @@ func (cm *manualCapabilitiesManager) ReportCapabilities(ctx context.Context) err
 		Properties: *deviceCapabilities,
 	}
 
+	cm.log.Info("Reporting the following capabilities", "cap", pretty.Sprint(requestBody))
+
 	resp, err := client.PostDeviceDeviceIdCapabilities(ctx, deviceCapabilities.Id, requestBody)
 	if err != nil {
 		cm.log.Errorw("Failed to send device capabilities", "error", err)
@@ -148,14 +151,14 @@ func (cm *manualCapabilitiesManager) discoverCapabilities(ctx context.Context) (
 		return nil, fmt.Errorf("failed to read capabilities file: %w", err)
 	}
 
+	capabilities := sbi.DeviceCapabilities{}
 	// 2. Unmarshal the JSON data
-	var properties sbi.Properties
-	err = json.Unmarshal(data, &properties)
+	err = json.Unmarshal(data, &capabilities)
 	if err != nil {
 		cm.log.Errorw("Failed to unmarshal capabilities data", "file", cm.config.CapabilitiesFile, "error", err)
 		return nil, fmt.Errorf("failed to unmarshal capabilities data: %w", err)
 	}
-
+	var properties sbi.Properties = capabilities.Properties
 	cm.log.Debugw("Successfully read capabilities from file", "capabilities", properties)
 	return &properties, nil
 }

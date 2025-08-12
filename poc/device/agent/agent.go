@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
@@ -54,25 +55,34 @@ func NewDeviceAgent(
 	var capabilityManager CapabilitiesManager = NewManualCapabilitiesManager(logger, config, apiClientFactory)
 	var workloadManager WorkloadManager
 	var workloadWatcher WorkloadWatcher
-	if config.RuntimeInfo.Type == "kubernetes" {
-		helmClient, err := workloads.NewHelmClient(config.RuntimeInfo.Kubernetes.KubeconfigPath)
-		if err != nil {
-			cancel()
-			return nil, err
+	switch strings.ToLower(config.RuntimeInfo.Type) {
+	case "kubernetes":
+		{
+			helmClient, err := workloads.NewHelmClient(config.RuntimeInfo.Kubernetes.KubeconfigPath)
+			if err != nil {
+				cancel()
+				return nil, err
+			}
+			workloadManager = NewWorkloadManager(logger, database, helmClient, nil)
+			workloadWatcher = NewWorkloadWatcher(logger, database, helmClient, nil)
 		}
-		workloadManager = NewWorkloadManager(logger, database, helmClient, nil)
-		workloadWatcher = NewWorkloadWatcher(logger, database, helmClient, nil)
+
+	case "docker":
+		{
+			dockerComposeClient, err := workloads.NewDockerComposeClient()
+			if err != nil {
+				cancel()
+				return nil, err
+			}
+			workloadManager = NewWorkloadManager(logger, database, nil, dockerComposeClient)
+			workloadWatcher = NewWorkloadWatcher(logger, database, nil, dockerComposeClient)
+		}
+
+	default:
+		cancel()
+		return nil, fmt.Errorf("unknown runtime type: %s", config.RuntimeInfo.Type)
 	}
 
-	if config.RuntimeInfo.Type == "docker" {
-		dockerComposeClient, err := workloads.NewDockerComposeClient()
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		workloadManager = NewWorkloadManager(logger, database, nil, dockerComposeClient)
-		workloadWatcher = NewWorkloadWatcher(logger, database, nil, dockerComposeClient)
-	}
 	logger.Debug("Created context for DeviceAgent lifecycle management")
 
 	agent := &DeviceAgent{
@@ -119,6 +129,13 @@ func (da *DeviceAgent) Start() error {
 		da.log.Errorw("failed to onboard the device", "error", err)
 		return fmt.Errorf("failed to onboard the device: %w", err)
 	}
+
+	da.log.Debug("Starting device capabilities manager...")
+	if err := da.capabilitiesManager.Start(); err != nil {
+		da.log.Errorw("Failed to start device capabilities manager", "error", err)
+		return fmt.Errorf("failed to start device capabilities manager: %w", err)
+	}
+	da.log.Info("Device capabilities manager started successfully")
 
 	// Report Device Capabilities
 	da.log.Info("Reporting device capabilities...")

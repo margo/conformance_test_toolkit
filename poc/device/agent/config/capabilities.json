@@ -8,12 +8,12 @@
         "serialNumber": "PF45343-AA",
         "roles": ["standalone cluster", "cluster lead"],
         "resources": {
-            "memory": "64.0 GB",
-            "storage": "2000 GB",
+            "memory": 64,
+            "storage": 2000,
             "cpus": [{
                 "architecture": "Intel x64",
                 "cores": 24,
-                "frequency": "6.2 GHz"
+                "frequency": 6.2
             }]
         },
         "peripherals": [{

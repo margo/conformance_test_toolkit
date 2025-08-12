@@ -129,7 +129,7 @@ type Interface struct {
 	Name string `json:"name"`
 
 	// Properties Properties of the interface to inform the WOS with additional information.
-	Properties map[string]string `json:"properties"`
+	Properties map[string]interface{} `json:"properties"`
 
 	// Type Type of the interface. i.e. Ethernet NIC
 	Type string `json:"type"`
