@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kr/pretty"
@@ -55,14 +56,17 @@ type workloadManager struct {
 
 // HelmDeployer implements WorkloadDeployer for Helm deployments
 type HelmDeployer struct {
-	client *workloads.HelmClient
-	log    *zap.SugaredLogger
+	client   *workloads.HelmClient
+	database database.AgentDatabase // Add this field
+	log      *zap.SugaredLogger
 }
 
-func NewHelmDeployer(client *workloads.HelmClient, log *zap.SugaredLogger) *HelmDeployer {
+// Update constructors to pass database reference
+func NewHelmDeployer(client *workloads.HelmClient, database database.AgentDatabase, log *zap.SugaredLogger) *HelmDeployer {
 	return &HelmDeployer{
-		client: client,
-		log:    log,
+		client:   client,
+		database: database, // Add this field
+		log:      log,
 	}
 }
 
@@ -108,7 +112,7 @@ func (h *HelmDeployer) Deploy(ctx context.Context, deployment sbi.AppDeployment)
 
 	// Install chart
 	namespace := "" // Default namespace
-	releaseName := componentAsHelm.Name
+	releaseName := generateReleaseName(*deployment.Metadata.Id, componentAsHelm.Name)
 	revision := *componentAsHelm.Properties.Revision
 	wait := componentAsHelm.Properties.Wait != nil && *componentAsHelm.Properties.Wait
 	overrides := componentValues[componentAsHelm.Name]
@@ -138,7 +142,7 @@ func (h *HelmDeployer) Update(ctx context.Context, deployment sbi.AppDeployment)
 	}
 
 	// Update chart
-	releaseName := componentAsHelm.Name
+	releaseName := generateReleaseName(*deployment.Metadata.Id, componentAsHelm.Name)
 	repository := componentAsHelm.Properties.Repository
 	namespace := ""
 	// revision := *componentAsHelm.Properties.Revision
@@ -156,8 +160,25 @@ func (h *HelmDeployer) Update(ctx context.Context, deployment sbi.AppDeployment)
 func (h *HelmDeployer) Remove(ctx context.Context, appID string) error {
 	h.log.Infow("Removing Helm workload", "appId", appID)
 
-	// Use appID as release name (this might need adjustment based on your naming strategy)
-	releaseName := appID
+	// FIX: Need to get component name to generate correct release name
+	// Get app from database to determine component name
+	app, err := h.database.GetWorkload(appID) // You'll need to pass database to HelmDeployer
+	if err != nil {
+		return fmt.Errorf("failed to get app from database: %w", err)
+	}
+
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(app)
+	if err != nil {
+		return fmt.Errorf("failed to convert AppState to AppDeployment: %w", err)
+	}
+
+	component := appDeployment.Spec.DeploymentProfile.Components[0]
+	componentAsHelm, err := component.AsHelmApplicationDeploymentProfileComponent()
+	if err != nil {
+		return fmt.Errorf("invalid helm deployment profile: %w", err)
+	}
+
+	releaseName := generateReleaseName(appID, componentAsHelm.Name)
 	namespace := ""
 
 	if err := h.client.UninstallChart(ctx, releaseName, namespace); err != nil {
@@ -212,7 +233,7 @@ func NewWorkloadManager(log *zap.SugaredLogger, database database.AgentDatabase,
 
 	// Add available deployers
 	if helmClient != nil {
-		deployers["helm.v3"] = NewHelmDeployer(helmClient, log)
+		deployers["helm.v3"] = NewHelmDeployer(helmClient, database, log)
 	}
 	if dockerComposeClient != nil {
 		deployers["compose"] = NewDockerComposeDeployer(dockerComposeClient, log)
@@ -422,4 +443,26 @@ func (wm *workloadManager) getAvailableDeployerTypes() []string {
 		types = append(types, deployerType)
 	}
 	return types
+}
+
+func generateReleaseName(appID, componentName string) string {
+	// Use a consistent naming strategy: appID-componentName (truncated if needed)
+	releaseName := fmt.Sprintf("%s-%s", appID, componentName)
+
+	// Helm release names must be <= 53 characters and DNS-1123 compliant
+	if len(releaseName) > 53 {
+		// Use first 8 chars of appID + component name
+		shortAppID := appID[:8]
+		maxComponentLen := 53 - len(shortAppID) - 1
+		if len(componentName) > maxComponentLen {
+			componentName = componentName[:maxComponentLen]
+		}
+		releaseName = fmt.Sprintf("%s-%s", shortAppID, componentName)
+	}
+
+	// Ensure DNS-1123 compliance
+	releaseName = strings.ToLower(releaseName)
+	releaseName = strings.ReplaceAll(releaseName, "_", "-")
+
+	return releaseName
 }

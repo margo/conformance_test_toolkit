@@ -61,14 +61,16 @@ type workloadWatcher struct {
 
 // HelmMonitor implements WorkloadMonitor for Helm deployments
 type HelmMonitor struct {
-	client *workloads.HelmClient
-	log    *zap.SugaredLogger
+	client   *workloads.HelmClient
+	database database.AgentDatabase // Add this field
+	log      *zap.SugaredLogger
 }
 
-func NewHelmMonitor(client *workloads.HelmClient, log *zap.SugaredLogger) *HelmMonitor {
+func NewHelmMonitor(client *workloads.HelmClient, database database.AgentDatabase, log *zap.SugaredLogger) *HelmMonitor {
 	return &HelmMonitor{
-		client: client,
-		log:    log,
+		client:   client,
+		database: database, // Add this field
+		log:      log,
 	}
 }
 
@@ -91,18 +93,52 @@ func (h *HelmMonitor) StopWatching(ctx context.Context, appID string) error {
 	return nil
 }
 
+// In HelmMonitor.GetStatus() - FIXED
 func (h *HelmMonitor) GetStatus(ctx context.Context, appID string) (WorkloadStatus, error) {
 	h.log.Debugw("Getting Helm workload status", "appId", appID)
 
-	// Check context cancellation
 	select {
 	case <-ctx.Done():
 		return WorkloadStatus{}, ctx.Err()
 	default:
 	}
 
-	// Use appID as release name (adjust based on your naming strategy)
-	releaseName := appID
+	// FIX: Get the actual release name used during deployment
+	app, err := h.database.GetWorkload(appID) // You'll need to pass database to HelmMonitor
+	if err != nil {
+		return WorkloadStatus{
+			WorkloadId: appID,
+			Status:     "unknown",
+			Health:     "unknown",
+			Message:    fmt.Sprintf("Failed to get app from database: %v", err),
+			Timestamp:  time.Now(),
+		}, nil
+	}
+
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(app)
+	if err != nil {
+		return WorkloadStatus{
+			WorkloadId: appID,
+			Status:     "unknown",
+			Health:     "unknown",
+			Message:    fmt.Sprintf("Failed to convert app: %v", err),
+			Timestamp:  time.Now(),
+		}, nil
+	}
+
+	component := appDeployment.Spec.DeploymentProfile.Components[0]
+	componentAsHelm, err := component.AsHelmApplicationDeploymentProfileComponent()
+	if err != nil {
+		return WorkloadStatus{
+			WorkloadId: appID,
+			Status:     "unknown",
+			Health:     "unknown",
+			Message:    fmt.Sprintf("Invalid helm component: %v", err),
+			Timestamp:  time.Now(),
+		}, nil
+	}
+
+	releaseName := generateReleaseName(appID, componentAsHelm.Name)
 	namespace := ""
 
 	// Get release status from Helm
@@ -114,7 +150,7 @@ func (h *HelmMonitor) GetStatus(ctx context.Context, appID string) (WorkloadStat
 			Health:     "unknown",
 			Message:    fmt.Sprintf("Failed to get status: %v", err),
 			Timestamp:  time.Now(),
-		}, nil // Don't return error, return unknown status instead
+		}, nil
 	}
 
 	return WorkloadStatus{
@@ -212,7 +248,7 @@ func NewWorkloadWatcher(log *zap.SugaredLogger, database database.AgentDatabase,
 
 	// Add available monitors
 	if helmClient != nil {
-		monitors["helm.v3"] = NewHelmMonitor(helmClient, log)
+		monitors["helm.v3"] = NewHelmMonitor(helmClient, database, log)
 	}
 	if dockerComposeClient != nil {
 		monitors["compose"] = NewDockerComposeMonitor(dockerComposeClient, log)
@@ -278,7 +314,7 @@ func (ww *workloadWatcher) GetSubscriberID() string {
 
 // OnDatabaseEvent handles database events and starts/stops monitoring accordingly
 func (ww *workloadWatcher) OnDatabaseEvent(event database.WorkloadDatabaseEvent) error {
-	ww.log.Debugw("Received database event",
+	ww.log.Debugw("WorkloadWatcher-Received database event",
 		"type", event.Type,
 		"appId", event.AppID,
 		"timestamp", event.Timestamp)
@@ -322,9 +358,14 @@ func (ww *workloadWatcher) StartWatching(ctx context.Context, app sbi.AppState) 
 
 	// Determine monitor type from app deployment profile
 	// TODO: Extract deployment profile type from app.AppDeployment
-	deploymentType := "helm.v3" // Default for now, should be extracted from app
+	deployment, err := pkg.ConvertAppStateToAppDeployment(app) // "helm.v3" // Default for now, should be extracted from app
+	if err != nil {
+		return err
+	}
 
-	monitor, exists := ww.monitors[deploymentType]
+	deploymentType := deployment.Spec.DeploymentProfile.Type
+
+	monitor, exists := ww.monitors[string(deploymentType)]
 	if !exists {
 		return fmt.Errorf("unsupported deployment profile type: %s (available: %v)",
 			deploymentType, ww.getAvailableMonitorTypes())
