@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kr/pretty"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
 )
@@ -121,7 +120,7 @@ func (cm *manualCapabilitiesManager) ReportCapabilities(ctx context.Context) err
 		Properties: *deviceCapabilities,
 	}
 
-	cm.log.Info("Reporting the following capabilities", "cap", pretty.Sprint(requestBody))
+	cm.log.Debug("Reporting the following capabilities", "cap", requestBody)
 
 	resp, err := client.PostDeviceDeviceIdCapabilities(ctx, deviceCapabilities.Id, requestBody)
 	if err != nil {

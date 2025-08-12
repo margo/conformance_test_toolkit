@@ -32,7 +32,8 @@ func NewDeviceAgent(
 	logger *zap.SugaredLogger,
 	apiClientFactory APIClientInterface,
 ) (*DeviceAgent, error) {
-	logger.Debug("Creating new DeviceAgent instance")
+	logger.Debugw("Creating new DeviceAgent instance",
+		"runtimeType", config.RuntimeInfo.Type)
 
 	if config == nil {
 		logger.Error("Configuration is nil, cannot create DeviceAgent")
@@ -44,8 +45,8 @@ func NewDeviceAgent(
 	}
 
 	if apiClientFactory == nil {
-		logger.Error("API client object is nil, cannot create DeviceAgent")
-		return nil, fmt.Errorf("apiClient object cannot be nil")
+		logger.Error("API client factory is nil, cannot create DeviceAgent")
+		return nil, fmt.Errorf("apiClient factory cannot be nil")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -55,11 +56,17 @@ func NewDeviceAgent(
 	var capabilityManager CapabilitiesManager = NewManualCapabilitiesManager(logger, config, apiClientFactory)
 	var workloadManager WorkloadManager
 	var workloadWatcher WorkloadWatcher
+
 	switch strings.ToLower(config.RuntimeInfo.Type) {
 	case "kubernetes":
 		{
+			logger.Debugw("Initializing Kubernetes runtime components",
+				"kubeconfigPath", config.RuntimeInfo.Kubernetes.KubeconfigPath)
 			helmClient, err := workloads.NewHelmClient(config.RuntimeInfo.Kubernetes.KubeconfigPath)
 			if err != nil {
+				logger.Errorw("Failed to create Helm client",
+					"error", err,
+					"kubeconfigPath", config.RuntimeInfo.Kubernetes.KubeconfigPath)
 				cancel()
 				return nil, err
 			}
@@ -69,8 +76,10 @@ func NewDeviceAgent(
 
 	case "docker":
 		{
+			logger.Debugw("Initializing Docker Compose runtime components")
 			dockerComposeClient, err := workloads.NewDockerComposeClient()
 			if err != nil {
+				logger.Errorw("Failed to create Docker Compose client", "error", err)
 				cancel()
 				return nil, err
 			}
@@ -79,11 +88,16 @@ func NewDeviceAgent(
 		}
 
 	default:
+		logger.Errorw("Unsupported runtime type specified",
+			"runtimeType", config.RuntimeInfo.Type,
+			"supportedTypes", []string{"kubernetes", "docker"})
 		cancel()
 		return nil, fmt.Errorf("unknown runtime type: %s", config.RuntimeInfo.Type)
 	}
 
-	logger.Debug("Created context for DeviceAgent lifecycle management")
+	logger.Debugw("DeviceAgent context and components initialized",
+		"runtimeType", config.RuntimeInfo.Type,
+		"dataPath", "./data")
 
 	agent := &DeviceAgent{
 		config:              config,
@@ -100,78 +114,90 @@ func NewDeviceAgent(
 	}
 
 	logger.Infow("DeviceAgent instance created successfully",
-		"isOAuthBasedOnboardingManagerEnabled", onboardingManager != nil,
-		"isStateSeekerEnabled", stateSeeker != nil,
-		"isWorkloadManagerEnabled", workloadManager != nil,
-		"isWorkloadWatcherEnabled", workloadWatcher != nil,
-		"isCapabilitiesManagerEnabled", capabilityManager != nil)
+		"runtimeType", config.RuntimeInfo.Type,
+		"components", map[string]bool{
+			"onboardingManager":   onboardingManager != nil,
+			"stateSeeker":         stateSeeker != nil,
+			"workloadManager":     workloadManager != nil,
+			"workloadWatcher":     workloadWatcher != nil,
+			"capabilitiesManager": capabilityManager != nil,
+		})
 
 	return agent, nil
 }
 
 // Start initializes and starts the device agent.
 func (da *DeviceAgent) Start() error {
-	da.log.Info("Starting device agent...")
+	startTime := time.Now()
+	da.log.Infow("Starting device agent...", "startTime", startTime)
 
 	// Start database first
-	da.log.Debug("Starting database...")
+	da.log.Debugw("Starting database component", "dataPath", "./data")
 	if err := da.database.Start(); err != nil {
 		da.log.Errorw("Failed to start database", "error", err)
 		return fmt.Errorf("failed to start database: %w", err)
 	}
-	da.log.Info("Database started successfully")
+	da.log.Infow("Database started successfully")
 
 	// Onboard device with retry logic
-	da.log.Info("Starting device onboarding process...")
-	onboardingTimeout, _ := context.WithDeadline(da.ctx, time.Now().Add(time.Second*30))
-	deviceId, err := da.onboardingManager.KeepTryingOnboardingIfFailed(onboardingTimeout)
+	onboardingTimeout := 30 * time.Second
+	da.log.Infow("Starting device onboarding process",
+		"timeout", onboardingTimeout)
+	onboardingCtx, cancel := context.WithTimeout(da.ctx, onboardingTimeout)
+	defer cancel()
+
+	deviceId, err := da.onboardingManager.KeepTryingOnboardingIfFailed(onboardingCtx)
 	if err != nil {
-		da.log.Errorw("failed to onboard the device", "error", err)
+		da.log.Errorw("Device onboarding failed",
+			"error", err,
+			"timeout", onboardingTimeout)
 		return fmt.Errorf("failed to onboard the device: %w", err)
 	}
+	da.log.Infow("Device onboarding completed successfully", "deviceId", deviceId)
 
-	da.log.Debug("Starting device capabilities manager...")
+	da.log.Debugw("Starting capabilities manager component")
 	if err := da.capabilitiesManager.Start(); err != nil {
-		da.log.Errorw("Failed to start device capabilities manager", "error", err)
+		da.log.Errorw("Failed to start capabilities manager", "error", err)
 		return fmt.Errorf("failed to start device capabilities manager: %w", err)
 	}
-	da.log.Info("Device capabilities manager started successfully")
+	da.log.Infow("Capabilities manager started successfully")
 
 	// Report Device Capabilities
-	da.log.Info("Reporting device capabilities...")
+	da.log.Debugw("Reporting device capabilities to orchestrator")
 	if err := da.capabilitiesManager.ReportCapabilities(context.Background()); err != nil {
 		da.log.Errorw("Failed to report device capabilities", "error", err)
-		// Note: Not returning error here as per original code comment
-	} else {
-		da.log.Info("Device capabilities reported successfully")
+		// Note: Not returning error here as capabilities reporting is non-critical
 	}
 
 	// Start all components with context checking
-	da.log.Info("Starting device agent components...")
+	da.log.Infow("Starting core agent components")
 
-	da.log.Debug("Starting state syncer...")
+	da.log.Debugw("Starting state syncer component")
 	if err := da.stateSyncer.Start(); err != nil {
 		da.log.Errorw("Failed to start state syncer", "error", err)
 		return fmt.Errorf("failed to start state syncer: %w", err)
 	}
-	da.log.Info("State syncer started successfully")
+	da.log.Infow("State syncer started successfully")
 
-	da.log.Debug("Starting workload manager...")
+	da.log.Debugw("Starting workload manager component")
 	if err := da.workloadManager.Start(); err != nil {
 		da.log.Errorw("Failed to start workload manager", "error", err)
 		return fmt.Errorf("failed to start workload manager: %w", err)
 	}
-	da.log.Info("Workload manager started successfully")
+	da.log.Infow("Workload manager started successfully")
 
-	da.log.Debug("Starting workload watcher...")
+	da.log.Debugw("Starting workload watcher component")
 	if err := da.workloadWatcher.Start(); err != nil {
 		da.log.Errorw("Failed to start workload watcher", "error", err)
 		return fmt.Errorf("failed to start workload watcher: %w", err)
 	}
-	da.log.Info("Workload watcher started successfully")
+	da.log.Infow("Workload watcher started successfully")
 
-	da.log.Infow("Device agent started successfully",
+	startupDuration := time.Since(startTime)
+	da.log.Infow("Device agent startup completed successfully",
 		"deviceId", deviceId,
+		"startupDuration", startupDuration,
+		"runtimeType", da.config.RuntimeInfo.Type,
 		"components", []string{"database", "stateSyncer", "workloadManager", "workloadWatcher"})
 
 	return nil
@@ -179,63 +205,68 @@ func (da *DeviceAgent) Start() error {
 
 // Stop gracefully shuts down the device agent.
 func (da *DeviceAgent) Stop() error {
-	da.log.Info("Initiating device agent shutdown...")
+	shutdownStart := time.Now()
+	da.log.Infow("Initiating device agent shutdown", "shutdownStart", shutdownStart)
 
 	var shutdownErrors []error
 
-	// Stop components in reverse order of startup
-	if da.workloadWatcher != nil {
-		da.log.Debug("Stopping workload watcher...")
-		if err := da.workloadWatcher.Stop(); err != nil {
-			da.log.Errorw("Failed to stop workload watcher", "error", err)
-			shutdownErrors = append(shutdownErrors, fmt.Errorf("workload watcher: %w", err))
-		} else {
-			da.log.Info("Workload watcher stopped successfully")
-		}
-	}
-
-	if da.workloadManager != nil {
-		da.log.Debug("Stopping workload manager...")
-		if err := da.workloadManager.Stop(); err != nil {
-			da.log.Errorw("Failed to stop workload manager", "error", err)
-			shutdownErrors = append(shutdownErrors, fmt.Errorf("workload manager: %w", err))
-		} else {
-			da.log.Info("Workload manager stopped successfully")
-		}
-	}
-
 	if da.stateSyncer != nil {
-		da.log.Debug("Stopping state syncer...")
+		da.log.Debugw("Stopping state syncer component")
 		if err := da.stateSyncer.Stop(); err != nil {
 			da.log.Errorw("Failed to stop state syncer", "error", err)
 			shutdownErrors = append(shutdownErrors, fmt.Errorf("state syncer: %w", err))
 		} else {
-			da.log.Info("State syncer stopped successfully")
+			da.log.Infow("State syncer stopped successfully")
 		}
 	}
 
-	da.log.Debug("Stopping database...")
+	if da.workloadManager != nil {
+		da.log.Debugw("Stopping workload manager component")
+		if err := da.workloadManager.Stop(); err != nil {
+			da.log.Errorw("Failed to stop workload manager", "error", err)
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("workload manager: %w", err))
+		} else {
+			da.log.Infow("Workload manager stopped successfully")
+		}
+	}
+
+	// Stop components in reverse order of startup
+	if da.workloadWatcher != nil {
+		da.log.Debugw("Stopping workload watcher component")
+		if err := da.workloadWatcher.Stop(); err != nil {
+			da.log.Errorw("Failed to stop workload watcher", "error", err)
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("workload watcher: %w", err))
+		} else {
+			da.log.Infow("Workload watcher stopped successfully")
+		}
+	}
+
+	da.log.Debugw("Stopping database component")
 	if da.database != nil {
 		if err := da.database.Stop(); err != nil {
 			da.log.Errorw("Failed to stop database", "error", err)
 			shutdownErrors = append(shutdownErrors, fmt.Errorf("database: %w", err))
 		} else {
-			da.log.Info("Database stopped successfully")
+			da.log.Infow("Database stopped successfully")
 		}
 	}
 
 	// Cancel context
-	da.log.Debug("Cancelling agent context...")
+	da.log.Debugw("Cancelling agent context and cleaning up resources")
 	da.cancelFunc()
+
+	shutdownDuration := time.Since(shutdownStart)
 
 	// Report shutdown status
 	if len(shutdownErrors) > 0 {
 		da.log.Errorw("Device agent shutdown completed with errors",
 			"errorCount", len(shutdownErrors),
+			"shutdownDuration", shutdownDuration,
 			"errors", shutdownErrors)
 		return fmt.Errorf("shutdown completed with %d errors: %v", len(shutdownErrors), shutdownErrors)
 	}
 
-	da.log.Info("Device agent shutdown completed successfully")
+	da.log.Infow("Device agent shutdown completed successfully",
+		"shutdownDuration", shutdownDuration)
 	return nil
 }
