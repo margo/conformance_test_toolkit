@@ -101,7 +101,7 @@ paths:
             schema:
               $ref: '#/components/schemas/DeviceCapabilities'
       responses:
-        '201':
+        '200':
           description: The device capabilities document was added successfully.
         '400':
           description: Bad request (e.g., invalid input).
@@ -144,7 +144,7 @@ paths:
             schema:
               $ref: '#/components/schemas/DeviceCapabilities'
       responses:
-        '201':
+        '200':
           description: The device capabilities document was updated successfully.
         '400':
           description: Bad request (e.g., invalid input).

@@ -122,7 +122,7 @@ func (om *oauthBasedOnboardingManager) Onboard(ctx context.Context) (string, err
 	}
 
 	// Check if device is already onboarded
-	if device != nil && device.DeviceAuth != nil {
+	if device != nil && device.DeviceProperties != nil && device.DeviceAuth != nil {
 		om.log.Infow("Device already onboarded, skipping onboarding process",
 			"deviceId", device.DeviceProperties.Id)
 		return device.DeviceProperties.Id, nil

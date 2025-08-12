@@ -1,28 +1,64 @@
 package workloads
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"time"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/registry"
 	"helm.sh/helm/v3/pkg/repo"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // HelmClient represents a Helm client with common settings
 type HelmClient struct {
-	settings *cli.EnvSettings
-	config   *action.Configuration
+	settings       *cli.EnvSettings
+	config         *action.Configuration
+	registryClient *registry.Client
+	kubeClient     kubernetes.Interface
 }
+
+// HelmError represents typed Helm errors
+type HelmError struct {
+	Type    string
+	Message string
+	Err     error
+}
+
+func (e *HelmError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Type, e.Message)
+}
+
+func (e *HelmError) Unwrap() error {
+	return e.Err
+}
+
+// Error types
+const (
+	ErrorTypeNotFound     = "NotFound"
+	ErrorTypeInvalidInput = "InvalidInput"
+	ErrorTypeRegistry     = "Registry"
+	ErrorTypeChart        = "Chart"
+	ErrorTypeRelease      = "Release"
+)
 
 // NewHelmClient creates a new Helm client
 func NewHelmClient(kubeconfigPath string) (*HelmClient, error) {
 	settings := cli.New()
-	settings.KubeConfig = kubeconfigPath
+	if kubeconfigPath != "" {
+		settings.KubeConfig = kubeconfigPath
+	}
+
 	config := new(action.Configuration)
 
 	// Initialize action configuration
@@ -30,10 +66,42 @@ func NewHelmClient(kubeconfigPath string) (*HelmClient, error) {
 		return nil, fmt.Errorf("failed to initialize helm configuration: %w", err)
 	}
 
+	// Create registry client for OCI support
+	registryClient, err := registry.NewClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create registry client: %w", err)
+	}
+
+	// Create Kubernetes client for namespace management
+	kubeClient, err := createKubeClient(kubeconfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
 	return &HelmClient{
-		settings: settings,
-		config:   config,
+		settings:       settings,
+		config:         config,
+		registryClient: registryClient,
+		kubeClient:     kubeClient,
 	}, nil
+}
+
+// createKubeClient creates a Kubernetes client
+func createKubeClient(kubeconfigPath string) (kubernetes.Interface, error) {
+	var config *rest.Config
+	var err error
+
+	if kubeconfigPath != "" {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	} else {
+		config, err = rest.InClusterConfig()
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return kubernetes.NewForConfig(config)
 }
 
 type HelmRepoAuth struct {
@@ -54,8 +122,75 @@ type HelmRepoCertAuthentication struct {
 	PassCredentialsAll bool   `json:"pass_credentials_all"`
 }
 
-// AddRepository adds a Helm repository
+// validateInput validates common input parameters
+func validateInput(releaseName, chart string) error {
+	if strings.TrimSpace(releaseName) == "" {
+		return &HelmError{
+			Type:    ErrorTypeInvalidInput,
+			Message: "release name cannot be empty",
+		}
+	}
+	if strings.TrimSpace(chart) == "" {
+		return &HelmError{
+			Type:    ErrorTypeInvalidInput,
+			Message: "chart cannot be empty",
+		}
+	}
+	return nil
+}
+
+// LoginRegistry authenticates with an OCI registry
+func (c *HelmClient) LoginRegistry(registryUrl, username, password string) error {
+	if registryUrl == "" {
+		return &HelmError{
+			Type:    ErrorTypeInvalidInput,
+			Message: "registry cannot be empty",
+		}
+	}
+
+	err := c.registryClient.Login(registryUrl, registry.LoginOptBasicAuth(username, password))
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeRegistry,
+			Message: fmt.Sprintf("failed to login to registry %s", registryUrl),
+			Err:     err,
+		}
+	}
+
+	log.Printf("Successfully logged in to registry: %s", registryUrl)
+	return nil
+}
+
+// LogoutRegistry logs out from an OCI registry
+func (c *HelmClient) LogoutRegistry(registryURL string) error {
+	if registryURL == "" {
+		return &HelmError{
+			Type:    ErrorTypeInvalidInput,
+			Message: "registry URL cannot be empty",
+		}
+	}
+
+	err := c.registryClient.Logout(registryURL)
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeRegistry,
+			Message: fmt.Sprintf("failed to logout from registry %s", registryURL),
+			Err:     err,
+		}
+	}
+
+	return nil
+}
+
+// AddRepository adds a Helm repository with persistence
 func (c *HelmClient) AddRepository(name, url string, auth HelmRepoAuth) error {
+	if name == "" || url == "" {
+		return &HelmError{
+			Type:    ErrorTypeInvalidInput,
+			Message: "repository name and URL cannot be empty",
+		}
+	}
+
 	repoEntry := repo.Entry{
 		Name: name,
 		URL:  url,
@@ -79,74 +214,245 @@ func (c *HelmClient) AddRepository(name, url string, auth HelmRepoAuth) error {
 
 	repository, err := repo.NewChartRepository(&repoEntry, getter.All(c.settings))
 	if err != nil {
-		return fmt.Errorf("failed to create chart repository: %w", err)
+		return &HelmError{
+			Type:    ErrorTypeRegistry,
+			Message: "failed to create chart repository",
+			Err:     err,
+		}
 	}
 
 	if _, err := repository.DownloadIndexFile(); err != nil {
-		return fmt.Errorf("failed to download repository index: %w", err)
+		return &HelmError{
+			Type:    ErrorTypeRegistry,
+			Message: "failed to download repository index",
+			Err:     err,
+		}
 	}
 
+	// Persist repository to file
+	repoFile := c.settings.RepositoryConfig
+	f, err := repo.LoadFile(repoFile)
+	if err != nil {
+		f = repo.NewFile()
+	}
+
+	// Update or add repository
+	f.Update(&repoEntry)
+	if err := f.WriteFile(repoFile, 0644); err != nil {
+		return &HelmError{
+			Type:    ErrorTypeRegistry,
+			Message: "failed to persist repository configuration",
+			Err:     err,
+		}
+	}
+
+	log.Printf("Successfully added repository: %s", name)
 	return nil
 }
 
-// InstallChart installs a Helm chart
+// InstallChart installs a Helm chart with enhanced error handling
 func (c *HelmClient) InstallChart(ctx context.Context, releaseName, chart, namespace, revision string, wait bool, values map[string]interface{}) error {
+	if err := validateInput(releaseName, chart); err != nil {
+		return err
+	}
+
+	if namespace == "" {
+		namespace = "default"
+	}
+
 	install := action.NewInstall(c.config)
 	install.ReleaseName = releaseName
 	install.Namespace = namespace
 	install.Version = revision
 	install.Wait = wait
+	install.Timeout = 10 * time.Minute
 
+	// Check if it's an OCI reference
+	if strings.HasPrefix(chart, "oci://") {
+		return c.installChartFromOCI(ctx, install, chart, revision, values)
+	}
+
+	// Traditional chart installation
 	chartPath, err := install.ChartPathOptions.LocateChart(chart, c.settings)
 	if err != nil {
-		return fmt.Errorf("failed to locate chart: %w", err)
+		return &HelmError{
+			Type:    ErrorTypeChart,
+			Message: "failed to locate chart",
+			Err:     err,
+		}
 	}
 
 	chartReq, err := loader.Load(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load chart: %w", err)
+		return &HelmError{
+			Type:    ErrorTypeChart,
+			Message: "failed to load chart",
+			Err:     err,
+		}
 	}
 
 	_, err = install.RunWithContext(ctx, chartReq, values)
 	if err != nil {
-		return fmt.Errorf("failed to install chart: %w", err)
+		return &HelmError{
+			Type:    ErrorTypeRelease,
+			Message: "failed to install chart",
+			Err:     err,
+		}
+	}
+
+	log.Printf("Successfully installed chart: %s as release: %s", chart, releaseName)
+	return nil
+}
+
+// installChartFromOCI installs a chart from OCI registry
+func (c *HelmClient) installChartFromOCI(ctx context.Context, install *action.Install, chartRef, version string, values map[string]interface{}) error {
+	// Pull chart from OCI registry
+	chartRef = fmt.Sprintf("%s:%s", chartRef, version) // "ghcr.io/nginxinc/charts/nginx-ingress:0.0.0-edge"
+	result, err := c.registryClient.Pull(chartRef, registry.PullOptWithChart(true))
+	if err != nil {
+		fmt.Println("installChartFromOCI", "err", err.Error())
+		return &HelmError{
+			Type:    ErrorTypeRegistry,
+			Message: "failed to pull OCI chart",
+			Err:     err,
+		}
+	}
+
+	// Load the chart
+	chartReq, err := loader.LoadArchive(bytes.NewReader(result.Chart.Data))
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeChart,
+			Message: "failed to load OCI chart",
+			Err:     err,
+		}
+	}
+
+	_, err = install.RunWithContext(ctx, chartReq, values)
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeRelease,
+			Message: "failed to install OCI chart",
+			Err:     err,
+		}
 	}
 
 	return nil
 }
 
-// UninstallChart uninstalls a Helm release
-func (c *HelmClient) UninstallChart(ctx context.Context, name, namespace string) error {
-	uninstall := action.NewUninstall(c.config)
-
-	_, err := uninstall.Run(name)
-	if err != nil {
-		return fmt.Errorf("failed to uninstall release %s: %w", name, err)
+// InstallChartWithDryRun performs a dry run installation
+func (c *HelmClient) InstallChartWithDryRun(ctx context.Context, releaseName, chart, namespace, revision string, values map[string]interface{}) (string, error) {
+	if err := validateInput(releaseName, chart); err != nil {
+		return "", err
 	}
 
-	return nil
-}
+	if namespace == "" {
+		namespace = "default"
+	}
 
-// UpdateChart upgrades a Helm release
-func (c *HelmClient) UpdateChart(ctx context.Context, name, chart, namespace string, values map[string]interface{}) error {
-	upgrade := action.NewUpgrade(c.config)
-	upgrade.Namespace = namespace
+	install := action.NewInstall(c.config)
+	install.ReleaseName = releaseName
+	install.Namespace = namespace
+	install.Version = revision
+	install.DryRun = true
 
-	chartPath, err := upgrade.ChartPathOptions.LocateChart(chart, c.settings)
+	chartPath, err := install.ChartPathOptions.LocateChart(chart, c.settings)
 	if err != nil {
-		return fmt.Errorf("failed to locate chart: %w", err)
+		return "", &HelmError{
+			Type:    ErrorTypeChart,
+			Message: "failed to locate chart",
+			Err:     err,
+		}
 	}
 
 	chartReq, err := loader.Load(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load chart: %w", err)
+		return "", &HelmError{
+			Type:    ErrorTypeChart,
+			Message: "failed to load chart",
+			Err:     err,
+		}
+	}
+
+	release, err := install.RunWithContext(ctx, chartReq, values)
+	if err != nil {
+		return "", &HelmError{
+			Type:    ErrorTypeRelease,
+			Message: "dry run failed",
+			Err:     err,
+		}
+	}
+
+	return release.Manifest, nil
+}
+
+// UninstallChart uninstalls a Helm release with enhanced error handling
+func (c *HelmClient) UninstallChart(ctx context.Context, name, namespace string) error {
+	if strings.TrimSpace(name) == "" {
+		return &HelmError{
+			Type:    ErrorTypeInvalidInput,
+			Message: "release name cannot be empty",
+		}
+	}
+
+	uninstall := action.NewUninstall(c.config)
+	uninstall.Timeout = 5 * time.Minute
+
+	_, err := uninstall.Run(name)
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeRelease,
+			Message: fmt.Sprintf("failed to uninstall release %s", name),
+			Err:     err,
+		}
+	}
+
+	log.Printf("Successfully uninstalled release: %s", name)
+	return nil
+}
+
+// UpdateChart upgrades a Helm release with enhanced error handling
+func (c *HelmClient) UpdateChart(ctx context.Context, name, chart, namespace string, values map[string]interface{}) error {
+	if err := validateInput(name, chart); err != nil {
+		return err
+	}
+
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	upgrade := action.NewUpgrade(c.config)
+	upgrade.Namespace = namespace
+	upgrade.Timeout = 10 * time.Minute
+
+	chartPath, err := upgrade.ChartPathOptions.LocateChart(chart, c.settings)
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeChart,
+			Message: "failed to locate chart",
+			Err:     err,
+		}
+	}
+
+	chartReq, err := loader.Load(chartPath)
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeChart,
+			Message: "failed to load chart",
+			Err:     err,
+		}
 	}
 
 	_, err = upgrade.RunWithContext(ctx, name, chartReq, values)
 	if err != nil {
-		return fmt.Errorf("failed to upgrade release %s: %w", name, err)
+		return &HelmError{
+			Type:    ErrorTypeRelease,
+			Message: fmt.Sprintf("failed to upgrade release %s", name),
+			Err:     err,
+		}
 	}
 
+	log.Printf("Successfully upgraded release: %s", name)
 	return nil
 }
 
@@ -166,20 +472,30 @@ type ReleaseStatus struct {
 
 // GetReleaseStatus retrieves the status of a Helm release
 func (c *HelmClient) GetReleaseStatus(ctx context.Context, releaseName, namespace string) (*ReleaseStatus, error) {
-	// Create status action
-	status := action.NewStatus(c.config)
+	if strings.TrimSpace(releaseName) == "" {
+		return nil, &HelmError{
+			Type:    ErrorTypeInvalidInput,
+			Message: "release name cannot be empty",
+		}
+	}
 
-	// Get release status
+	status := action.NewStatus(c.config)
 	release, err := status.Run(releaseName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get status for release %s: %w", releaseName, err)
+		return nil, &HelmError{
+			Type:    ErrorTypeNotFound,
+			Message: fmt.Sprintf("failed to get status for release %s", releaseName),
+			Err:     err,
+		}
 	}
 
 	if release == nil {
-		return nil, fmt.Errorf("release %s not found", releaseName)
+		return nil, &HelmError{
+			Type:    ErrorTypeNotFound,
+			Message: fmt.Sprintf("release %s not found", releaseName),
+		}
 	}
 
-	// Convert Helm release to our ReleaseStatus struct
 	releaseStatus := &ReleaseStatus{
 		Name:        release.Name,
 		Namespace:   release.Namespace,
@@ -187,18 +503,14 @@ func (c *HelmClient) GetReleaseStatus(ctx context.Context, releaseName, namespac
 		Revision:    release.Version,
 		Description: release.Info.Description,
 		Notes:       release.Info.Notes,
+		Updated:     release.Info.LastDeployed.Format("2006-01-02 15:04:05"),
 	}
 
-	// Set updated time if available
-	releaseStatus.Updated = release.Info.LastDeployed.Format("2006-01-02 15:04:05")
-
-	// Set chart information if available
 	if release.Chart != nil && release.Chart.Metadata != nil {
 		releaseStatus.Chart = fmt.Sprintf("%s-%s", release.Chart.Metadata.Name, release.Chart.Metadata.Version)
 		releaseStatus.AppVersion = release.Chart.Metadata.AppVersion
 	}
 
-	// Set values if available
 	if release.Config != nil {
 		releaseStatus.Values = release.Config
 	} else {
@@ -208,20 +520,25 @@ func (c *HelmClient) GetReleaseStatus(ctx context.Context, releaseName, namespac
 	return releaseStatus, nil
 }
 
-// ListReleases lists all Helm releases in the specified namespace
+// ListReleases lists all Helm releases with filtering options
 func (c *HelmClient) ListReleases(ctx context.Context, namespace string) ([]*ReleaseStatus, error) {
 	list := action.NewList(c.config)
 
-	// Set namespace if provided, otherwise list from all namespaces
-	list.AllNamespaces = true
-
-	// Get all releases
-	releases, err := list.Run()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list releases: %w", err)
+	if namespace != "" {
+		list.AllNamespaces = false
+	} else {
+		list.AllNamespaces = true
 	}
 
-	// Convert to our ReleaseStatus format
+	releases, err := list.Run()
+	if err != nil {
+		return nil, &HelmError{
+			Type:    ErrorTypeRelease,
+			Message: "failed to list releases",
+			Err:     err,
+		}
+	}
+
 	var releaseStatuses []*ReleaseStatus
 	for _, release := range releases {
 		status := &ReleaseStatus{
@@ -230,9 +547,8 @@ func (c *HelmClient) ListReleases(ctx context.Context, namespace string) ([]*Rel
 			Status:      release.Info.Status.String(),
 			Revision:    release.Version,
 			Description: release.Info.Description,
+			Updated:     release.Info.LastDeployed.Format("2006-01-02 15:04:05"),
 		}
-
-		status.Updated = release.Info.LastDeployed.Format("2006-01-02 15:04:05")
 
 		if release.Chart != nil && release.Chart.Metadata != nil {
 			status.Chart = fmt.Sprintf("%s-%s", release.Chart.Metadata.Name, release.Chart.Metadata.Version)

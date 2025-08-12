@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kr/pretty"
 	"github.com/margo/dev-repo/poc/device/agent/database"
 	workloads "github.com/margo/dev-repo/shared-lib/workloads"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
@@ -99,17 +100,11 @@ func (h *HelmDeployer) Deploy(ctx context.Context, deployment sbi.AppDeployment)
 	}
 
 	// Add repository
+	h.log.Info("helm component", pretty.Sprint(componentAsHelm))
 	repository := componentAsHelm.Properties.Repository
-	if err := h.client.AddRepository("", repository, workloads.HelmRepoAuth{}); err != nil {
-		return fmt.Errorf("failed to add repository: %w", err)
-	}
-
-	// Check context again before installation
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
+	// if err := h.client.AddRepository(componentAsHelm.Name, repository, workloads.HelmRepoAuth{}); err != nil {
+	// 	return fmt.Errorf("failed to add repository: %w", err)
+	// }
 
 	// Install chart
 	namespace := "" // Default namespace

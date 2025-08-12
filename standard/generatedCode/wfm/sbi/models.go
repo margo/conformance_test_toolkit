@@ -177,7 +177,7 @@ type Peripheral struct {
 	Name string `json:"name"`
 
 	// Properties Properties of the peripheral.
-	Properties map[string]string `json:"properties"`
+	Properties map[string]interface{} `json:"properties"`
 
 	// Type Type of the peripheral. i.e. GPU
 	Type string `json:"type"`

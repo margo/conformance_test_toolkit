@@ -131,7 +131,7 @@ func (cm *manualCapabilitiesManager) ReportCapabilities(ctx context.Context) err
 	defer resp.Body.Close()
 
 	// 4. Handle Response
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != 200 {
 		cm.log.Errorw("Failed to report device capabilities", "statusCode", resp.StatusCode)
 		return fmt.Errorf("failed to report device capabilities: status code %d", resp.StatusCode)
 	}
