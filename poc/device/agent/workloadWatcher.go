@@ -7,28 +7,12 @@ import (
 	"time"
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
+	"github.com/margo/dev-repo/poc/device/agent/monitoring"
 	workloads "github.com/margo/dev-repo/shared-lib/workloads"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"github.com/margo/dev-repo/standard/pkg"
 	"go.uber.org/zap"
 )
-
-// WorkloadMonitor interface for different monitoring implementations
-type WorkloadMonitor interface {
-	Watch(ctx context.Context, appID string) error
-	StopWatching(ctx context.Context, appID string) error
-	GetStatus(ctx context.Context, appID string) (WorkloadStatus, error)
-	GetType() string
-}
-
-// WorkloadStatus represents the current status of a workload
-type WorkloadStatus struct {
-	WorkloadId string    `json:"workloadId"`
-	Status     string    `json:"status"` // running, stopped, failed, unknown
-	Health     string    `json:"health"` // healthy, unhealthy, unknown
-	Message    string    `json:"message,omitempty"`
-	Timestamp  time.Time `json:"timestamp"`
-}
 
 type WorkloadWatcher interface {
 	// Lifecycle management
@@ -38,7 +22,7 @@ type WorkloadWatcher interface {
 	// Workload monitoring operations
 	StartWatching(ctx context.Context, app sbi.AppState) error
 	StopWatching(ctx context.Context, appID string) error
-	GetWorkloadStatus(ctx context.Context, appID string) (WorkloadStatus, error)
+	GetWorkloadStatus(ctx context.Context, appID string) (monitoring.WorkloadStatus, error)
 
 	// Database subscriber interface for reactive monitoring
 	database.WorkloadDatabaseSubscriber
@@ -47,7 +31,7 @@ type WorkloadWatcher interface {
 type workloadWatcher struct {
 	log      *zap.SugaredLogger
 	database database.AgentDatabase
-	monitors map[string]WorkloadMonitor
+	monitors map[string]monitoring.WorkloadMonitor
 
 	// Active watches tracking
 	activeWatches map[string]context.CancelFunc
@@ -59,199 +43,16 @@ type workloadWatcher struct {
 	wg       sync.WaitGroup
 }
 
-// HelmMonitor implements WorkloadMonitor for Helm deployments
-type HelmMonitor struct {
-	client   *workloads.HelmClient
-	database database.AgentDatabase // Add this field
-	log      *zap.SugaredLogger
-}
-
-func NewHelmMonitor(client *workloads.HelmClient, database database.AgentDatabase, log *zap.SugaredLogger) *HelmMonitor {
-	return &HelmMonitor{
-		client:   client,
-		database: database, // Add this field
-		log:      log,
-	}
-}
-
-func (h *HelmMonitor) GetType() string {
-	return "helm.v3"
-}
-
-func (h *HelmMonitor) Watch(ctx context.Context, appID string) error {
-	h.log.Infow("Starting to watch Helm workload", "appId", appID)
-
-	// Start monitoring loop
-	go h.monitorLoop(ctx, appID)
-
-	return nil
-}
-
-func (h *HelmMonitor) StopWatching(ctx context.Context, appID string) error {
-	h.log.Infow("Stopping watch for Helm workload", "appId", appID)
-	// Context cancellation will stop the monitoring loop
-	return nil
-}
-
-// In HelmMonitor.GetStatus() - FIXED
-func (h *HelmMonitor) GetStatus(ctx context.Context, appID string) (WorkloadStatus, error) {
-	h.log.Debugw("Getting Helm workload status", "appId", appID)
-
-	select {
-	case <-ctx.Done():
-		return WorkloadStatus{}, ctx.Err()
-	default:
-	}
-
-	// FIX: Get the actual release name used during deployment
-	app, err := h.database.GetWorkload(appID) // You'll need to pass database to HelmMonitor
-	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Failed to get app from database: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
-	}
-
-	appDeployment, err := pkg.ConvertAppStateToAppDeployment(app)
-	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Failed to convert app: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
-	}
-
-	component := appDeployment.Spec.DeploymentProfile.Components[0]
-	componentAsHelm, err := component.AsHelmApplicationDeploymentProfileComponent()
-	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Invalid helm component: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
-	}
-
-	releaseName := generateReleaseName(appID, componentAsHelm.Name)
-	namespace := ""
-
-	// Get release status from Helm
-	status, err := h.client.GetReleaseStatus(ctx, releaseName, namespace)
-	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Failed to get status: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
-	}
-
-	return WorkloadStatus{
-		WorkloadId: appID,
-		Status:     status.Status,
-		Health:     h.determineHealth(status),
-		Message:    status.Description,
-		Timestamp:  time.Now(),
-	}, nil
-}
-
-func (h *HelmMonitor) monitorLoop(ctx context.Context, appID string) {
-	ticker := time.NewTicker(30 * time.Second) // Monitor every 30 seconds
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			h.log.Debugw("Stopping monitor loop for Helm workload", "appId", appID)
-			return
-		case <-ticker.C:
-			status, err := h.GetStatus(ctx, appID)
-			if err != nil {
-				h.log.Errorw("Failed to get workload status", "appId", appID, "error", err)
-				continue
-			}
-
-			h.log.Debugw("Workload status check",
-				"appId", appID,
-				"status", status.Status,
-				"health", status.Health)
-
-			// TODO: Report status changes to database or external systems
-		}
-	}
-}
-
-func (h *HelmMonitor) determineHealth(status *workloads.ReleaseStatus) string {
-	// Implement health determination logic based on Helm status
-	switch status.Status {
-	case "deployed":
-		return "healthy"
-	case "failed", "uninstalling", "pending-install", "pending-upgrade", "pending-rollback":
-		return "unhealthy"
-	default:
-		return "unknown"
-	}
-}
-
-// DockerComposeMonitor implements WorkloadMonitor for Docker Compose deployments
-type DockerComposeMonitor struct {
-	client *workloads.DockerComposeClient
-	log    *zap.SugaredLogger
-}
-
-func NewDockerComposeMonitor(client *workloads.DockerComposeClient, log *zap.SugaredLogger) *DockerComposeMonitor {
-	return &DockerComposeMonitor{
-		client: client,
-		log:    log,
-	}
-}
-
-func (d *DockerComposeMonitor) GetType() string {
-	return "compose"
-}
-
-func (d *DockerComposeMonitor) Watch(ctx context.Context, appID string) error {
-	d.log.Infow("Starting to watch Docker Compose workload", "appId", appID)
-
-	// TODO: Implement Docker Compose monitoring
-	return fmt.Errorf("docker compose monitoring not yet implemented")
-}
-
-func (d *DockerComposeMonitor) StopWatching(ctx context.Context, appID string) error {
-	d.log.Infow("Stopping watch for Docker Compose workload", "appId", appID)
-	// TODO: Implement Docker Compose stop watching
-	return fmt.Errorf("docker compose stop watching not yet implemented")
-}
-
-func (d *DockerComposeMonitor) GetStatus(ctx context.Context, appID string) (WorkloadStatus, error) {
-	d.log.Debugw("Getting Docker Compose workload status", "appId", appID)
-	// TODO: Implement Docker Compose status checking
-	return WorkloadStatus{
-		WorkloadId: appID,
-		Status:     "unknown",
-		Health:     "unknown",
-		Message:    "Docker Compose monitoring not implemented",
-		Timestamp:  time.Now(),
-	}, nil
-}
-
 // NewWorkloadWatcher creates a new WorkloadWatcher instance
 func NewWorkloadWatcher(log *zap.SugaredLogger, database database.AgentDatabase, helmClient *workloads.HelmClient, dockerComposeClient *workloads.DockerComposeClient) WorkloadWatcher {
-	monitors := make(map[string]WorkloadMonitor)
+	monitors := make(map[string]monitoring.WorkloadMonitor)
 
 	// Add available monitors
 	if helmClient != nil {
-		monitors["helm.v3"] = NewHelmMonitor(helmClient, database, log)
+		monitors["helm.v3"] = monitoring.NewHelmMonitor(helmClient, database, log)
 	}
 	if dockerComposeClient != nil {
-		monitors["compose"] = NewDockerComposeMonitor(dockerComposeClient, log)
+		monitors["compose"] = monitoring.NewDockerComposeMonitor(dockerComposeClient, log)
 	}
 
 	return &workloadWatcher{
@@ -418,9 +219,9 @@ func (ww *workloadWatcher) StopWatching(ctx context.Context, appID string) error
 }
 
 // GetWorkloadStatus retrieves the current status of a workload
-func (ww *workloadWatcher) GetWorkloadStatus(ctx context.Context, workloadId string) (WorkloadStatus, error) {
+func (ww *workloadWatcher) GetWorkloadStatus(ctx context.Context, workloadId string) (monitoring.WorkloadStatus, error) {
 	if workloadId == "" {
-		return WorkloadStatus{}, fmt.Errorf("app ID is required")
+		return monitoring.WorkloadStatus{}, fmt.Errorf("app ID is required")
 	}
 
 	ww.log.Debugw("Getting workload status", "appId", workloadId)
@@ -428,7 +229,7 @@ func (ww *workloadWatcher) GetWorkloadStatus(ctx context.Context, workloadId str
 	// Get appState from database to determine deployment type
 	appState, err := ww.database.GetWorkload(workloadId)
 	if err != nil {
-		return WorkloadStatus{}, fmt.Errorf("failed to get app from database: %w", err)
+		return monitoring.WorkloadStatus{}, fmt.Errorf("failed to get app from database: %w", err)
 	}
 
 	// TODO: Extract deployment profile type from app
@@ -436,7 +237,7 @@ func (ww *workloadWatcher) GetWorkloadStatus(ctx context.Context, workloadId str
 
 	monitor, exists := ww.monitors[string(appDeployment.Spec.DeploymentProfile.Type)]
 	if !exists {
-		return WorkloadStatus{}, fmt.Errorf("unsupported deployment profile type: %s", appDeployment.Spec.DeploymentProfile.Type)
+		return monitoring.WorkloadStatus{}, fmt.Errorf("unsupported deployment profile type: %s", appDeployment.Spec.DeploymentProfile.Type)
 	}
 
 	return monitor.GetStatus(ctx, workloadId)
