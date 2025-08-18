@@ -1,5 +1,5 @@
 deviceId: device-101
-wfmSbiUrl: http://172.19.59.148:8082/v1alpha2/margo/sbi/v1
+wfmSbiUrl: http://localhost:8082/v1alpha2/margo/sbi/v1 #http://172.19.59.148:8082/v1alpha2/margo/sbi/v1
 capabilitiesFile: /root/margo/dev-repo/poc/device/agent/config/capabilities.json
 runtimeInfo:
   type: KUBERNETES

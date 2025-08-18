@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"errors"
+
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
@@ -330,10 +332,11 @@ func (c *HelmClient) installChartFromOCI(ctx context.Context, install *action.In
 
 	_, err = install.RunWithContext(ctx, chartReq, values)
 	if err != nil {
+		fmt.Println("error", err.Error())
 		return &HelmError{
 			Type:    ErrorTypeRelease,
 			Message: "failed to install OCI chart",
-			Err:     err,
+			Err:     errors.Join(err),
 		}
 	}
 

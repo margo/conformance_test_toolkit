@@ -8,6 +8,7 @@ import (
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
 	"github.com/margo/dev-repo/shared-lib/workloads"
+	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"github.com/margo/dev-repo/standard/pkg"
 	"go.uber.org/zap"
 )
@@ -136,7 +137,9 @@ func (h *HelmMonitor) monitorLoop(ctx context.Context, appID string) {
 				"status", status.Status,
 				"health", status.Health)
 
-			// TODO: Report status changes to database or external systems
+			if err := h.database.UpdateWorkloadStatus(appID, sbi.AppStateAppState(status.Status)); err != nil {
+				h.log.Errorw("Failed to update the status of the workload in database", "appId", appID, "error", err.Error())
+			}
 		}
 	}
 }

@@ -23,6 +23,7 @@ type AgentDatabase interface {
 	Remove(workloadId string) error
 	UpdateWorkload(workload sbi.AppState) error
 	UpsertWorkload(workload sbi.AppState) error
+	UpdateWorkloadStatus(workloadId string, status sbi.AppStateAppState) error
 	WorkloadExists(workloadId string) bool
 	GetWorkloadCount() int
 	GetDeviceProperties() *sbi.Properties
@@ -393,6 +394,16 @@ func (db *AgentInMemoryDatabase) UpsertWorkload(workload sbi.AppState) error {
 	})
 
 	return nil
+}
+
+func (db *AgentInMemoryDatabase) UpdateWorkloadStatus(workloadId string, status sbi.AppStateAppState) error {
+	existingWorkload, err := db.GetWorkload(workloadId)
+	if err != nil {
+		return err
+	}
+	existingWorkload.AppState = status
+
+	return db.UpsertWorkload(existingWorkload)
 }
 
 // WorkloadExists checks if a workload with the given ID exists.

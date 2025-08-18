@@ -77,7 +77,7 @@ func (h *HelmDeployer) Deploy(ctx context.Context, deployment sbi.AppDeployment)
 	overrides := componentValues[componentAsHelm.Name]
 
 	if err := h.client.InstallChart(ctx, releaseName, repository, namespace, revision, wait, overrides); err != nil {
-		return fmt.Errorf("failed to install helm chart: %w", err)
+		return fmt.Errorf("failed to install helm chart: %s", err.Error())
 	}
 
 	h.log.Infow("Successfully deployed Helm workload", "appId", deployment.Metadata.Id, "releaseName", releaseName)
