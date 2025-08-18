@@ -1,4 +1,4 @@
-package main
+package device
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/margo/dev-repo/poc/device/agent/types"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
 )
@@ -20,9 +21,9 @@ type CapabilitiesManager interface {
 
 // manualCapabilitiesManager struct
 type manualCapabilitiesManager struct {
-	config           *Config
+	config           *types.Config
 	log              *zap.SugaredLogger
-	apiClientFactory APIClientInterface
+	apiClientFactory types.APIClientInterface
 
 	// Lifecycle management
 	started  bool
@@ -30,7 +31,7 @@ type manualCapabilitiesManager struct {
 }
 
 // NewManualCapabilitiesManager creates a new CapabilitiesManager
-func NewManualCapabilitiesManager(log *zap.SugaredLogger, config *Config, apiClientFactory APIClientInterface) CapabilitiesManager {
+func NewManualCapabilitiesManager(log *zap.SugaredLogger, config *types.Config, apiClientFactory types.APIClientInterface) CapabilitiesManager {
 	return &manualCapabilitiesManager{
 		config:           config,
 		log:              log,

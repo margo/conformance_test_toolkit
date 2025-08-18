@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/margo/dev-repo/poc/device/agent/types"
 	"go.uber.org/zap"
 )
 
@@ -20,7 +21,7 @@ func main() {
 	sugar := logger.Sugar()
 
 	// Create ConfigManager
-	configManager := NewConfigManager(*configFile)
+	configManager := types.NewConfigManager(*configFile)
 
 	// Load Config
 	config, err := configManager.LoadAndValidateConfig()
@@ -29,7 +30,7 @@ func main() {
 	}
 
 	// Create APIClientFactory
-	sbiClient := &apiClient{
+	sbiClient := &types.ApiClient{
 		SBIUrl: config.WfmSbiUrl,
 	}
 

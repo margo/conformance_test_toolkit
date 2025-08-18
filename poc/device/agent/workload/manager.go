@@ -1,4 +1,4 @@
-package main
+package workload
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
-	"github.com/margo/dev-repo/poc/device/agent/deployers"
+	"github.com/margo/dev-repo/poc/device/agent/workload/deployers"
 	workloads "github.com/margo/dev-repo/shared-lib/workloads"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"github.com/margo/dev-repo/standard/pkg"
@@ -31,7 +31,7 @@ type WorkloadManager interface {
 	ExplicitlyTriggerRemove(ctx context.Context, appID string) error
 
 	// DatabaseSubscriber interface methods for event-driven operations
-	database.WorkloadDatabaseSubscriber
+	database.DeploymentDatabaseSubscriber
 }
 
 // workloadManager implements the WorkloadManager interface with event-driven architecture
@@ -106,10 +106,10 @@ func (wm *workloadManager) GetSubscriberID() string {
 }
 
 // OnDatabaseEvent handles database events and triggers appropriate workload operations
-func (wm *workloadManager) OnDatabaseEvent(event database.WorkloadDatabaseEvent) error {
+func (wm *workloadManager) OnDatabaseEvent(event database.DeploymentDatabaseEvent) error {
 	wm.log.Debugw("Received database event",
 		"type", event.Type,
-		"appId", event.AppID,
+		"appId", event.Deployment.DesiredState.AppId,
 		"timestamp", event.Timestamp)
 
 	// Create context with timeout for database event handling
@@ -117,19 +117,19 @@ func (wm *workloadManager) OnDatabaseEvent(event database.WorkloadDatabaseEvent)
 	defer cancel()
 
 	switch event.Type {
-	case database.EventAppAdded:
-		if event.NewState != nil {
-			wm.log.Infow("Handling new app deployment", "appId", event.AppID)
-			return wm.deploy(ctx, *event.NewState)
+	case database.EventDeploymentAdded:
+		if event.Deployment.DesiredState != nil {
+			wm.log.Infow("Handling new app deployment", "appId", event.Deployment.DesiredState.AppId)
+			return wm.deploy(ctx, *event.Deployment.DesiredState)
 		}
-	case database.EventAppDesiredStateChanged:
-		if event.NewState != nil {
-			wm.log.Infow("Handling app desired state change", "appId", event.AppID)
-			return wm.update(ctx, *event.NewState)
+	case database.EventDeploymentDesiredStateChanged:
+		if event.Deployment.DesiredState != nil {
+			wm.log.Infow("Handling app desired state change", "appId", event.Deployment.DesiredState.AppId)
+			return wm.update(ctx, *event.Deployment.DesiredState)
 		}
-	case database.EventAppDeleted:
-		wm.log.Infow("Handling app removal", "appId", event.AppID)
-		return wm.remove(ctx, event.AppID)
+	case database.EventDeploymentDeleted:
+		wm.log.Infow("Handling app removal", "appId", event.Deployment.DesiredState.AppId)
+		return wm.remove(ctx, event.Deployment.DesiredState.AppId)
 	default:
 		wm.log.Debugw("Ignoring unhandled event type", "type", event.Type)
 	}
@@ -233,14 +233,14 @@ func (wm *workloadManager) remove(ctx context.Context, appID string) error {
 	default:
 	}
 
-	// Get app from database to determine deployment type
-	app, err := wm.database.GetWorkload(appID)
+	// Get deployment from database to determine deployment type
+	deployment, err := wm.database.GetDeployment(appID)
 	if err != nil {
 		return fmt.Errorf("failed to get app from database: %w", err)
 	}
 
 	// Convert to deployment to get type
-	appDeployment, err := pkg.ConvertAppStateToAppDeployment(app)
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*deployment.CurrentState)
 	if err != nil {
 		return fmt.Errorf("failed to convert AppState to AppDeployment: %w", err)
 	}

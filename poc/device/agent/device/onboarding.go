@@ -1,4 +1,4 @@
-package main
+package device
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/margo/dev-repo/non-standard/pkg/utils"
 	"github.com/margo/dev-repo/poc/device/agent/database"
+	"github.com/margo/dev-repo/poc/device/agent/types"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
 )
@@ -23,10 +24,10 @@ type OnboardingManager interface {
 }
 
 type oauthBasedOnboardingManager struct {
-	config           *Config
+	config           *types.Config
 	database         database.AgentDatabase
 	log              *zap.SugaredLogger
-	apiClientFactory APIClientInterface
+	apiClientFactory types.APIClientInterface
 
 	// Lifecycle management - separate from operation contexts
 	started  bool
@@ -35,9 +36,9 @@ type oauthBasedOnboardingManager struct {
 
 func NewOAuthBasedOnboardingManager(
 	log *zap.SugaredLogger,
-	config *Config,
+	config *types.Config,
 	database database.AgentDatabase,
-	apiClientFactory APIClientInterface,
+	apiClientFactory types.APIClientInterface,
 ) OnboardingManager {
 	return &oauthBasedOnboardingManager{
 		config:           config,

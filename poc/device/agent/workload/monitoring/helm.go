@@ -35,8 +35,21 @@ func (h *HelmMonitor) GetType() string {
 func (h *HelmMonitor) Watch(ctx context.Context, appID string) error {
 	h.log.Infow("Starting to watch Helm workload", "appId", appID)
 
-	// Start monitoring loop
-	go h.monitorLoop(ctx, appID)
+	// FIX: Get the actual release name used during deployment
+	deployment, err := h.database.GetDeployment(appID)
+	if err != nil {
+		return err
+	}
+
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*deployment.CurrentState)
+	if err != nil {
+		return err
+	}
+
+	for _, component := range appDeployment.Spec.DeploymentProfile.Components {
+		componentAsHelm, _ := component.AsHelmApplicationDeploymentProfileComponent()
+		go h.monitorLoop(ctx, appID, componentAsHelm.Name)
+	}
 
 	return nil
 }
@@ -48,48 +61,30 @@ func (h *HelmMonitor) StopWatching(ctx context.Context, appID string) error {
 }
 
 // In HelmMonitor.GetStatus() - FIXED
-func (h *HelmMonitor) GetStatus(ctx context.Context, appID string) (WorkloadStatus, error) {
+func (h *HelmMonitor) GetStatus(ctx context.Context, appID, componentName string) (sbi.ComponentStatus, error) {
 	h.log.Debugw("Getting Helm workload status", "appId", appID)
 
-	select {
-	case <-ctx.Done():
-		return WorkloadStatus{}, ctx.Err()
-	default:
-	}
-
 	// FIX: Get the actual release name used during deployment
-	app, err := h.database.GetWorkload(appID) // You'll need to pass database to HelmMonitor
+	deployment, err := h.database.GetDeployment(appID)
 	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Failed to get app from database: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
+		return sbi.ComponentStatus{}, nil
 	}
 
-	appDeployment, err := pkg.ConvertAppStateToAppDeployment(app)
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*deployment.CurrentState)
 	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Failed to convert app: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
+		return sbi.ComponentStatus{}, err
 	}
 
-	component := appDeployment.Spec.DeploymentProfile.Components[0]
-	componentAsHelm, err := component.AsHelmApplicationDeploymentProfileComponent()
+	componentAsHelm, _ := appDeployment.Spec.DeploymentProfile.Components[0].AsHelmApplicationDeploymentProfileComponent()
+
+	for _, componentInDb := range appDeployment.Spec.DeploymentProfile.Components {
+		tempHelmComponent, _ := componentInDb.AsHelmApplicationDeploymentProfileComponent()
+		if componentAsHelm.Name == tempHelmComponent.Name {
+			componentAsHelm = tempHelmComponent
+		}
+	}
 	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Invalid helm component: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
+		return sbi.ComponentStatus{}, err
 	}
 
 	releaseName := generateReleaseName(appID, componentAsHelm.Name)
@@ -98,47 +93,36 @@ func (h *HelmMonitor) GetStatus(ctx context.Context, appID string) (WorkloadStat
 	// Get release status from Helm
 	status, err := h.client.GetReleaseStatus(ctx, releaseName, namespace)
 	if err != nil {
-		return WorkloadStatus{
-			WorkloadId: appID,
-			Status:     "unknown",
-			Health:     "unknown",
-			Message:    fmt.Sprintf("Failed to get status: %v", err),
-			Timestamp:  time.Now(),
-		}, nil
+		return sbi.ComponentStatus{}, err
 	}
 
-	return WorkloadStatus{
-		WorkloadId: appID,
-		Status:     status.Status,
-		Health:     h.determineHealth(status),
-		Message:    status.Description,
-		Timestamp:  time.Now(),
+	return sbi.ComponentStatus{
+		State: sbi.ComponentStatusState(status.Status),
 	}, nil
 }
 
-func (h *HelmMonitor) monitorLoop(ctx context.Context, appID string) {
+func (h *HelmMonitor) monitorLoop(ctx context.Context, deploymentId, componentName string) error {
 	ticker := time.NewTicker(30 * time.Second) // Monitor every 30 seconds
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			h.log.Debugw("Stopping monitor loop for Helm workload", "appId", appID)
-			return
+			h.log.Debugw("Stopping monitor loop for Helm workload", "appId", deploymentId)
+			return nil
 		case <-ticker.C:
-			status, err := h.GetStatus(ctx, appID)
+			status, err := h.GetStatus(ctx, deploymentId, componentName)
 			if err != nil {
-				h.log.Errorw("Failed to get workload status", "appId", appID, "error", err)
+				h.log.Errorw("Failed to get workload status", "appId", deploymentId, "error", err)
 				continue
 			}
 
 			h.log.Debugw("Workload status check",
-				"appId", appID,
-				"status", status.Status,
-				"health", status.Health)
+				"appId", deploymentId,
+				"status", status.State)
 
-			if err := h.database.UpdateWorkloadStatus(appID, sbi.AppStateAppState(status.Status)); err != nil {
-				h.log.Errorw("Failed to update the status of the workload in database", "appId", appID, "error", err.Error())
+			if err := h.database.UpsertComponentStatus(deploymentId, componentName, status); err != nil {
+				h.log.Errorw("Failed to update the status of the workload in database", "appId", deploymentId, "error", err.Error())
 			}
 		}
 	}

@@ -3,10 +3,12 @@ package monitoring
 import (
 	"context"
 	"time"
+
+	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 )
 
-// WorkloadStatus represents the current status of a workload
-type WorkloadStatus struct {
+// DeploymentComponentStatus represents the current status of a workload
+type DeploymentComponentStatus struct {
 	WorkloadId string    `json:"workloadId"`
 	Status     string    `json:"status"` // running, stopped, failed, unknown
 	Health     string    `json:"health"` // healthy, unhealthy, unknown
@@ -18,6 +20,6 @@ type WorkloadStatus struct {
 type WorkloadMonitor interface {
 	Watch(ctx context.Context, appID string) error
 	StopWatching(ctx context.Context, appID string) error
-	GetStatus(ctx context.Context, appID string) (WorkloadStatus, error)
+	GetStatus(ctx context.Context, appID, componentName string) (sbi.ComponentStatus, error)
 	GetType() string
 }

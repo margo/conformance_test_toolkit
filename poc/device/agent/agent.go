@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
+	"github.com/margo/dev-repo/poc/device/agent/device"
+	"github.com/margo/dev-repo/poc/device/agent/types"
+	"github.com/margo/dev-repo/poc/device/agent/workload"
 	workloads "github.com/margo/dev-repo/shared-lib/workloads"
 	"go.uber.org/zap"
 )
@@ -16,21 +19,21 @@ type DeviceAgent struct {
 	log                 *zap.SugaredLogger
 	ctx                 context.Context    // Context for managing agent lifecycle
 	cancelFunc          context.CancelFunc // Function to cancel the context
-	config              *Config
+	config              *types.Config
+	apiClientFactory    types.APIClientInterface
 	database            database.AgentDatabase
-	apiClientFactory    APIClientInterface
-	stateSyncer         AppStateSyncer
-	workloadManager     WorkloadManager
-	workloadWatcher     WorkloadWatcher
-	capabilitiesManager CapabilitiesManager
-	onboardingManager   OnboardingManager
+	workloadManager     workload.WorkloadManager
+	workloadWatcher     workload.WorkloadWatcher
+	stateSyncer         device.AppStateSyncer
+	capabilitiesManager device.CapabilitiesManager
+	onboardingManager   device.OnboardingManager
 }
 
 // NewDeviceAgent creates a new device agent instance.
 func NewDeviceAgent(
-	config *Config,
+	config *types.Config,
 	logger *zap.SugaredLogger,
-	apiClientFactory APIClientInterface,
+	apiClientFactory types.APIClientInterface,
 ) (*DeviceAgent, error) {
 	logger.Debugw("Creating new DeviceAgent instance",
 		"runtimeType", config.RuntimeInfo.Type)
@@ -51,11 +54,11 @@ func NewDeviceAgent(
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var database database.AgentDatabase = database.NewAgentInMemoryDatabase(ctx, "./data")
-	var onboardingManager OnboardingManager = NewOAuthBasedOnboardingManager(logger, config, database, apiClientFactory)
-	var stateSyncer AppStateSyncer = NewAppStateSyncer(logger, config, database, apiClientFactory)
-	var capabilityManager CapabilitiesManager = NewManualCapabilitiesManager(logger, config, apiClientFactory)
-	var workloadManager WorkloadManager
-	var workloadWatcher WorkloadWatcher
+	var onboardingManager device.OnboardingManager = device.NewOAuthBasedOnboardingManager(logger, config, database, apiClientFactory)
+	var stateSyncer device.AppStateSyncer = device.NewAppStateSyncer(logger, config, database, apiClientFactory)
+	var capabilityManager device.CapabilitiesManager = device.NewManualCapabilitiesManager(logger, config, apiClientFactory)
+	var workloadManager workload.WorkloadManager
+	var workloadWatcher workload.WorkloadWatcher
 
 	switch strings.ToLower(config.RuntimeInfo.Type) {
 	case "kubernetes":
@@ -70,8 +73,8 @@ func NewDeviceAgent(
 				cancel()
 				return nil, err
 			}
-			workloadManager = NewWorkloadManager(logger, database, helmClient, nil)
-			workloadWatcher = NewWorkloadWatcher(logger, database, helmClient, nil)
+			workloadManager = workload.NewWorkloadManager(logger, database, helmClient, nil)
+			workloadWatcher = workload.NewWorkloadWatcher(logger, database, helmClient, nil)
 		}
 
 	case "docker":
@@ -83,8 +86,8 @@ func NewDeviceAgent(
 				cancel()
 				return nil, err
 			}
-			workloadManager = NewWorkloadManager(logger, database, nil, dockerComposeClient)
-			workloadWatcher = NewWorkloadWatcher(logger, database, nil, dockerComposeClient)
+			workloadManager = workload.NewWorkloadManager(logger, database, nil, dockerComposeClient)
+			workloadWatcher = workload.NewWorkloadWatcher(logger, database, nil, dockerComposeClient)
 		}
 
 	default:

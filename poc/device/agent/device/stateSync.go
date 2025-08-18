@@ -1,4 +1,4 @@
-package main
+package device
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kr/pretty"
 	"github.com/margo/dev-repo/poc/device/agent/database"
+	"github.com/margo/dev-repo/poc/device/agent/types"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"github.com/margo/dev-repo/standard/pkg"
 	"go.uber.org/zap"
@@ -27,15 +28,15 @@ type AppStateSyncer interface {
 	Stop() error
 	ExplicitlyTriggerSync(ctx context.Context) error
 	// DatabaseSubscriber interface methods for event-driven operations
-	database.WorkloadDatabaseSubscriber
+	database.DeploymentDatabaseSubscriber
 }
 
 // appStateSyncer struct - no context storage
 type appStateSyncer struct {
-	config           *Config
+	config           *types.Config
 	database         database.AgentDatabase
 	log              *zap.SugaredLogger
-	apiClientFactory APIClientInterface
+	apiClientFactory types.APIClientInterface
 
 	// Lifecycle management
 	started  bool
@@ -44,7 +45,7 @@ type appStateSyncer struct {
 }
 
 // NewAppStateSyncer creates a new StateSyncer
-func NewAppStateSyncer(log *zap.SugaredLogger, config *Config, database database.AgentDatabase, apiClientFactory APIClientInterface) AppStateSyncer {
+func NewAppStateSyncer(log *zap.SugaredLogger, config *types.Config, database database.AgentDatabase, apiClientFactory types.APIClientInterface) AppStateSyncer {
 	return &appStateSyncer{
 		config:           config,
 		database:         database,
@@ -62,7 +63,7 @@ func (ss *appStateSyncer) Start() error {
 		return nil
 	}
 
-	// Subscribe to database events for reactive workload management
+	// Subscribe to database events for reactive deployment management
 	if err := ss.database.Subscribe(ss); err != nil {
 		return fmt.Errorf("failed to subscribe to database events: %w", err)
 	}
@@ -104,11 +105,11 @@ func (ss *appStateSyncer) Stop() error {
 	return nil
 }
 
-// OnDatabaseEvent handles database events and triggers appropriate workload operations
-func (ss *appStateSyncer) OnDatabaseEvent(event database.WorkloadDatabaseEvent) error {
+// OnDatabaseEvent handles database events and triggers appropriate deployment operations
+func (ss *appStateSyncer) OnDatabaseEvent(event database.DeploymentDatabaseEvent) error {
 	ss.log.Debugw("Received database event",
 		"type", event.Type,
-		"appId", event.AppID,
+		"appId", event.Deployment.DesiredState.AppId,
 		"timestamp", event.Timestamp)
 
 	// Create context with timeout for database event handling
@@ -116,10 +117,10 @@ func (ss *appStateSyncer) OnDatabaseEvent(event database.WorkloadDatabaseEvent) 
 	defer cancel()
 
 	switch event.Type {
-	case database.EventAppStatusUpdate:
-		if event.NewState != nil {
-			ss.log.Infow("Sending app status update to the orchestrator", "appId", event.AppID)
-			return ss.sendAppStatusUpdate(ctx, *event.NewState)
+	case database.EventDeploymentStatusUpdate:
+		if event.Deployment.CurrentState != nil {
+			ss.log.Infow("Sending app status update to the orchestrator", "appId", event.Deployment.CurrentState.AppId)
+			return ss.sendAppStatusUpdate(ctx, event.Deployment)
 		}
 	}
 
@@ -145,58 +146,77 @@ func (ss *appStateSyncer) ExplicitlyTriggerSync(ctx context.Context) error {
 	return ss.performStateSync(ctx)
 }
 
-func (ss *appStateSyncer) sendAppStatusUpdate(ctx context.Context, newState sbi.AppState) error {
-	ss.log.Debug("Sending app status update...")
+func (ss *appStateSyncer) sendAppStatusUpdate(ctx context.Context, deployment database.AppDeployment) error {
+	ss.log.Debug("Sending app status update to orchestrator...")
 
 	// Create API client for communication with orchestration service
 	client, err := ss.apiClientFactory.NewSBIClient()
 	if err != nil {
-		ss.log.Errorw("Failed to create API client", "error", err)
+		ss.log.Errorw("Failed to create API client for status update", "error", err)
 		return fmt.Errorf("failed to create API client: %w", err)
 	}
 
-	// Send current states and receive desired states
-	appUUID, _ := uuid.FromBytes([]byte(newState.AppId))
-	resp, err := client.PostDeviceDeviceIdDeploymentDeploymentIdStatus(ctx, ss.config.DeviceID, appUUID, sbi.DeploymentStatus{})
+	// Parse deployment ID as UUID
+	appUUID, err := uuid.Parse(deployment.CurrentState.AppId)
 	if err != nil {
-		ss.log.Errorw("Failed to send state sync request", "error", err)
-		return fmt.Errorf("failed to send state sync request: %w", err)
+		ss.log.Errorw("Failed to parse deployment ID as UUID", "appId", deployment.CurrentState.AppId, "error", err)
+		return fmt.Errorf("failed to parse deployment ID as UUID: %w", err)
+	}
+
+	componentStatus := make([]sbi.ComponentStatus, 0, len(deployment.CurrentComponentsTrack))
+
+	for _, component := range deployment.CurrentComponentsTrack {
+		var compStatus sbi.ComponentStatus
+		compStatus = sbi.ComponentStatus{
+			Name:  component.Name,
+			State: component.State, // Use actual current state
+			Error: component.Error,
+		}
+
+		componentStatus = append(componentStatus, compStatus)
+	}
+
+	// Create deployment status payload
+	deploymentStatus := sbi.DeploymentStatus{
+		ApiVersion:   "deployment.margo/v1",
+		Kind:         "DeploymentStatus",
+		Components:   componentStatus,
+		DeploymentId: appUUID,
+		Status: sbi.OverallStatus{
+			State: sbi.OverallStatusState(deployment.CurrentState.AppState),
+		},
+	}
+
+	// Send status update to orchestrator
+	resp, err := client.PostDeviceDeviceIdDeploymentDeploymentIdStatus(ctx, ss.config.DeviceID, appUUID, deploymentStatus)
+	if err != nil {
+		ss.log.Errorw("Failed to send app status update", "appId", deployment.CurrentState.AppId, "error", err)
+		return fmt.Errorf("failed to send app status update: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Parse the response from orchestration service
-	desiredStateResp, err := sbi.ParseStateResponse(resp)
+	// Parse the status update response from orchestration service
+	statusUpdateResp, err := sbi.ParsePostDeviceDeviceIdDeploymentDeploymentIdStatusResponse(resp)
 	if err != nil {
-		ss.log.Errorw("Failed to parse app state response", "error", err)
-		return fmt.Errorf("failed to parse app state response: %w", err)
+		ss.log.Errorw("Failed to parse status update response", "appId", deployment.CurrentState.AppId, "error", err)
+		return fmt.Errorf("failed to parse status update response: %w", err)
 	}
 
 	// Handle different response status codes
-	switch desiredStateResp.StatusCode() {
-	case http.StatusOK, http.StatusAccepted:
-		ss.log.Debugw("Received desired state API response",
-			"statusCode", desiredStateResp.StatusCode(),
-			"hasData", desiredStateResp.JSON200 != nil)
+	switch statusUpdateResp.StatusCode() {
+	case http.StatusOK, http.StatusAccepted, http.StatusCreated:
+		ss.log.Debugw("Successfully sent app status update",
+			"appId", deployment.CurrentState.AppId,
+			"statusCode", statusUpdateResp.StatusCode())
 
-		// Process desired states if provided
-		if desiredStateResp.JSON200 != nil {
-			ss.log.Debugw("Processing desired states", "response", pretty.Sprint(desiredStateResp.JSON200))
-
-			if err := ss.mergeAppStates(ctx, *desiredStateResp.JSON200); err != nil {
-				ss.log.Errorw("Failed to merge app states", "error", err)
-				return fmt.Errorf("failed to merge app states: %w", err)
-			}
-		} else {
-			ss.log.Debug("No desired state changes received")
-		}
-
-		ss.log.Debug("App states synced successfully")
+		ss.log.Infow("App status update completed successfully", "appId", deployment.CurrentState.AppId)
 		return nil
 
 	default:
-		ss.log.Errorw("Received error response from orchestrator",
-			"statusCode", desiredStateResp.StatusCode())
-		return ss.handleErrorResponse(desiredStateResp.Body, desiredStateResp.StatusCode(), "sync app state")
+		ss.log.Errorw("Received error response from orchestrator for status update",
+			"appId", deployment.CurrentState.AppId,
+			"statusCode", statusUpdateResp.StatusCode())
+		return ss.handleErrorResponse(statusUpdateResp.Body, statusUpdateResp.StatusCode(), "send app status update")
 	}
 }
 
@@ -238,16 +258,16 @@ func (ss *appStateSyncer) syncAppStatesLoop() {
 func (ss *appStateSyncer) performStateSync(ctx context.Context) error {
 	ss.log.Debug("Syncing app states...")
 
-	// Fetch current workloads from local database
-	currentWorkloads, err := ss.database.GetAllWorkloads()
+	// Fetch current deployments from local database
+	currentDeployments, err := ss.database.GetAllDeployments()
 	if err != nil {
-		return fmt.Errorf("failed to fetch workloads from database: %w", err)
+		return fmt.Errorf("failed to fetch deployments from database: %w", err)
 	}
 
-	// Convert workloads map to slice for API request
-	currentAppStates := make(sbi.StateJSONRequestBody, 0, len(currentWorkloads))
-	for _, appState := range currentWorkloads {
-		currentAppStates = append(currentAppStates, appState)
+	// Convert deployments map to slice for API request
+	currentAppStates := make(sbi.StateJSONRequestBody, 0, len(currentDeployments))
+	for _, appState := range currentDeployments {
+		currentAppStates = append(currentAppStates, *appState.CurrentState)
 	}
 
 	ss.log.Debugw("Sending current states to orchestrator", "count", len(currentAppStates))
@@ -339,7 +359,7 @@ func (ss *appStateSyncer) mergeAppStates(ctx context.Context, states sbi.Desired
 		switch state.AppState {
 		case sbi.REMOVING:
 			ss.log.Infow("Removing app", "appId", *appDeployment.Metadata.Id)
-			ss.database.Remove(*appDeployment.Metadata.Id)
+			ss.database.RemoveDeployment(*appDeployment.Metadata.Id)
 
 		case sbi.RUNNING, sbi.UPDATING:
 			ss.log.Infow("Adding/Updating app", "appId", *appDeployment.Metadata.Id, "state", state.AppState)
@@ -348,12 +368,7 @@ func (ss *appStateSyncer) mergeAppStates(ctx context.Context, states sbi.Desired
 				ss.log.Errorw("Failed to convert AppDeployment to AppState", "appId", *appDeployment.Metadata.Id, "error", err)
 				return err
 			}
-
-			if state.AppState == sbi.RUNNING {
-				ss.database.AddWorkload(newAppState)
-			} else {
-				ss.database.UpdateWorkload(newAppState)
-			}
+			ss.database.UpsertDeploymentDesiredState(newAppState)
 
 		default:
 			ss.log.Warnw("Unknown app state, skipping", "appId", *appDeployment.Metadata.Id, "state", state.AppState)

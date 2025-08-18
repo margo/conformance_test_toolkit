@@ -120,13 +120,13 @@ func (h *HelmDeployer) Remove(ctx context.Context, appID string) error {
 	h.log.Infow("Removing Helm workload", "appId", appID)
 
 	// FIX: Need to get component name to generate correct release name
-	// Get app from database to determine component name
-	app, err := h.database.GetWorkload(appID) // You'll need to pass database to HelmDeployer
+	// Get deployment from database to determine component name
+	deployment, err := h.database.GetDeployment(appID) // You'll need to pass database to HelmDeployer
 	if err != nil {
 		return fmt.Errorf("failed to get app from database: %w", err)
 	}
 
-	appDeployment, err := pkg.ConvertAppStateToAppDeployment(app)
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*deployment.CurrentState)
 	if err != nil {
 		return fmt.Errorf("failed to convert AppState to AppDeployment: %w", err)
 	}

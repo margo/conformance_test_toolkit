@@ -1,4 +1,4 @@
-package main
+package workload
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
-	"github.com/margo/dev-repo/poc/device/agent/monitoring"
+	"github.com/margo/dev-repo/poc/device/agent/workload/monitoring"
 	workloads "github.com/margo/dev-repo/shared-lib/workloads"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"github.com/margo/dev-repo/standard/pkg"
@@ -22,10 +22,10 @@ type WorkloadWatcher interface {
 	// Workload monitoring operations
 	StartWatching(ctx context.Context, app sbi.AppState) error
 	StopWatching(ctx context.Context, appID string) error
-	GetWorkloadStatus(ctx context.Context, appID string) (monitoring.WorkloadStatus, error)
+	GetDeploymentStatus(ctx context.Context, appID string) (sbi.ComponentStatus, error)
 
 	// Database subscriber interface for reactive monitoring
-	database.WorkloadDatabaseSubscriber
+	database.DeploymentDatabaseSubscriber
 }
 
 type workloadWatcher struct {
@@ -114,10 +114,10 @@ func (ww *workloadWatcher) GetSubscriberID() string {
 }
 
 // OnDatabaseEvent handles database events and starts/stops monitoring accordingly
-func (ww *workloadWatcher) OnDatabaseEvent(event database.WorkloadDatabaseEvent) error {
+func (ww *workloadWatcher) OnDatabaseEvent(event database.DeploymentDatabaseEvent) error {
 	ww.log.Debugw("WorkloadWatcher-Received database event",
 		"type", event.Type,
-		"appId", event.AppID,
+		"appId", event.Deployment.DesiredState.AppId,
 		"timestamp", event.Timestamp)
 
 	// Create context with timeout for database event handling
@@ -125,10 +125,10 @@ func (ww *workloadWatcher) OnDatabaseEvent(event database.WorkloadDatabaseEvent)
 	defer cancel()
 
 	switch event.Type {
-	case database.EventAppAdded:
-		if event.NewState != nil {
-			ww.log.Infow("Starting monitoring for new app", "appId", event.AppID)
-			return ww.StartWatching(ctx, *event.NewState)
+	case database.EventDeploymentAdded:
+		if event.Deployment.DesiredState != nil {
+			ww.log.Infow("Starting monitoring for new app", "appId", event.Deployment.DesiredState.AppId)
+			return ww.StartWatching(ctx, *event.Deployment.DesiredState)
 		}
 	// case database.EventAppDesiredStateChanged:
 	// 	// For updates, we might need to restart monitoring with new configuration
@@ -139,9 +139,9 @@ func (ww *workloadWatcher) OnDatabaseEvent(event database.WorkloadDatabaseEvent)
 	// 		// Start new watch
 	// 		return ww.StartWatching(ctx, *event.NewState)
 	// 	}
-	case database.EventAppDeleted:
-		ww.log.Infow("Stopping monitoring for deleted app", "appId", event.AppID)
-		return ww.StopWatching(ctx, event.AppID)
+	case database.EventDeploymentDeleted:
+		ww.log.Infow("Stopping monitoring for deleted app", "appId", event.Deployment.DesiredState.AppId)
+		return ww.StopWatching(ctx, event.Deployment.DesiredState.AppId)
 	default:
 		ww.log.Debugw("Ignoring unhandled event type", "type", event.Type)
 	}
@@ -218,29 +218,29 @@ func (ww *workloadWatcher) StopWatching(ctx context.Context, appID string) error
 	return nil
 }
 
-// GetWorkloadStatus retrieves the current status of a workload
-func (ww *workloadWatcher) GetWorkloadStatus(ctx context.Context, workloadId string) (monitoring.WorkloadStatus, error) {
-	if workloadId == "" {
-		return monitoring.WorkloadStatus{}, fmt.Errorf("app ID is required")
+// GetDeploymentStatus retrieves the current status of a workload
+func (ww *workloadWatcher) GetDeploymentStatus(ctx context.Context, deploymentId string) (sbi.ComponentStatus, error) {
+	if deploymentId == "" {
+		return sbi.ComponentStatus{}, fmt.Errorf("app ID is required")
 	}
 
-	ww.log.Debugw("Getting workload status", "appId", workloadId)
+	ww.log.Debugw("Getting workload status", "appId", deploymentId)
 
-	// Get appState from database to determine deployment type
-	appState, err := ww.database.GetWorkload(workloadId)
+	// Get deployment from database to determine deployment type
+	deployment, err := ww.database.GetDeployment(deploymentId)
 	if err != nil {
-		return monitoring.WorkloadStatus{}, fmt.Errorf("failed to get app from database: %w", err)
+		return sbi.ComponentStatus{}, fmt.Errorf("failed to get app from database: %w", err)
 	}
 
 	// TODO: Extract deployment profile type from app
-	appDeployment, _ := pkg.ConvertAppStateToAppDeployment(appState) // "helm.v3" // Default for now
+	appDeployment, _ := pkg.ConvertAppStateToAppDeployment(*deployment.CurrentState) // "helm.v3" // Default for now
 
 	monitor, exists := ww.monitors[string(appDeployment.Spec.DeploymentProfile.Type)]
 	if !exists {
-		return monitoring.WorkloadStatus{}, fmt.Errorf("unsupported deployment profile type: %s", appDeployment.Spec.DeploymentProfile.Type)
+		return sbi.ComponentStatus{}, fmt.Errorf("unsupported deployment profile type: %s", appDeployment.Spec.DeploymentProfile.Type)
 	}
 
-	return monitor.GetStatus(ctx, workloadId)
+	return monitor.GetStatus(ctx, deploymentId, "")
 }
 
 // getAvailableMonitorTypes returns list of available monitor types

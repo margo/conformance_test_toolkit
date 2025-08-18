@@ -3,9 +3,9 @@ package monitoring
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/margo/dev-repo/shared-lib/workloads"
+	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
 )
 
@@ -39,14 +39,8 @@ func (d *DockerComposeMonitor) StopWatching(ctx context.Context, appID string) e
 	return fmt.Errorf("docker compose stop watching not yet implemented")
 }
 
-func (d *DockerComposeMonitor) GetStatus(ctx context.Context, appID string) (WorkloadStatus, error) {
+func (d *DockerComposeMonitor) GetStatus(ctx context.Context, appID, componentName string) (sbi.ComponentStatus, error) {
 	d.log.Debugw("Getting Docker Compose workload status", "appId", appID)
 	// TODO: Implement Docker Compose status checking
-	return WorkloadStatus{
-		WorkloadId: appID,
-		Status:     "unknown",
-		Health:     "unknown",
-		Message:    "Docker Compose monitoring not implemented",
-		Timestamp:  time.Now(),
-	}, nil
+	return sbi.ComponentStatus{}, nil
 }

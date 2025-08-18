@@ -19,6 +19,14 @@ WORKDIR /app
 COPY --from=builder /app/device-agent .
 COPY --from=builder /app/poc/device/agent/config ./config
 
-EXPOSE 8080
+# Create volume for config override
+VOLUME ["/app/config"]
 
-CMD ["./device-agent"]
+# Add metadata labels
+LABEL description="Margo Device Agent for edge workload management" \
+      source="https://github.com/margo/dev-repo" \
+      title="Device Agent"
+
+# Use ENTRYPOINT for better flexibility
+ENTRYPOINT ["./device-agent"]
+CMD ["-config", "config/config.yaml"]

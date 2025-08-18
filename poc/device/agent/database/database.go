@@ -13,26 +13,36 @@ import (
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 )
 
+type AppDeployment struct {
+	DesiredState *sbi.AppState
+	CurrentState *sbi.AppState
+	// map[componentname]componentobject
+	CurrentComponentsTrack map[string]sbi.ComponentStatus
+}
+
 type AgentDatabase interface {
 	Start() error
 	Stop() error
 	Clear() error
-	GetAllWorkloads() (map[string]sbi.AppState, error)
-	GetWorkload(workloadId string) (sbi.AppState, error)
-	AddWorkload(workload sbi.AppState) error
-	Remove(workloadId string) error
-	UpdateWorkload(workload sbi.AppState) error
-	UpsertWorkload(workload sbi.AppState) error
-	UpdateWorkloadStatus(workloadId string, status sbi.AppStateAppState) error
-	WorkloadExists(workloadId string) bool
-	GetWorkloadCount() int
+
+	GetAllDeployments() (map[string]AppDeployment, error)
+	GetDeployment(deploymentId string) (AppDeployment, error)
+	RemoveDeployment(deploymentId string) error
+	GetCurrentState(deploymentId string) (*sbi.AppState, error)
+	GetDesiredState(deploymentId string) (*sbi.AppState, error)
+	UpsertDeploymentDesiredState(state sbi.AppState) error
+	UpsertDeploymentCurrentState(state sbi.AppState) error
+	UpsertComponentStatus(deploymentId, componentName string, status sbi.ComponentStatus) error
+	DeploymentExists(deploymentId string) bool
+	GetDeploymentCount() int
+
 	GetDeviceProperties() *sbi.Properties
 	GetDeviceAuth() *sbi.OnboardingResponse
 	GetDevice() (*DeviceModel, error)
 	UpsertDevice(device *DeviceModel) error
 	UpsertDeviceCapabilities(capabilities *sbi.DeviceCapabilities) error
 	UpsertDeviceAuth(auth *sbi.OnboardingResponse) error
-	Subscribe(subscriber WorkloadDatabaseSubscriber) error
+	Subscribe(subscriber DeploymentDatabaseSubscriber) error
 	Unsubscribe(subscriberId string) error
 }
 
@@ -55,8 +65,8 @@ type DeviceModel struct {
 }
 
 type DatabaseDump struct {
-	Workloads map[string]sbi.AppState
-	Device    DeviceModel
+	Deployments map[string]AppDeployment
+	Device      DeviceModel
 }
 
 // AgentInMemoryDatabase is an in-memory database that stores application workloads
@@ -69,15 +79,15 @@ type AgentInMemoryDatabase struct {
 	// device object
 	device DeviceModel
 
-	// workloads maps workload ID to app state - this is the source of truth
-	workloads map[string]sbi.AppState
+	// deployments maps workload ID to app state - this is the source of truth
+	deployments map[string]AppDeployment
 
 	// workloadChangeSubscribers is a list of components that want to be notified of database changes
 	// Using slice instead of map for simplicity, assuming small number of workloadChangeSubscribers
-	workloadChangeSubscribers []WorkloadDatabaseSubscriber
+	workloadChangeSubscribers []DeploymentDatabaseSubscriber
 
 	// workloadEventChan is a buffered channel for async event publishing to avoid blocking database operations
-	workloadEventChan chan WorkloadDatabaseEvent
+	workloadEventChan chan DeploymentDatabaseEvent
 
 	// mu protects concurrent access to subscribers slice and currentWorkloads map
 	// Using RWMutex to allow concurrent reads while protecting writes
@@ -114,10 +124,10 @@ func NewAgentInMemoryDatabase(ctx context.Context, dataDir string) *AgentInMemor
 			Status:           DeviceStatusOnline,
 			LastSeen:         time.Now().UTC(),
 		},
-		workloads:                 make(map[string]sbi.AppState),
+		deployments:               make(map[string]AppDeployment),
 		bkpDataDir:                dataDir,
-		workloadChangeSubscribers: make([]WorkloadDatabaseSubscriber, 0),
-		workloadEventChan:         make(chan WorkloadDatabaseEvent, 100), // Buffered channel to prevent blocking
+		workloadChangeSubscribers: make([]DeploymentDatabaseSubscriber, 0),
+		workloadEventChan:         make(chan DeploymentDatabaseEvent, 100), // Buffered channel to prevent blocking
 		ctx:                       localCtx,
 		operationStopper:          canceller,
 	}
@@ -187,8 +197,8 @@ func (db *AgentInMemoryDatabase) dump() error {
 	filename := filepath.Join(db.bkpDataDir, "agent.dump.json")
 
 	dump := DatabaseDump{
-		Workloads: db.workloads,
-		Device:    db.device,
+		Deployments: db.deployments,
+		Device:      db.device,
 	}
 
 	// Marshal with indentation for human readability (could be optimized for size)
@@ -220,7 +230,7 @@ func (db *AgentInMemoryDatabase) restore() error {
 	// Check if dump file exists - missing file is not an error
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		// No dump file exists, start with empty database
-		db.workloads = make(map[string]sbi.AppState)
+		db.deployments = make(map[string]AppDeployment)
 		return nil
 	}
 
@@ -235,225 +245,261 @@ func (db *AgentInMemoryDatabase) restore() error {
 		return fmt.Errorf("failed to unmarshal database dump: %w", err)
 	}
 
-	db.workloads = dump.Workloads
+	db.deployments = dump.Deployments
 	// let us initialize the map if it is nil
-	if db.workloads == nil {
-		db.workloads = make(map[string]sbi.AppState)
+	if db.deployments == nil {
+		db.deployments = make(map[string]AppDeployment)
 	}
 
 	db.device = dump.Device
 	return nil
 }
 
-// GetAllWorkloads returns a copy of all workloads in the database.
+// GetAllDeployments returns a copy of all deployments in the database.
 // Returns a copy to prevent external modifications to internal state.
-func (db *AgentInMemoryDatabase) GetAllWorkloads() (map[string]sbi.AppState, error) {
+func (db *AgentInMemoryDatabase) GetAllDeployments() (map[string]AppDeployment, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
 	// Return a copy to prevent external modifications
-	workloads := make(map[string]sbi.AppState, len(db.workloads))
-	for k, v := range db.workloads {
-		workloads[k] = v
+	deployments := make(map[string]AppDeployment, len(db.deployments))
+	for k, v := range db.deployments {
+		deployments[k] = v
 	}
-	return workloads, nil
+	return deployments, nil
 }
 
-// GetWorkload retrieves a specific workload by ID.
-// Returns an error if the workload doesn't exist.
-func (db *AgentInMemoryDatabase) GetWorkload(workloadId string) (sbi.AppState, error) {
-	if workloadId == "" {
-		return sbi.AppState{}, fmt.Errorf("workload ID cannot be empty")
+// GetDeployment retrieves a specific deployment by ID.
+// Returns an error if the deployment doesn't exist.
+func (db *AgentInMemoryDatabase) GetDeployment(deploymentId string) (AppDeployment, error) {
+	if deploymentId == "" {
+		return AppDeployment{}, fmt.Errorf("deployment ID cannot be empty")
 	}
 
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	workload, exists := db.workloads[workloadId]
+	deployment, exists := db.deployments[deploymentId]
 	if !exists {
-		return sbi.AppState{}, fmt.Errorf("workload with ID %s not found", workloadId)
+		return AppDeployment{}, fmt.Errorf("deployment with ID %s not found", deploymentId)
 	}
 
-	return workload, nil
+	return deployment, nil
 }
 
-// AddWorkload adds a new workload to the database.
-// Returns an error if a workload with the same ID already exists.
-func (db *AgentInMemoryDatabase) AddWorkload(workload sbi.AppState) error {
-	if workload.AppId == "" {
-		return fmt.Errorf("workload AppId cannot be empty")
+// GetDesiredState retrieves the desired state for a specific deployment by ID.
+// Returns an error if the deployment doesn't exist.
+func (db *AgentInMemoryDatabase) GetDesiredState(deploymentId string) (*sbi.AppState, error) {
+	if deploymentId == "" {
+		return nil, fmt.Errorf("deployment ID cannot be empty")
 	}
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	db.mu.RLock() // Use read lock instead of write lock
+	defer db.mu.RUnlock()
 
-	// Check if workload already exists
-	if _, exists := db.workloads[workload.AppId]; exists {
-		return fmt.Errorf("workload with ID %s already exists", workload.AppId)
-	}
-
-	db.workloads[workload.AppId] = workload
-
-	// Determine event type based on whether workload existed
-	eventType := EventAppAdded
-
-	// Publish event to notify subscribers of the change
-	// Note: publishEvent is non-blocking to avoid deadlocks
-	db.publishEvent(WorkloadDatabaseEvent{
-		Type:      eventType,
-		AppID:     workload.AppId,
-		OldState:  nil,
-		NewState:  &workload,
-		Timestamp: time.Now(),
-	})
-	return nil
-}
-
-// Remove deletes a workload from the database.
-// Returns an error if the workload doesn't exist.
-func (db *AgentInMemoryDatabase) Remove(workloadId string) error {
-	if workloadId == "" {
-		return fmt.Errorf("workload ID cannot be empty")
-	}
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	existingAppState, exists := db.workloads[workloadId]
+	// Check if deployment exists
+	existingDeployment, exists := db.deployments[deploymentId]
 	if !exists {
-		return fmt.Errorf("workload with ID %s not found", workloadId)
+		return nil, fmt.Errorf("deployment with ID %s not found", deploymentId)
 	}
 
-	delete(db.workloads, workloadId)
-
-	db.publishEvent(WorkloadDatabaseEvent{
-		Type:      EventAppDeleted,
-		AppID:     workloadId,
-		Timestamp: time.Now(),
-		OldState:  &existingAppState,
-	})
-
-	return nil
+	return existingDeployment.DesiredState, nil // Use correct field name 'Desired'
 }
 
-// UpdateWorkload updates an existing workload in the database.
-// Returns an error if the workload doesn't exist.
-func (db *AgentInMemoryDatabase) UpdateWorkload(workload sbi.AppState) error {
-	if workload.AppId == "" {
-		return fmt.Errorf("workload AppId cannot be empty")
+// GetCurrentState retrieves the current state for a specific deployment by ID.
+// Returns an error if the deployment doesn't exist.
+func (db *AgentInMemoryDatabase) GetCurrentState(deploymentId string) (*sbi.AppState, error) {
+	if deploymentId == "" {
+		return nil, fmt.Errorf("deployment ID cannot be empty")
 	}
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	db.mu.RLock() // Use read lock instead of write lock
+	defer db.mu.RUnlock()
 
-	// Check if workload exists
-	existingWorkload, exists := db.workloads[workload.AppId]
+	// Check if deployment exists
+	existingDeployment, exists := db.deployments[deploymentId]
 	if !exists {
-		return fmt.Errorf("workload with ID %s not found", workload.AppId)
+		return nil, fmt.Errorf("deployment with ID %s not found", deploymentId)
 	}
 
-	db.workloads[workload.AppId] = workload
-
-	db.publishEvent(WorkloadDatabaseEvent{
-		Type:      EventAppDeleted,
-		AppID:     workload.AppId,
-		Timestamp: time.Now(),
-		OldState:  &existingWorkload,
-		NewState:  &workload,
-	})
-	return nil
+	return existingDeployment.CurrentState, nil
 }
 
-// UpsertWorkload inserts or updates a workload and publishes appropriate events.
-func (db *AgentInMemoryDatabase) UpsertWorkload(workload sbi.AppState) error {
-	if workload.AppId == "" {
-		return fmt.Errorf("workload AppId cannot be empty")
+// UpsertDeploymentDesiredState upserts the desired state for a deployment.
+// Creates a new deployment if it doesn't exist, updates if it does.
+func (db *AgentInMemoryDatabase) UpsertDeploymentDesiredState(newstate sbi.AppState) error {
+	if newstate.AppId == "" {
+		return fmt.Errorf("deployment AppId cannot be empty")
 	}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	// Capture old state for event publishing
-	oldState, exists := db.workloads[workload.AppId]
-	db.workloads[workload.AppId] = workload
+	// Check if deployment already exists
+	existingDeployment, exists := db.deployments[newstate.AppId]
+	var eventType EventType
 
-	// Determine event type based on whether workload existed
-	eventType := EventAppAdded
 	if exists {
-		eventType = EventAppUpdated
-		if oldState.AppDeploymentYAMLHash != workload.AppDeploymentYAMLHash {
-			eventType = EventAppDesiredStateChanged
+		// Deployment exists - this is an update
+		eventType = EventDeploymentUpdated
+		// Check if desired state actually changed
+		if existingDeployment.DesiredState.AppDeploymentYAMLHash != newstate.AppDeploymentYAMLHash {
+			eventType = EventDeploymentDesiredStateChanged
 		}
+	} else {
+		// Deployment doesn't exist - this is an add
+		eventType = EventDeploymentAdded
+		existingDeployment = AppDeployment{}
 	}
 
+	// Update the desired state
+	existingDeployment.DesiredState = &newstate
+	db.deployments[newstate.AppId] = existingDeployment
+
 	// Publish event to notify subscribers of the change
-	// Note: publishEvent is non-blocking to avoid deadlocks
-	db.publishEvent(WorkloadDatabaseEvent{
-		Type:      eventType,
-		AppID:     workload.AppId,
-		OldState:  &oldState,
-		NewState:  &workload,
-		Timestamp: time.Now(),
+	db.publishEvent(DeploymentDatabaseEvent{
+		Type:       eventType,
+		Deployment: existingDeployment,
+		Timestamp:  time.Now(),
 	})
 
 	return nil
 }
 
-func (db *AgentInMemoryDatabase) UpdateWorkloadStatus(workloadId string, status sbi.AppStateAppState) error {
-	existingWorkload, err := db.GetWorkload(workloadId)
-	if err != nil {
-		return err
+// UpsertDeploymentCurrentState updates the current state for a deployment.
+// Creates a new deployment if it doesn't exist, updates if it does.
+func (db *AgentInMemoryDatabase) UpsertDeploymentCurrentState(currentstate sbi.AppState) error {
+	if currentstate.AppId == "" {
+		return fmt.Errorf("deployment AppId cannot be empty")
 	}
-	existingWorkload.AppState = status
 
-	return db.UpsertWorkload(existingWorkload)
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Check if deployment already exists
+	existingDeployment, exists := db.deployments[currentstate.AppId]
+	var eventType EventType
+
+	if exists {
+		// Deployment exists - this is an update
+		eventType = EventDeploymentStatusUpdate
+	} else {
+		// Deployment doesn't exist - create new one
+		eventType = EventDeploymentAdded
+		existingDeployment = AppDeployment{}
+	}
+
+	// Update the current state
+	existingDeployment.CurrentState = &currentstate
+	db.deployments[currentstate.AppId] = existingDeployment
+
+	// Publish event to notify subscribers of the change
+	db.publishEvent(DeploymentDatabaseEvent{
+		Type:       eventType,
+		Deployment: existingDeployment,
+		Timestamp:  time.Now(),
+	})
+	return nil
 }
 
-// WorkloadExists checks if a workload with the given ID exists.
-func (db *AgentInMemoryDatabase) WorkloadExists(workloadId string) bool {
+func (db *AgentInMemoryDatabase) UpsertComponentStatus(deploymentId, componentName string, status sbi.ComponentStatus) error {
+	if deploymentId == "" {
+		return fmt.Errorf("deployment ID cannot be empty")
+	}
+	if componentName == "" {
+		return fmt.Errorf("component name cannot be empty")
+	}
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	existingDeployment, exists := db.deployments[deploymentId]
+	if !exists {
+		return fmt.Errorf("deployment with ID %s not found", deploymentId)
+	}
+
+	// Update the component status
+	existingDeployment.CurrentComponentsTrack[componentName] = status
+	db.deployments[deploymentId] = existingDeployment
+
+	// Publish event to notify subscribers of the component status change
+	db.publishEvent(DeploymentDatabaseEvent{
+		Type:       EventDeploymentStatusUpdate,
+		Deployment: existingDeployment,
+		Timestamp:  time.Now(),
+	})
+
+	return nil
+}
+
+// Remove deletes a deployment from the database.
+// Returns an error if the deployment doesn't exist.
+func (db *AgentInMemoryDatabase) RemoveDeployment(deploymentId string) error {
+	if deploymentId == "" {
+		return fmt.Errorf("deployment ID cannot be empty")
+	}
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	existingDeployment, exists := db.deployments[deploymentId]
+	if !exists {
+		return fmt.Errorf("deployment with ID %s not found", deploymentId)
+	}
+
+	delete(db.deployments, deploymentId)
+
+	db.publishEvent(DeploymentDatabaseEvent{
+		Type:       EventDeploymentDeleted,
+		Deployment: existingDeployment,
+		Timestamp:  time.Now(),
+	})
+
+	return nil
+}
+
+// DeploymentExists checks if a deployment with the given ID exists.
+func (db *AgentInMemoryDatabase) DeploymentExists(deploymentId string) bool {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	_, exists := db.workloads[workloadId]
+	_, exists := db.deployments[deploymentId]
 	return exists
 }
 
-// GetWorkloadCount returns the total number of workloads in the database.
-func (db *AgentInMemoryDatabase) GetWorkloadCount() int {
+// GetDeploymentCount returns the total number of deployments in the database.
+func (db *AgentInMemoryDatabase) GetDeploymentCount() int {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	return len(db.workloads)
+	return len(db.deployments)
 }
 
-// GetDeviceProperties returns error if unable to update device properties.
+// GetDeviceProperties returns device properties.
 func (db *AgentInMemoryDatabase) GetDeviceProperties() *sbi.Properties {
 	return db.device.DeviceProperties
 }
 
-// GetDeviceAuth returns error if unable to get device auth.
+// GetDeviceAuth returns device auth.
 func (db *AgentInMemoryDatabase) GetDeviceAuth() *sbi.OnboardingResponse {
 	return db.device.DeviceAuth
 }
 
-// Clear removes all workloads from the database.
-// This primarily be used for testing or reset scenarios
+// Clear removes all deployments from the database.
+// This should primarily be used for testing or reset scenarios
 func (db *AgentInMemoryDatabase) Clear() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	eventType := EventAppDeleted
-	for _, workload := range db.workloads {
-		db.publishEvent(WorkloadDatabaseEvent{
-			Type:      eventType,
-			AppID:     workload.AppId,
-			OldState:  &workload,
-			NewState:  nil,
-			Timestamp: time.Now(),
+	for _, deployment := range db.deployments {
+		db.publishEvent(DeploymentDatabaseEvent{
+			Type:       EventDeploymentDeleted,
+			Deployment: deployment,
+			Timestamp:  time.Now(),
 		})
 	}
 
-	db.workloads = make(map[string]sbi.AppState)
+	db.deployments = make(map[string]AppDeployment)
 	return nil
 }
 
@@ -473,7 +519,7 @@ func (db *AgentInMemoryDatabase) eventPublisher(ctx context.Context) {
 		case event := <-db.workloadEventChan:
 			// Get a snapshot of current subscribers under read lock
 			db.mu.RLock()
-			subscribers := make([]WorkloadDatabaseSubscriber, len(db.workloadChangeSubscribers))
+			subscribers := make([]DeploymentDatabaseSubscriber, len(db.workloadChangeSubscribers))
 			copy(subscribers, db.workloadChangeSubscribers)
 			db.mu.RUnlock()
 
@@ -481,15 +527,11 @@ func (db *AgentInMemoryDatabase) eventPublisher(ctx context.Context) {
 			// Each subscriber gets its own goroutine to prevent slow subscribers
 			// from affecting others
 			for _, subscriber := range subscribers {
-				go func(sub WorkloadDatabaseSubscriber) {
+				go func(sub DeploymentDatabaseSubscriber) {
 					if err := sub.OnDatabaseEvent(event); err != nil {
 						// Log error but don't block other subscribers
-						// In production, this should use structured logging
 						log.Printf("Subscriber %s failed to handle event: %v",
 							sub.GetSubscriberID(), err)
-
-						// TODO: implement a dead letter queue or retry mechanism
-						// for failed event deliveries ????
 					}
 				}(subscriber)
 			}
@@ -504,7 +546,7 @@ func (db *AgentInMemoryDatabase) eventPublisher(ctx context.Context) {
 
 // Subscribe registers a subscriber to receive database events.
 // Subscribers will be notified of all workload changes via the OnDatabaseEvent method.
-func (db *AgentInMemoryDatabase) Subscribe(subscriber WorkloadDatabaseSubscriber) error {
+func (db *AgentInMemoryDatabase) Subscribe(subscriber DeploymentDatabaseSubscriber) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -530,12 +572,12 @@ func (db *AgentInMemoryDatabase) Unsubscribe(subscriberId string) error {
 //
 // Note: Non-blocking publish prevents database operations from hanging
 // if the event system is overwhelmed.
-func (db *AgentInMemoryDatabase) publishEvent(event WorkloadDatabaseEvent) {
+func (db *AgentInMemoryDatabase) publishEvent(event DeploymentDatabaseEvent) {
 	select {
 	case db.workloadEventChan <- event:
 		// Event successfully queued
 	default:
 		// TODO: Event channel full, log this
-		log.Printf("Warning: Event channel full, dropping event for app %s", event.AppID)
+		log.Printf("Warning: Event channel full, dropping event for app %s", event.Deployment.CurrentState.AppId)
 	}
 }
