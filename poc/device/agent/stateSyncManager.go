@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kr/pretty"
 	"github.com/margo/dev-repo/poc/device/agent/database"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
@@ -20,15 +21,17 @@ const (
 	appStateSeekingInterval = time.Second * 10
 )
 
-// AppStateSeeker interface - all methods should accept context where needed
-type AppStateSeeker interface {
+// AppStateSyncer interface - all methods should accept context where needed
+type AppStateSyncer interface {
 	Start() error
 	Stop() error
 	ExplicitlyTriggerSync(ctx context.Context) error
+	// DatabaseSubscriber interface methods for event-driven operations
+	database.WorkloadDatabaseSubscriber
 }
 
-// appStateSeeker struct - no context storage
-type appStateSeeker struct {
+// appStateSyncer struct - no context storage
+type appStateSyncer struct {
 	config           *Config
 	database         database.AgentDatabase
 	log              *zap.SugaredLogger
@@ -40,9 +43,9 @@ type appStateSeeker struct {
 	wg       sync.WaitGroup
 }
 
-// NewAppStateSeeker creates a new StateSyncer
-func NewAppStateSeeker(log *zap.SugaredLogger, config *Config, database database.AgentDatabase, apiClientFactory APIClientInterface) AppStateSeeker {
-	return &appStateSeeker{
+// NewAppStateSyncer creates a new StateSyncer
+func NewAppStateSyncer(log *zap.SugaredLogger, config *Config, database database.AgentDatabase, apiClientFactory APIClientInterface) AppStateSyncer {
+	return &appStateSyncer{
 		config:           config,
 		database:         database,
 		log:              log,
@@ -51,12 +54,17 @@ func NewAppStateSeeker(log *zap.SugaredLogger, config *Config, database database
 	}
 }
 
-func (ss *appStateSeeker) Start() error {
-	ss.log.Info("Starting AppStateSeeker")
+func (ss *appStateSyncer) Start() error {
+	ss.log.Info("Starting AppStateSyncer")
 
 	if ss.started {
-		ss.log.Warn("AppStateSeeker already started")
+		ss.log.Warn("AppStateSyncer already started")
 		return nil
+	}
+
+	// Subscribe to database events for reactive workload management
+	if err := ss.database.Subscribe(ss); err != nil {
+		return fmt.Errorf("failed to subscribe to database events: %w", err)
 	}
 
 	ss.started = true
@@ -68,16 +76,21 @@ func (ss *appStateSeeker) Start() error {
 		ss.syncAppStatesLoop()
 	}()
 
-	ss.log.Info("AppStateSeeker started successfully")
+	ss.log.Info("AppStateSyncer started successfully")
 	return nil
 }
 
-func (ss *appStateSeeker) Stop() error {
-	ss.log.Info("Stopping AppStateSeeker")
+func (ss *appStateSyncer) Stop() error {
+	ss.log.Info("Stopping AppStateSyncer")
 
 	if !ss.started {
-		ss.log.Warn("AppStateSeeker not started")
+		ss.log.Warn("AppStateSyncer not started")
 		return nil
+	}
+
+	// Unsubscribe from database events
+	if err := ss.database.Unsubscribe(ss.GetSubscriberID()); err != nil {
+		ss.log.Warnw("Failed to unsubscribe from database events", "error", err)
 	}
 
 	// Signal stop
@@ -87,12 +100,39 @@ func (ss *appStateSeeker) Stop() error {
 	ss.wg.Wait()
 
 	ss.started = false
-	ss.log.Info("AppStateSeeker stopped successfully")
+	ss.log.Info("AppStateSyncer stopped successfully")
 	return nil
 }
 
+// OnDatabaseEvent handles database events and triggers appropriate workload operations
+func (ss *appStateSyncer) OnDatabaseEvent(event database.WorkloadDatabaseEvent) error {
+	ss.log.Debugw("Received database event",
+		"type", event.Type,
+		"appId", event.AppID,
+		"timestamp", event.Timestamp)
+
+	// Create context with timeout for database event handling
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	switch event.Type {
+	case database.EventAppStatusUpdate:
+		if event.NewState != nil {
+			ss.log.Infow("Sending app status update to the orchestrator", "appId", event.AppID)
+			return ss.sendAppStatusUpdate(ctx, *event.NewState)
+		}
+	}
+
+	return nil
+}
+
+// GetSubscriberID returns a unique identifier for this database subscriber
+func (ss *appStateSyncer) GetSubscriberID() string {
+	return "app-state-syncer"
+}
+
 // ExplicitlyTriggerSync manually triggers a sync operation
-func (ss *appStateSeeker) ExplicitlyTriggerSync(ctx context.Context) error {
+func (ss *appStateSyncer) ExplicitlyTriggerSync(ctx context.Context) error {
 	ss.log.Info("Explicitly triggering state sync")
 
 	// Check if context is cancelled
@@ -105,8 +145,63 @@ func (ss *appStateSeeker) ExplicitlyTriggerSync(ctx context.Context) error {
 	return ss.performStateSync(ctx)
 }
 
+func (ss *appStateSyncer) sendAppStatusUpdate(ctx context.Context, newState sbi.AppState) error {
+	ss.log.Debug("Sending app status update...")
+
+	// Create API client for communication with orchestration service
+	client, err := ss.apiClientFactory.NewSBIClient()
+	if err != nil {
+		ss.log.Errorw("Failed to create API client", "error", err)
+		return fmt.Errorf("failed to create API client: %w", err)
+	}
+
+	// Send current states and receive desired states
+	appUUID, _ := uuid.FromBytes([]byte(newState.AppId))
+	resp, err := client.PostDeviceDeviceIdDeploymentDeploymentIdStatus(ctx, ss.config.DeviceID, appUUID, sbi.DeploymentStatus{})
+	if err != nil {
+		ss.log.Errorw("Failed to send state sync request", "error", err)
+		return fmt.Errorf("failed to send state sync request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Parse the response from orchestration service
+	desiredStateResp, err := sbi.ParseStateResponse(resp)
+	if err != nil {
+		ss.log.Errorw("Failed to parse app state response", "error", err)
+		return fmt.Errorf("failed to parse app state response: %w", err)
+	}
+
+	// Handle different response status codes
+	switch desiredStateResp.StatusCode() {
+	case http.StatusOK, http.StatusAccepted:
+		ss.log.Debugw("Received desired state API response",
+			"statusCode", desiredStateResp.StatusCode(),
+			"hasData", desiredStateResp.JSON200 != nil)
+
+		// Process desired states if provided
+		if desiredStateResp.JSON200 != nil {
+			ss.log.Debugw("Processing desired states", "response", pretty.Sprint(desiredStateResp.JSON200))
+
+			if err := ss.mergeAppStates(ctx, *desiredStateResp.JSON200); err != nil {
+				ss.log.Errorw("Failed to merge app states", "error", err)
+				return fmt.Errorf("failed to merge app states: %w", err)
+			}
+		} else {
+			ss.log.Debug("No desired state changes received")
+		}
+
+		ss.log.Debug("App states synced successfully")
+		return nil
+
+	default:
+		ss.log.Errorw("Received error response from orchestrator",
+			"statusCode", desiredStateResp.StatusCode())
+		return ss.handleErrorResponse(desiredStateResp.Body, desiredStateResp.StatusCode(), "sync app state")
+	}
+}
+
 // syncAppStatesLoop runs the continuous sync loop
-func (ss *appStateSeeker) syncAppStatesLoop() {
+func (ss *appStateSyncer) syncAppStatesLoop() {
 	ss.log.Info("Starting app state sync loop")
 
 	// Create ticker for consistent intervals
@@ -140,7 +235,7 @@ func (ss *appStateSeeker) syncAppStatesLoop() {
 }
 
 // performStateSync handles the actual state synchronization logic
-func (ss *appStateSeeker) performStateSync(ctx context.Context) error {
+func (ss *appStateSyncer) performStateSync(ctx context.Context) error {
 	ss.log.Debug("Syncing app states...")
 
 	// Fetch current workloads from local database
@@ -209,7 +304,7 @@ func (ss *appStateSeeker) performStateSync(ctx context.Context) error {
 }
 
 // handleErrorResponse processes error responses consistently
-func (ss *appStateSeeker) handleErrorResponse(errBody []byte, statusCode int, operation string) error {
+func (ss *appStateSyncer) handleErrorResponse(errBody []byte, statusCode int, operation string) error {
 	body, err := io.ReadAll(bytes.NewReader(errBody))
 	if err != nil {
 		ss.log.Errorw("Failed to read response body", "operation", operation, "statusCode", statusCode, "error", err)
@@ -221,7 +316,7 @@ func (ss *appStateSeeker) handleErrorResponse(errBody []byte, statusCode int, op
 }
 
 // mergeAppStates merges the desired app states with the current app states
-func (ss *appStateSeeker) mergeAppStates(ctx context.Context, states sbi.DesiredAppStates) error {
+func (ss *appStateSyncer) mergeAppStates(ctx context.Context, states sbi.DesiredAppStates) error {
 	ss.log.Debugw("Merging desired app states", "desiredStates", pretty.Sprint(states))
 
 	for _, state := range states {

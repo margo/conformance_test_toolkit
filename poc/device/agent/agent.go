@@ -19,7 +19,7 @@ type DeviceAgent struct {
 	config              *Config
 	database            database.AgentDatabase
 	apiClientFactory    APIClientInterface
-	stateSyncer         AppStateSeeker
+	stateSyncer         AppStateSyncer
 	workloadManager     WorkloadManager
 	workloadWatcher     WorkloadWatcher
 	capabilitiesManager CapabilitiesManager
@@ -52,7 +52,7 @@ func NewDeviceAgent(
 	ctx, cancel := context.WithCancel(context.Background())
 	var database database.AgentDatabase = database.NewAgentInMemoryDatabase(ctx, "./data")
 	var onboardingManager OnboardingManager = NewOAuthBasedOnboardingManager(logger, config, database, apiClientFactory)
-	var stateSeeker AppStateSeeker = NewAppStateSeeker(logger, config, database, apiClientFactory)
+	var stateSyncer AppStateSyncer = NewAppStateSyncer(logger, config, database, apiClientFactory)
 	var capabilityManager CapabilitiesManager = NewManualCapabilitiesManager(logger, config, apiClientFactory)
 	var workloadManager WorkloadManager
 	var workloadWatcher WorkloadWatcher
@@ -105,7 +105,7 @@ func NewDeviceAgent(
 		cancelFunc:          cancel,
 		apiClientFactory:    apiClientFactory,
 		database:            database,
-		stateSyncer:         stateSeeker,
+		stateSyncer:         stateSyncer,
 		workloadManager:     workloadManager,
 		capabilitiesManager: capabilityManager,
 		workloadWatcher:     workloadWatcher,
@@ -116,11 +116,11 @@ func NewDeviceAgent(
 	logger.Infow("DeviceAgent instance created successfully",
 		"runtimeType", config.RuntimeInfo.Type,
 		"components", map[string]bool{
-			"onboardingManager":   onboardingManager != nil,
-			"stateSeeker":         stateSeeker != nil,
-			"workloadManager":     workloadManager != nil,
-			"workloadWatcher":     workloadWatcher != nil,
-			"capabilitiesManager": capabilityManager != nil,
+			"onboardingManager":     onboardingManager != nil,
+			"appStateSeeker/Syncer": stateSyncer != nil,
+			"workloadManager":       workloadManager != nil,
+			"workloadWatcher":       workloadWatcher != nil,
+			"capabilitiesManager":   capabilityManager != nil,
 		})
 
 	return agent, nil
