@@ -130,15 +130,15 @@ func (ww *workloadWatcher) OnDatabaseEvent(event database.WorkloadDatabaseEvent)
 			ww.log.Infow("Starting monitoring for new app", "appId", event.AppID)
 			return ww.StartWatching(ctx, *event.NewState)
 		}
-	case database.EventAppUpdated:
-		// For updates, we might need to restart monitoring with new configuration
-		if event.NewState != nil {
-			ww.log.Infow("Restarting monitoring for updated app", "appId", event.AppID)
-			// Stop existing watch
-			_ = ww.StopWatching(ctx, event.AppID)
-			// Start new watch
-			return ww.StartWatching(ctx, *event.NewState)
-		}
+	// case database.EventAppDesiredStateChanged:
+	// 	// For updates, we might need to restart monitoring with new configuration
+	// 	if event.NewState != nil {
+	// 		ww.log.Infow("Restarting monitoring for updated app", "appId", event.AppID)
+	// 		// Stop existing watch
+	// 		_ = ww.StopWatching(ctx, event.AppID)
+	// 		// Start new watch
+	// 		return ww.StartWatching(ctx, *event.NewState)
+	// 	}
 	case database.EventAppDeleted:
 		ww.log.Infow("Stopping monitoring for deleted app", "appId", event.AppID)
 		return ww.StopWatching(ctx, event.AppID)

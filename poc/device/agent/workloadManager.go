@@ -122,9 +122,9 @@ func (wm *workloadManager) OnDatabaseEvent(event database.WorkloadDatabaseEvent)
 			wm.log.Infow("Handling new app deployment", "appId", event.AppID)
 			return wm.deploy(ctx, *event.NewState)
 		}
-	case database.EventAppUpdated:
+	case database.EventAppDesiredStateChanged:
 		if event.NewState != nil {
-			wm.log.Infow("Handling app update", "appId", event.AppID)
+			wm.log.Infow("Handling app desired state change", "appId", event.AppID)
 			return wm.update(ctx, *event.NewState)
 		}
 	case database.EventAppDeleted:

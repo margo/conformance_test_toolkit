@@ -381,6 +381,9 @@ func (db *AgentInMemoryDatabase) UpsertWorkload(workload sbi.AppState) error {
 	eventType := EventAppAdded
 	if exists {
 		eventType = EventAppUpdated
+		if oldState.AppDeploymentYAMLHash != workload.AppDeploymentYAMLHash {
+			eventType = EventAppDesiredStateChanged
+		}
 	}
 
 	// Publish event to notify subscribers of the change

@@ -18,10 +18,12 @@ type WorkloadDatabaseEvent struct {
 type EventType string
 
 const (
-	EventAppAdded     EventType = "APP_ADDED"
-	EventAppUpdated   EventType = "APP_UPDATED"
-	EventAppDeleted   EventType = "APP_DELETED"
-	EventStateChanged EventType = "STATE_CHANGED"
+	EventAppAdded               EventType = "APP_ADDED"
+	EventAppUpdated             EventType = "APP_UPDATED"
+	EventAppDeployed            EventType = "APP_DEPLOYED"
+	EventAppDeleted             EventType = "APP_DELETED"
+	EventAppDesiredStateChanged EventType = "APP_DESIRED_STATE_CHANGED"
+	EventAppStatusUpdate        EventType = "APP_STATUS_UPDATE"
 )
 
 type WorkloadDatabaseSubscriber interface {
