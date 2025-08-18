@@ -267,7 +267,9 @@ func (ss *appStateSyncer) performStateSync(ctx context.Context) error {
 	// Convert deployments map to slice for API request
 	currentAppStates := make(sbi.StateJSONRequestBody, 0, len(currentDeployments))
 	for _, appState := range currentDeployments {
-		currentAppStates = append(currentAppStates, *appState.CurrentState)
+		if appState.CurrentState != nil {
+			currentAppStates = append(currentAppStates, *appState.CurrentState)
+		}
 	}
 
 	ss.log.Debugw("Sending current states to orchestrator", "count", len(currentAppStates))

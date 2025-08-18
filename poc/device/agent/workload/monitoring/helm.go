@@ -41,7 +41,7 @@ func (h *HelmMonitor) Watch(ctx context.Context, appID string) error {
 		return err
 	}
 
-	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*deployment.CurrentState)
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*deployment.DesiredState)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,11 @@ func (h *HelmMonitor) GetStatus(ctx context.Context, appID, componentName string
 		return sbi.ComponentStatus{}, nil
 	}
 
-	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*deployment.CurrentState)
+	var appState *sbi.AppState = deployment.DesiredState
+	if deployment.CurrentState != nil {
+		appState = deployment.CurrentState
+	}
+	appDeployment, err := pkg.ConvertAppStateToAppDeployment(*appState)
 	if err != nil {
 		return sbi.ComponentStatus{}, err
 	}
