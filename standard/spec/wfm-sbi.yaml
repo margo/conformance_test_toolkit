@@ -499,8 +499,9 @@ components:
         properties:
           type: object
           description: Properties of the peripheral.
-          additionalProperties:
-            type: string
+          additionalProperties: true
+          # x-go-type: interface{}
+            # type: string
           example:
             manufacturer: NVIDIA
             series: NVIDIA GeForce RTX 40 Series
@@ -532,8 +533,8 @@ components:
         properties:
           type: object
           description: Properties of the interface to inform the WOS with additional information.
-          additionalProperties:
-            type: string
+          additionalProperties: true
+          #   type: string
           example:
             maxSpeed: 2.5 Gbps
 
@@ -771,8 +772,10 @@ components:
       required: [value, targets]
       properties:
         value:
-          type: string
+          # type: object
           description: Value of the parameter
+          additionalProperties: true
+          x-go-type: interface{}
         targets:
           type: array
           items:

@@ -300,7 +300,7 @@ type AppParameterValue struct {
 	Targets []AppParameterTarget `json:"targets"`
 
 	// Value Value of the parameter
-	Value string `json:"value"`
+	Value interface{} `json:"value"`
 }
 
 // AppState defines model for appState.
