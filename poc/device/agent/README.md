@@ -51,11 +51,10 @@ The agent follows an event-driven architecture with the following core component
 
 - **Device Agent** (`agent.go`) - Main orchestrator managing all components
 - **Database** (`database/`) - In-memory database with disk persistence for workload state
-- **State Syncer** (`device/stateSync.go`) - Synchronizes desired vs actual state with orchestrator
-- **Workload Manager** (`workload/manager.go`) - Handles deployment, updates, and removal of workloads
-- **Workload Watcher** (`workload/watcher.go`) - Monitors workload health and status
-- **Onboarding Manager** (`device/onboarding.go`) - Handles device registration with orchestrator
-- **Capabilities Manager** (`device/capabilities.go`) - Reports device capabilities
+- **State Syncer** (`stateSync.go`) - Synchronizes desired vs actual state with orchestrator
+- **Workload Manager** (`deployment.go`) - Handles deployment, updates, and removal of workloads
+- **Workload Monitoring** (`monitor.go`) - Monitors workload health and status
+- **Onboarding Manager** (`onboarding.go`) - Handles device registration with orchestrator
 
 ### Supported Runtimes to Deploy the agent
 
@@ -197,15 +196,11 @@ poc/device/agent/
 ├── agent.go               # Main agent orchestrator
 ├── config/                # Configuration files
 ├── database/              # In-memory database with events
-├── device/                # Device management components
-│   ├── capabilities.go    # Capabilities reporting
-│   ├── onboarding.go     # Device onboarding
-│   └── stateSync.go      # State synchronization
-├── workload/              # Workload management
-│   ├── manager.go         # Deployment manager
-│   ├── watcher.go         # Health monitoring
-│   ├── deployers/         # Runtime-specific deployers
-│   └── monitoring/        # Monitoring implementations
+├── onboarding.go          # Device onboarding
+├── stateSync.go           # State synchronization
+├── monitor.go             # Monitoring of the deployments
+├── deployment.go          # Deployment manager
+├── status.go              # Deployment status reporter to the wfm
 └── types/                 # Shared types and interfaces
 ```
 

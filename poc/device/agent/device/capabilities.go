@@ -45,13 +45,13 @@ func (cm *manualCapabilitiesManager) Start() error {
 	cm.log.Info("Starting CapabilitiesManager")
 
 	// Validate configuration
-	if cm.config.CapabilitiesFile == "" {
+	if cm.config.Capabilities.ReadFromFile == "" {
 		return fmt.Errorf("capabilities file path is required")
 	}
 
 	// Check if capabilities file exists
-	if _, err := os.Stat(cm.config.CapabilitiesFile); os.IsNotExist(err) {
-		return fmt.Errorf("capabilities file does not exist: %s", cm.config.CapabilitiesFile)
+	if _, err := os.Stat(cm.config.Capabilities.ReadFromFile); os.IsNotExist(err) {
+		return fmt.Errorf("capabilities file does not exist: %s", cm.config.Capabilities.ReadFromFile)
 	}
 
 	cm.started = true
@@ -142,12 +142,12 @@ func (cm *manualCapabilitiesManager) ReportCapabilities(ctx context.Context) err
 
 // discoverCapabilities reads the device capabilities from the specified file
 func (cm *manualCapabilitiesManager) discoverCapabilities(ctx context.Context) (*sbi.Properties, error) {
-	cm.log.Infow("Reading device capabilities from file", "file", cm.config.CapabilitiesFile)
+	cm.log.Infow("Reading device capabilities from file", "file", cm.config.Capabilities.ReadFromFile)
 
 	// 1. Read the file
-	data, err := os.ReadFile(cm.config.CapabilitiesFile)
+	data, err := os.ReadFile(cm.config.Capabilities.ReadFromFile)
 	if err != nil {
-		cm.log.Errorw("Failed to read capabilities file", "file", cm.config.CapabilitiesFile, "error", err)
+		cm.log.Errorw("Failed to read capabilities file", "file", cm.config.Capabilities.ReadFromFile, "error", err)
 		return nil, fmt.Errorf("failed to read capabilities file: %w", err)
 	}
 
@@ -155,7 +155,7 @@ func (cm *manualCapabilitiesManager) discoverCapabilities(ctx context.Context) (
 	// 2. Unmarshal the JSON data
 	err = json.Unmarshal(data, &capabilities)
 	if err != nil {
-		cm.log.Errorw("Failed to unmarshal capabilities data", "file", cm.config.CapabilitiesFile, "error", err)
+		cm.log.Errorw("Failed to unmarshal capabilities data", "file", cm.config.Capabilities.ReadFromFile, "error", err)
 		return nil, fmt.Errorf("failed to unmarshal capabilities data: %w", err)
 	}
 	var properties sbi.Properties = capabilities.Properties
