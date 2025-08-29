@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
 	"github.com/margo/dev-repo/non-standard/pkg/models"
 	"github.com/margo/dev-repo/shared-lib/git"
 	"gopkg.in/yaml.v3"
@@ -339,7 +340,7 @@ func (pm *PackageManager) isValidAppDescription(filePath string) bool {
 //   - Returns error if YAML parsing fails
 //   - Returns error if application description format is invalid
 //   - Future: Will return validation errors for missing required fields
-func (pm *PackageManager) loadAppDescription(filePath string) (*models.ApplicationDescription, error) {
+func (pm *PackageManager) loadAppDescription(filePath string) (*nbi.AppDescription, error) {
 	// Open file for reading
 	reader, err := os.Open(filePath)
 	if err != nil {
@@ -474,7 +475,7 @@ func (pm *PackageManager) loadAppResources(resourcesPath string, resources map[s
 //   - Returns error if margo.yaml file cannot be written
 //   - Returns error if resources directory cannot be created
 //   - Returns error if any resource file cannot be written
-func (pm *PackageManager) CreatePackage(desc models.ApplicationDescription, resources map[string][]byte, outputPath string) error {
+func (pm *PackageManager) CreatePackage(desc nbi.AppDescription, resources map[string][]byte, outputPath string) error {
 	// Create package directory
 	if err := os.MkdirAll(outputPath, 0755); err != nil {
 		return fmt.Errorf("failed to create package directory %s: %w", outputPath, err)

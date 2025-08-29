@@ -9,11 +9,18 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
 	ApiKeyAuthScopes = "ApiKeyAuth.Scopes"
 	BearerAuthScopes = "BearerAuth.Scopes"
+)
+
+// Defines values for AppDeploymentProfileType.
+const (
+	AppDeploymentProfileTypeCompose AppDeploymentProfileType = "compose"
+	AppDeploymentProfileTypeHelmV3  AppDeploymentProfileType = "helm.v3"
 )
 
 // Defines values for ApplicationDeploymentOperation.
@@ -30,12 +37,6 @@ const (
 	ApplicationDeploymentOperationStatusFAILED     ApplicationDeploymentOperationStatus = "FAILED"
 	ApplicationDeploymentOperationStatusPENDING    ApplicationDeploymentOperationStatus = "PENDING"
 	ApplicationDeploymentOperationStatusPROCESSING ApplicationDeploymentOperationStatus = "PROCESSING"
-)
-
-// Defines values for ApplicationDeploymentProfileType.
-const (
-	Compose ApplicationDeploymentProfileType = "compose"
-	HelmV3  ApplicationDeploymentProfileType = "helm.v3"
 )
 
 // Defines values for ApplicationDeploymentStatusState.
@@ -81,6 +82,20 @@ const (
 	ApplicationPackageStatusStateUNSTAGED  ApplicationPackageStatusState = "UNSTAGED"
 )
 
+// Defines values for ConfigurationSchemaDataType.
+const (
+	Boolean ConfigurationSchemaDataType = "boolean"
+	Double  ConfigurationSchemaDataType = "double"
+	Integer ConfigurationSchemaDataType = "integer"
+	String  ConfigurationSchemaDataType = "string"
+)
+
+// Defines values for DeploymentExecutionProfileType.
+const (
+	DeploymentExecutionProfileTypeCompose DeploymentExecutionProfileType = "compose"
+	DeploymentExecutionProfileTypeHelmV3  DeploymentExecutionProfileType = "helm.v3"
+)
+
 // APIResponse defines model for APIResponse.
 type APIResponse struct {
 	// RequestId Request identifier
@@ -90,51 +105,139 @@ type APIResponse struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// AppConfigurationSchema defines model for AppConfigurationSchema.
+type AppConfigurationSchema struct {
+	// Schema Validation schemas for configuration values
+	Schema *[]ConfigurationSchema `json:"schema" yaml:"schema"`
+
+	// Sections Configuration sections for UI organization
+	Sections *[]ConfigurationSection `json:"sections" yaml:"sections"`
+}
+
+// AppDeploymentProfile defines model for AppDeploymentProfile.
+type AppDeploymentProfile struct {
+	// Components Components in this deployment profile
+	Components []AppDeploymentProfile_Components_Item `json:"components" yaml:"components"`
+
+	// Description Description of the deployment profile
+	Description       *string            `json:"description" yaml:"description"`
+	RequiredResources *RequiredResources `json:"requiredResources,omitempty"`
+
+	// Type Type of deployment profile
+	Type AppDeploymentProfileType `json:"type" yaml:"type"`
+}
+
+// AppDeploymentProfile_Components_Item defines model for AppDeploymentProfile.components.Item.
+type AppDeploymentProfile_Components_Item struct {
+	union json.RawMessage
+}
+
+// AppDeploymentProfileType Type of deployment profile
+type AppDeploymentProfileType string
+
+// AppDescription Application Description manifest
+type AppDescription struct {
+	// ApiVersion API version
+	ApiVersion    string                  `json:"apiVersion" yaml:"apiVersion"`
+	Configuration *AppConfigurationSchema `json:"configuration,omitempty"`
+
+	// DeploymentProfiles Available deployment profiles for the application
+	DeploymentProfiles []AppDeploymentProfile `json:"deploymentProfiles" yaml:"deploymentProfiles"`
+
+	// Kind Resource kind
+	Kind       string                       `json:"kind" yaml:"kind"`
+	Metadata   AppDescriptionMetadata       `json:"metadata"`
+	Parameters *AppDescriptionParametersMap `json:"parameters,omitempty"`
+}
+
+// AppDescriptionCatalogInfo defines model for AppDescriptionCatalogInfo.
+type AppDescriptionCatalogInfo struct {
+	Application *struct {
+		// DescriptionFile Path to detailed description file
+		DescriptionFile *string `json:"descriptionFile" yaml:"descriptionFile"`
+
+		// Icon Path to application icon
+		Icon *string `json:"icon" yaml:"icon"`
+
+		// LicenseFile Path to license file
+		LicenseFile *string `json:"licenseFile" yaml:"licenseFile"`
+
+		// ReleaseNotes Path to release notes file
+		ReleaseNotes *string `json:"releaseNotes" yaml:"releaseNotes"`
+
+		// Site Application website URL
+		Site *string `json:"site" yaml:"site"`
+
+		// Tagline Short tagline for the application
+		Tagline *string `json:"tagline" yaml:"tagline"`
+
+		// Tags Tags for categorizing the application
+		Tags *[]string `json:"tags" yaml:"tags"`
+	} `json:"application" yaml:"application"`
+	Author *[]struct {
+		// Email Author email
+		Email *openapi_types.Email `json:"email" yaml:"email"`
+
+		// Name Author name
+		Name *string `json:"name" yaml:"name"`
+	} `json:"author" yaml:"author"`
+	Organization *[]struct {
+		// Name Organization name
+		Name *string `json:"name" yaml:"name"`
+
+		// Site Organization website
+		Site *string `json:"site" yaml:"site"`
+	} `json:"organization" yaml:"organization"`
+}
+
+// AppDescriptionMetadata defines model for AppDescriptionMetadata.
+type AppDescriptionMetadata struct {
+	Catalog *AppDescriptionCatalogInfo `json:"catalog,omitempty"`
+
+	// Description Description of the application
+	Description *string `json:"description" yaml:"description"`
+
+	// Id Unique identifier for the application
+	Id string `json:"id" yaml:"id"`
+
+	// Name Human-readable name of the application
+	Name string `json:"name" yaml:"name"`
+
+	// Version Version of the application
+	Version string `json:"version" yaml:"version"`
+}
+
+// AppDescriptionParametersMap defines model for AppDescriptionParametersMap.
+type AppDescriptionParametersMap map[string]struct {
+	// Targets Target locations for this parameter
+	Targets []AppParameterTarget `json:"targets" yaml:"targets"`
+
+	// Value Default value for the parameter
+	Value interface{} `json:"value" yaml:"value"`
+}
+
+// AppParameterTarget defines model for AppParameterTarget.
+type AppParameterTarget struct {
+	// Components Components this target applies to
+	Components []string `json:"components" yaml:"components"`
+
+	// Pointer JSONPath or configuration path
+	Pointer string `json:"pointer" yaml:"pointer"`
+}
+
 // ApplicationDeploymentListResp List of Application Deployments
 type ApplicationDeploymentListResp struct {
 	// ApiVersion API version
-	ApiVersion string                      `json:"apiVersion"`
-	Items      []ApplicationDeploymentResp `json:"items"`
+	ApiVersion string                              `json:"apiVersion"`
+	Items      []ApplicationDeploymentManifestResp `json:"items"`
 
 	// Kind Resource kind
 	Kind     string             `json:"kind"`
 	Metadata PaginationMetadata `json:"metadata"`
 }
 
-// ApplicationDeploymentOperation Current application deployment operation
-type ApplicationDeploymentOperation string
-
-// ApplicationDeploymentOperationStatus Current state of the application deployment operation
-type ApplicationDeploymentOperationStatus string
-
-// ApplicationDeploymentProfile Application Deployment Profile
-type ApplicationDeploymentProfile struct {
-	// Components Components of the deployment profile
-	Components []ApplicationDeploymentProfile_Components_Item `json:"components"`
-
-	// Type Type of deployment profile
-	Type ApplicationDeploymentProfileType `json:"type"`
-}
-
-// ApplicationDeploymentProfile_Components_Item defines model for ApplicationDeploymentProfile.components.Item.
-type ApplicationDeploymentProfile_Components_Item struct {
-	union json.RawMessage
-}
-
-// ApplicationDeploymentProfileType Type of deployment profile
-type ApplicationDeploymentProfileType string
-
-// ApplicationDeploymentRecentOperation defines model for ApplicationDeploymentRecentOperation.
-type ApplicationDeploymentRecentOperation struct {
-	// Op Current application deployment operation
-	Op ApplicationDeploymentOperation `json:"op"`
-
-	// Status Current state of the application deployment operation
-	Status ApplicationDeploymentOperationStatus `json:"status"`
-}
-
-// ApplicationDeploymentRequest Application Deployment request
-type ApplicationDeploymentRequest struct {
+// ApplicationDeploymentManifestRequest Application Deployment request
+type ApplicationDeploymentManifestRequest struct {
 	// ApiVersion API version
 	ApiVersion string `json:"apiVersion"`
 
@@ -164,8 +267,8 @@ type ApplicationDeploymentRequest struct {
 	Spec ApplicationDeploymentSpec `json:"spec"`
 }
 
-// ApplicationDeploymentResp Application Deployment manifest
-type ApplicationDeploymentResp struct {
+// ApplicationDeploymentManifestResp Application Deployment manifest
+type ApplicationDeploymentManifestResp struct {
 	// ApiVersion API version
 	ApiVersion string `json:"apiVersion"`
 
@@ -181,6 +284,21 @@ type ApplicationDeploymentResp struct {
 	Status *ApplicationDeploymentStatus `json:"status,omitempty"`
 }
 
+// ApplicationDeploymentOperation Current application deployment operation
+type ApplicationDeploymentOperation string
+
+// ApplicationDeploymentOperationStatus Current state of the application deployment operation
+type ApplicationDeploymentOperationStatus string
+
+// ApplicationDeploymentRecentOperation defines model for ApplicationDeploymentRecentOperation.
+type ApplicationDeploymentRecentOperation struct {
+	// Op Current application deployment operation
+	Op ApplicationDeploymentOperation `json:"op"`
+
+	// Status Current state of the application deployment operation
+	Status ApplicationDeploymentOperationStatus `json:"status"`
+}
+
 // ApplicationDeploymentSpec Application Deployment specification
 type ApplicationDeploymentSpec struct {
 	AppPackageRef struct {
@@ -189,11 +307,11 @@ type ApplicationDeploymentSpec struct {
 	} `json:"appPackageRef"`
 
 	// DeploymentProfile Application Deployment Profile
-	DeploymentProfile ApplicationDeploymentProfile         `json:"deploymentProfile"`
+	DeploymentProfile DeploymentExecutionProfile           `json:"deploymentProfile"`
 	DeviceRef         *ApplicationDeploymentSpec_DeviceRef `json:"deviceRef,omitempty"`
 
 	// Parameters Application Parameters
-	Parameters *ApplicationParameters `json:"parameters,omitempty"`
+	Parameters *DeploymentParameters `json:"parameters,omitempty"`
 }
 
 // ApplicationDeploymentSpecDeviceRef0 defines model for .
@@ -229,29 +347,14 @@ type ApplicationDeploymentStatusState string
 // ApplicationPackageListResp List of Application Packages
 type ApplicationPackageListResp struct {
 	// ApiVersion API version
-	ApiVersion string                   `json:"apiVersion"`
-	Items      []ApplicationPackageResp `json:"items"`
-	Kind       string                   `json:"kind"`
-	Metadata   *PaginationMetadata      `json:"metadata,omitempty"`
+	ApiVersion string                           `json:"apiVersion"`
+	Items      []ApplicationPackageManifestResp `json:"items"`
+	Kind       string                           `json:"kind"`
+	Metadata   *PaginationMetadata              `json:"metadata,omitempty"`
 }
 
-// ApplicationPackageOperation Current application package operation
-type ApplicationPackageOperation string
-
-// ApplicationPackageOperationStatus Current state of the application package operation
-type ApplicationPackageOperationStatus string
-
-// ApplicationPackageRecentOperation defines model for ApplicationPackageRecentOperation.
-type ApplicationPackageRecentOperation struct {
-	// Op Current application package operation
-	Op ApplicationPackageOperation `json:"op"`
-
-	// Status Current state of the application package operation
-	Status ApplicationPackageOperationStatus `json:"status"`
-}
-
-// ApplicationPackageRequest Application Package manifest
-type ApplicationPackageRequest struct {
+// ApplicationPackageManifestRequest Application Package manifest
+type ApplicationPackageManifestRequest struct {
 	// ApiVersion API version
 	ApiVersion string `json:"apiVersion"`
 
@@ -275,8 +378,8 @@ type ApplicationPackageRequest struct {
 	Spec ApplicationPackageSpec `json:"spec"`
 }
 
-// ApplicationPackageResp Application Package manifest
-type ApplicationPackageResp struct {
+// ApplicationPackageManifestResp Application Package manifest
+type ApplicationPackageManifestResp struct {
 	// ApiVersion API version
 	ApiVersion string `json:"apiVersion"`
 
@@ -288,6 +391,21 @@ type ApplicationPackageResp struct {
 	// Spec Application Package specification
 	Spec   ApplicationPackageSpec    `json:"spec"`
 	Status *ApplicationPackageStatus `json:"status,omitempty"`
+}
+
+// ApplicationPackageOperation Current application package operation
+type ApplicationPackageOperation string
+
+// ApplicationPackageOperationStatus Current state of the application package operation
+type ApplicationPackageOperationStatus string
+
+// ApplicationPackageRecentOperation defines model for ApplicationPackageRecentOperation.
+type ApplicationPackageRecentOperation struct {
+	// Op Current application package operation
+	Op ApplicationPackageOperation `json:"op"`
+
+	// Status Current state of the application package operation
+	Status ApplicationPackageOperationStatus `json:"status"`
 }
 
 // ApplicationPackageSpec Application Package specification
@@ -321,29 +439,27 @@ type ApplicationPackageStatus struct {
 // ApplicationPackageStatusState State of the application package
 type ApplicationPackageStatusState string
 
-// ApplicationParameterTarget Application Parameter Target
-type ApplicationParameterTarget struct {
-	// Components Components of the parameter
-	Components []string `json:"components"`
-
-	// Pointer Pointer to the parameter
-	Pointer string `json:"pointer"`
-}
-
-// ApplicationParameterValue Application Parameter Value
-type ApplicationParameterValue struct {
-	// Targets Targets of the parameter
-	Targets []ApplicationParameterTarget `json:"targets"`
-
-	// Value Value of the parameter
-	Value string `json:"value"`
-}
-
-// ApplicationParameters Application Parameters
-type ApplicationParameters map[string]ApplicationParameterValue
-
 // ComposeApplicationDeploymentProfileComponent Compose Application Deployment Profile Component
 type ComposeApplicationDeploymentProfileComponent struct {
+	// Name Name of the component
+	Name       string `json:"name" yaml:"name"`
+	Properties struct {
+		// KeyLocation Key location of the component
+		KeyLocation *string `json:"keyLocation" yaml:"keyLocation"`
+
+		// PackageLocation Package location of the component
+		PackageLocation string `json:"packageLocation" yaml:"packageLocation"`
+
+		// Timeout Timeout for the component
+		Timeout *string `json:"timeout" yaml:"timeout"`
+
+		// Wait Wait for the component to be ready
+		Wait *bool `json:"wait" yaml:"wait"`
+	} `json:"properties" yaml:"properties"`
+}
+
+// ComposeDeploymentProfileComponent Compose Application Deployment Profile Component
+type ComposeDeploymentProfileComponent struct {
 	// Name Name of the component
 	Name       string `json:"name"`
 	Properties struct {
@@ -361,6 +477,66 @@ type ComposeApplicationDeploymentProfileComponent struct {
 	} `json:"properties"`
 }
 
+// ConfigurationSchema defines model for ConfigurationSchema.
+type ConfigurationSchema struct {
+	// AllowEmpty Whether empty values are allowed
+	AllowEmpty *bool `json:"allowEmpty" yaml:"allowEmpty"`
+
+	// DataType Data type for validation
+	DataType ConfigurationSchemaDataType `json:"dataType" yaml:"dataType"`
+
+	// MaxLength Maximum length for strings
+	MaxLength *int `json:"maxLength" yaml:"maxLength"`
+
+	// MaxPrecision Maximum decimal precision for doubles
+	MaxPrecision *int `json:"maxPrecision" yaml:"maxPrecision"`
+
+	// MaxValue Maximum value for numbers
+	MaxValue *float32 `json:"maxValue" yaml:"maxValue"`
+
+	// MinLength Minimum length for strings
+	MinLength *int `json:"minLength" yaml:"minLength"`
+
+	// MinValue Minimum value for numbers
+	MinValue *float32 `json:"minValue" yaml:"minValue"`
+
+	// Name Schema name
+	Name string `json:"name" yaml:"name"`
+
+	// RegexMatch Regular expression for validation
+	RegexMatch *string `json:"regexMatch" yaml:"regexMatch"`
+}
+
+// ConfigurationSchemaDataType Data type for validation
+type ConfigurationSchemaDataType string
+
+// ConfigurationSection defines model for ConfigurationSection.
+type ConfigurationSection struct {
+	// Name Name of the configuration section
+	Name string `json:"name" yaml:"name"`
+
+	// Settings Settings in this section
+	Settings []ConfigurationSetting `json:"settings" yaml:"settings"`
+}
+
+// ConfigurationSetting defines model for ConfigurationSetting.
+type ConfigurationSetting struct {
+	// Description Description of the setting
+	Description *string `json:"description" yaml:"description"`
+
+	// Immutable Whether the setting can be changed after deployment
+	Immutable *bool `json:"immutable" yaml:"immutable"`
+
+	// Name Display name for the setting
+	Name string `json:"name" yaml:"name"`
+
+	// Parameter Parameter name reference
+	Parameter string `json:"parameter" yaml:"parameter"`
+
+	// Schema Reference to validation schema
+	Schema string `json:"schema" yaml:"schema"`
+}
+
 // ContextualInfo defines model for ContextualInfo.
 type ContextualInfo struct {
 	// Code Code of the contextual information
@@ -369,6 +545,44 @@ type ContextualInfo struct {
 	// Message Message of the contextual information
 	Message *string `json:"message,omitempty"`
 }
+
+// DeploymentExecutionProfile Application Deployment Profile
+type DeploymentExecutionProfile struct {
+	// Components Components of the deployment profile
+	Components []DeploymentExecutionProfile_Components_Item `json:"components"`
+
+	// Type Type of deployment profile
+	Type DeploymentExecutionProfileType `json:"type"`
+}
+
+// DeploymentExecutionProfile_Components_Item defines model for DeploymentExecutionProfile.components.Item.
+type DeploymentExecutionProfile_Components_Item struct {
+	union json.RawMessage
+}
+
+// DeploymentExecutionProfileType Type of deployment profile
+type DeploymentExecutionProfileType string
+
+// DeploymentParameterTarget Application Parameter Target
+type DeploymentParameterTarget struct {
+	// Components Components of the parameter
+	Components []string `json:"components"`
+
+	// Pointer Pointer to the parameter
+	Pointer string `json:"pointer"`
+}
+
+// DeploymentParameterValue Application Parameter Value
+type DeploymentParameterValue struct {
+	// Targets Targets of the parameter
+	Targets []DeploymentParameterTarget `json:"targets"`
+
+	// Value Value of the parameter
+	Value interface{} `json:"value"`
+}
+
+// DeploymentParameters Application Parameters
+type DeploymentParameters map[string]DeploymentParameterValue
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
@@ -416,6 +630,25 @@ type GitRepo1 = interface{}
 // HelmApplicationDeploymentProfileComponent Helm Application Deployment Profile Component
 type HelmApplicationDeploymentProfileComponent struct {
 	// Name Name of the component
+	Name       string `json:"name" yaml:"name"`
+	Properties struct {
+		// Repository Repository of the component
+		Repository string `json:"repository" yaml:"repository"`
+
+		// Revision Revision of the component
+		Revision *string `json:"revision" yaml:"revision"`
+
+		// Timeout Timeout for the component
+		Timeout *string `json:"timeout" yaml:"timeout"`
+
+		// Wait Wait for the component to be ready
+		Wait *bool `json:"wait" yaml:"wait"`
+	} `json:"properties" yaml:"properties"`
+}
+
+// HelmDeploymentProfileComponent Helm Application Deployment Profile Component
+type HelmDeploymentProfileComponent struct {
+	// Name Name of the component
 	Name       string `json:"name"`
 	Properties struct {
 		// Repository Repository of the component
@@ -462,6 +695,34 @@ type PaginationMetadata struct {
 	RemainingItemCount *int `json:"remainingItemCount,omitempty"`
 }
 
+// RequiredResources defines model for RequiredResources.
+type RequiredResources struct {
+	Cpu *struct {
+		// Architectures Supported CPU architectures
+		Architectures *[]string `json:"architectures" yaml:"architectures"`
+
+		// Cores Required CPU cores
+		Cores *float32 `json:"cores" yaml:"cores"`
+	} `json:"cpu" yaml:"cpu"`
+	Interfaces *[]struct {
+		// Type Interface type (e.g., ethernet, bluetooth)
+		Type *string `json:"type" yaml:"type"`
+	} `json:"interfaces" yaml:"interfaces"`
+
+	// Memory Required memory (e.g., "1024Mi")
+	Memory      *string `json:"memory" yaml:"memory"`
+	Peripherals *[]struct {
+		// Manufacturer Manufacturer requirement
+		Manufacturer *string `json:"manufacturer" yaml:"manufacturer"`
+
+		// Type Type of peripheral
+		Type *string `json:"type" yaml:"type"`
+	} `json:"peripherals" yaml:"peripherals"`
+
+	// Storage Required storage (e.g., "10Gi")
+	Storage *string `json:"storage" yaml:"storage"`
+}
+
 // ValidationError defines model for ValidationError.
 type ValidationError struct {
 	// Field Field with the validation error
@@ -496,27 +757,27 @@ type DeleteAppPackageParams struct {
 }
 
 // CreateApplicationDeploymentJSONRequestBody defines body for CreateApplicationDeployment for application/json ContentType.
-type CreateApplicationDeploymentJSONRequestBody = ApplicationDeploymentRequest
+type CreateApplicationDeploymentJSONRequestBody = ApplicationDeploymentManifestRequest
 
 // OnboardAppPackageJSONRequestBody defines body for OnboardAppPackage for application/json ContentType.
-type OnboardAppPackageJSONRequestBody = ApplicationPackageRequest
+type OnboardAppPackageJSONRequestBody = ApplicationPackageManifestRequest
 
-// AsHelmApplicationDeploymentProfileComponent returns the union data inside the ApplicationDeploymentProfile_Components_Item as a HelmApplicationDeploymentProfileComponent
-func (t ApplicationDeploymentProfile_Components_Item) AsHelmApplicationDeploymentProfileComponent() (HelmApplicationDeploymentProfileComponent, error) {
+// AsHelmApplicationDeploymentProfileComponent returns the union data inside the AppDeploymentProfile_Components_Item as a HelmApplicationDeploymentProfileComponent
+func (t AppDeploymentProfile_Components_Item) AsHelmApplicationDeploymentProfileComponent() (HelmApplicationDeploymentProfileComponent, error) {
 	var body HelmApplicationDeploymentProfileComponent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromHelmApplicationDeploymentProfileComponent overwrites any union data inside the ApplicationDeploymentProfile_Components_Item as the provided HelmApplicationDeploymentProfileComponent
-func (t *ApplicationDeploymentProfile_Components_Item) FromHelmApplicationDeploymentProfileComponent(v HelmApplicationDeploymentProfileComponent) error {
+// FromHelmApplicationDeploymentProfileComponent overwrites any union data inside the AppDeploymentProfile_Components_Item as the provided HelmApplicationDeploymentProfileComponent
+func (t *AppDeploymentProfile_Components_Item) FromHelmApplicationDeploymentProfileComponent(v HelmApplicationDeploymentProfileComponent) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeHelmApplicationDeploymentProfileComponent performs a merge with any union data inside the ApplicationDeploymentProfile_Components_Item, using the provided HelmApplicationDeploymentProfileComponent
-func (t *ApplicationDeploymentProfile_Components_Item) MergeHelmApplicationDeploymentProfileComponent(v HelmApplicationDeploymentProfileComponent) error {
+// MergeHelmApplicationDeploymentProfileComponent performs a merge with any union data inside the AppDeploymentProfile_Components_Item, using the provided HelmApplicationDeploymentProfileComponent
+func (t *AppDeploymentProfile_Components_Item) MergeHelmApplicationDeploymentProfileComponent(v HelmApplicationDeploymentProfileComponent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -527,22 +788,22 @@ func (t *ApplicationDeploymentProfile_Components_Item) MergeHelmApplicationDeplo
 	return err
 }
 
-// AsComposeApplicationDeploymentProfileComponent returns the union data inside the ApplicationDeploymentProfile_Components_Item as a ComposeApplicationDeploymentProfileComponent
-func (t ApplicationDeploymentProfile_Components_Item) AsComposeApplicationDeploymentProfileComponent() (ComposeApplicationDeploymentProfileComponent, error) {
+// AsComposeApplicationDeploymentProfileComponent returns the union data inside the AppDeploymentProfile_Components_Item as a ComposeApplicationDeploymentProfileComponent
+func (t AppDeploymentProfile_Components_Item) AsComposeApplicationDeploymentProfileComponent() (ComposeApplicationDeploymentProfileComponent, error) {
 	var body ComposeApplicationDeploymentProfileComponent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromComposeApplicationDeploymentProfileComponent overwrites any union data inside the ApplicationDeploymentProfile_Components_Item as the provided ComposeApplicationDeploymentProfileComponent
-func (t *ApplicationDeploymentProfile_Components_Item) FromComposeApplicationDeploymentProfileComponent(v ComposeApplicationDeploymentProfileComponent) error {
+// FromComposeApplicationDeploymentProfileComponent overwrites any union data inside the AppDeploymentProfile_Components_Item as the provided ComposeApplicationDeploymentProfileComponent
+func (t *AppDeploymentProfile_Components_Item) FromComposeApplicationDeploymentProfileComponent(v ComposeApplicationDeploymentProfileComponent) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeComposeApplicationDeploymentProfileComponent performs a merge with any union data inside the ApplicationDeploymentProfile_Components_Item, using the provided ComposeApplicationDeploymentProfileComponent
-func (t *ApplicationDeploymentProfile_Components_Item) MergeComposeApplicationDeploymentProfileComponent(v ComposeApplicationDeploymentProfileComponent) error {
+// MergeComposeApplicationDeploymentProfileComponent performs a merge with any union data inside the AppDeploymentProfile_Components_Item, using the provided ComposeApplicationDeploymentProfileComponent
+func (t *AppDeploymentProfile_Components_Item) MergeComposeApplicationDeploymentProfileComponent(v ComposeApplicationDeploymentProfileComponent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -553,12 +814,12 @@ func (t *ApplicationDeploymentProfile_Components_Item) MergeComposeApplicationDe
 	return err
 }
 
-func (t ApplicationDeploymentProfile_Components_Item) MarshalJSON() ([]byte, error) {
+func (t AppDeploymentProfile_Components_Item) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
 	return b, err
 }
 
-func (t *ApplicationDeploymentProfile_Components_Item) UnmarshalJSON(b []byte) error {
+func (t *AppDeploymentProfile_Components_Item) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -705,6 +966,68 @@ func (t ApplicationPackageSpec_Source) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ApplicationPackageSpec_Source) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsHelmDeploymentProfileComponent returns the union data inside the DeploymentExecutionProfile_Components_Item as a HelmDeploymentProfileComponent
+func (t DeploymentExecutionProfile_Components_Item) AsHelmDeploymentProfileComponent() (HelmDeploymentProfileComponent, error) {
+	var body HelmDeploymentProfileComponent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmDeploymentProfileComponent overwrites any union data inside the DeploymentExecutionProfile_Components_Item as the provided HelmDeploymentProfileComponent
+func (t *DeploymentExecutionProfile_Components_Item) FromHelmDeploymentProfileComponent(v HelmDeploymentProfileComponent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmDeploymentProfileComponent performs a merge with any union data inside the DeploymentExecutionProfile_Components_Item, using the provided HelmDeploymentProfileComponent
+func (t *DeploymentExecutionProfile_Components_Item) MergeHelmDeploymentProfileComponent(v HelmDeploymentProfileComponent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JsonMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsComposeDeploymentProfileComponent returns the union data inside the DeploymentExecutionProfile_Components_Item as a ComposeDeploymentProfileComponent
+func (t DeploymentExecutionProfile_Components_Item) AsComposeDeploymentProfileComponent() (ComposeDeploymentProfileComponent, error) {
+	var body ComposeDeploymentProfileComponent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromComposeDeploymentProfileComponent overwrites any union data inside the DeploymentExecutionProfile_Components_Item as the provided ComposeDeploymentProfileComponent
+func (t *DeploymentExecutionProfile_Components_Item) FromComposeDeploymentProfileComponent(v ComposeDeploymentProfileComponent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeComposeDeploymentProfileComponent performs a merge with any union data inside the DeploymentExecutionProfile_Components_Item, using the provided ComposeDeploymentProfileComponent
+func (t *DeploymentExecutionProfile_Components_Item) MergeComposeDeploymentProfileComponent(v ComposeDeploymentProfileComponent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JsonMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t DeploymentExecutionProfile_Components_Item) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *DeploymentExecutionProfile_Components_Item) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
