@@ -31,14 +31,14 @@ const (
 
 // Type aliases for better API ergonomics, and can be used later on to change the structs if needed
 type (
-	AppPkgOnboardingReq  = nonStdWfmNbi.ApplicationPackageRequest
-	AppPkgOnboardingResp = nonStdWfmNbi.ApplicationPackageResp
-	AppPkgSummary        = nonStdWfmNbi.ApplicationPackageResp
+	AppPkgOnboardingReq  = nonStdWfmNbi.ApplicationPackageManifestRequest
+	AppPkgOnboardingResp = nonStdWfmNbi.ApplicationPackageManifestResp
+	AppPkgSummary        = nonStdWfmNbi.ApplicationPackageManifestResp
 	ListAppPkgsParams    = nonStdWfmNbi.ListAppPackagesParams
 	ListAppPkgsResp      = nonStdWfmNbi.ApplicationPackageListResp
 
-	DeploymentReq        = nonStdWfmNbi.ApplicationDeploymentRequest
-	DeploymentResp       = nonStdWfmNbi.ApplicationDeploymentResp
+	DeploymentReq        = nonStdWfmNbi.ApplicationDeploymentManifestRequest
+	DeploymentResp       = nonStdWfmNbi.ApplicationDeploymentManifestResp
 	DeploymentListResp   = nonStdWfmNbi.ApplicationDeploymentListResp
 	DeploymentListParams = nonStdWfmNbi.ListApplicationDeploymentsParams
 )

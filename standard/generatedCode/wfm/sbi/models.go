@@ -129,7 +129,7 @@ type Interface struct {
 	Name string `json:"name"`
 
 	// Properties Properties of the interface to inform the WOS with additional information.
-	Properties map[string]string `json:"properties"`
+	Properties map[string]interface{} `json:"properties"`
 
 	// Type Type of the interface. i.e. Ethernet NIC
 	Type string `json:"type"`
@@ -177,7 +177,7 @@ type Peripheral struct {
 	Name string `json:"name"`
 
 	// Properties Properties of the peripheral.
-	Properties map[string]string `json:"properties"`
+	Properties map[string]interface{} `json:"properties"`
 
 	// Type Type of the peripheral. i.e. GPU
 	Type string `json:"type"`
@@ -300,7 +300,7 @@ type AppParameterValue struct {
 	Targets []AppParameterTarget `json:"targets"`
 
 	// Value Value of the parameter
-	Value string `json:"value"`
+	Value interface{} `json:"value"`
 }
 
 // AppState defines model for appState.

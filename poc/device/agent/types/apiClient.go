@@ -1,4 +1,4 @@
-package main
+package types
 
 import (
 	"fmt"
@@ -11,15 +11,15 @@ type APIClientInterface interface {
 	NewSBIClient() (sbi.ClientInterface, error)
 }
 
-// apiClient implementation
-type apiClient struct {
+// ApiClient implementation
+type ApiClient struct {
 	// You can add any dependencies needed for creating the client here, like auth info
 	// clientId, clientSecret, tokenUrl string
 	SBIUrl string
 }
 
 // NewClient creates a new sbi.Client
-func (f *apiClient) NewSBIClient() (sbi.ClientInterface, error) {
+func (f *ApiClient) NewSBIClient() (sbi.ClientInterface, error) {
 	client, err := sbi.NewClient(f.SBIUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)

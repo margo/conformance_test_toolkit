@@ -25,10 +25,15 @@ deploymentProfiles:
     components:
       - name: nginx
         properties:  
-          repository: oci://registry-1.docker.io/library/nginx
-          revision: "1.25.3-alpine"
+          repository: oci://ghcr.io/nginxinc/charts/nginx-ingress
+          revision: "1.2.2"
           wait: true
 parameters:
+  serviceType:
+    value: NodePort
+    targets:
+    - pointer: controller.service.type
+      components: ["nginx"]
   httpPort:
     value: 80
     targets:
@@ -85,6 +90,10 @@ configuration:
           name: Keepalive Timeout
           description: Timeout for keep-alive connections (seconds)
           schema: positiveInteger
+        - parameter: serviceType
+          name: Service Type
+          description: NodePort, Loadbalancer etc.
+          schema: stringValue
     - name: Performance Settings
       settings:
         - parameter: workerProcesses
@@ -127,6 +136,8 @@ configuration:
       dataType: string
       pattern: "^(auto|[1-9][0-9]*)$"
       allowEmpty: false
+    - name: stringValue
+      dataType: string
     - name: sizeValue
       dataType: string
       pattern: "^[1-9][0-9]*[kmgKMG]?$"

@@ -706,7 +706,7 @@ func (r ListApplicationDeploymentsResponse) StatusCode() int {
 type CreateApplicationDeploymentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON202      *ApplicationDeploymentResp
+	JSON202      *ApplicationDeploymentManifestResp
 	JSON400      *ErrorResponse
 	JSON409      *ErrorResponse
 	JSON500      *ErrorResponse
@@ -731,7 +731,7 @@ func (r CreateApplicationDeploymentResponse) StatusCode() int {
 type DeleteApplicationDeploymentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON202      *ApplicationDeploymentResp
+	JSON202      *ApplicationDeploymentManifestResp
 	JSON404      *ErrorResponse
 	JSON409      *ErrorResponse
 	JSON500      *ErrorResponse
@@ -756,7 +756,7 @@ func (r DeleteApplicationDeploymentResponse) StatusCode() int {
 type GetApplicationDeploymentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ApplicationDeploymentResp
+	JSON200      *ApplicationDeploymentManifestResp
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
 }
@@ -804,7 +804,7 @@ func (r ListAppPackagesResponse) StatusCode() int {
 type OnboardAppPackageResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON202      *ApplicationPackageResp
+	JSON202      *ApplicationPackageManifestResp
 	JSON400      *ErrorResponse
 	JSON409      *ErrorResponse
 	JSON422      *struct {
@@ -843,7 +843,7 @@ func (r OnboardAppPackageResponse) StatusCode() int {
 type DeleteAppPackageResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON202      *ApplicationPackageResp
+	JSON202      *ApplicationPackageManifestResp
 	JSON404      *ErrorResponse
 	JSON409      *ErrorResponse
 	JSON500      *ErrorResponse
@@ -868,7 +868,7 @@ func (r DeleteAppPackageResponse) StatusCode() int {
 type GetAppPackageResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ApplicationPackageResp
+	JSON200      *ApplicationPackageManifestResp
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
 }
@@ -1032,7 +1032,7 @@ func ParseCreateApplicationDeploymentResponse(rsp *http.Response) (*CreateApplic
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest ApplicationDeploymentResp
+		var dest ApplicationDeploymentManifestResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1079,7 +1079,7 @@ func ParseDeleteApplicationDeploymentResponse(rsp *http.Response) (*DeleteApplic
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest ApplicationDeploymentResp
+		var dest ApplicationDeploymentManifestResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1126,7 +1126,7 @@ func ParseGetApplicationDeploymentResponse(rsp *http.Response) (*GetApplicationD
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ApplicationDeploymentResp
+		var dest ApplicationDeploymentManifestResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1206,7 +1206,7 @@ func ParseOnboardAppPackageResponse(rsp *http.Response) (*OnboardAppPackageRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest ApplicationPackageResp
+		var dest ApplicationPackageManifestResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1273,7 +1273,7 @@ func ParseDeleteAppPackageResponse(rsp *http.Response) (*DeleteAppPackageRespons
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest ApplicationPackageResp
+		var dest ApplicationPackageManifestResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1320,7 +1320,7 @@ func ParseGetAppPackageResponse(rsp *http.Response) (*GetAppPackageResponse, err
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ApplicationPackageResp
+		var dest ApplicationPackageManifestResp
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

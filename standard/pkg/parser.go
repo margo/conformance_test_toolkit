@@ -167,7 +167,7 @@ func containsComponent(components []string, componentName string) bool {
 }
 
 // Helper function to set nested values in a map using dot notation
-func setNestedValue(values map[string]interface{}, pointer string, value string) error {
+func setNestedValue(values map[string]interface{}, pointer string, value interface{}) error {
 	keys := strings.Split(pointer, ".")
 	current := values
 
@@ -188,7 +188,7 @@ func setNestedValue(values map[string]interface{}, pointer string, value string)
 
 	// Set the final value
 	finalKey := keys[len(keys)-1]
-	current[finalKey] = convertStringValue(value)
+	current[finalKey] = value // convertStringValue(value)
 
 	return nil
 }
