@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
@@ -92,6 +93,31 @@ func (da *DeviceAuth) Onboard(ctx context.Context, deviceSign []byte) (deviceId 
 	da.tokenUrl = onboardingResp.JSON200.TokenEndpointUrl
 	da.log.Infow("Device onboarding successful", "deviceId", da.deviceID)
 	return da.deviceID, nil
+}
+
+func (da *DeviceAuth) OnboardWithRetries(ctx context.Context, deviceSign []byte, retries uint8) (deviceId string, err error) {
+	totalRetries := retries
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		if retries == 0 {
+			break
+		}
+		retries--
+
+		// Wait for next tick or overall timeout
+		<-ticker.C
+
+		da.log.Infow("executing onboard operation", "tryCount", totalRetries-retries)
+		deviceId, err := da.Onboard(ctx, deviceSign)
+		if err != nil {
+			retries--
+			continue
+		}
+		return deviceId, err
+	}
+
+	return "", fmt.Errorf("unable to onboard the device")
 }
 
 func (da *DeviceAuth) ReportCapabilities(ctx context.Context, capabilities sbi.DeviceCapabilities) error {

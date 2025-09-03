@@ -80,10 +80,10 @@ func NewAgent(configPath string) (*Agent, error) {
 	if !isOnboarded {
 		deviceAuth = NewDeviceAuth(apiClient, log)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		deviceId, err := deviceAuth.Onboard(ctx, findDeviceSignature(log))
+		deviceId, err := deviceAuth.OnboardWithRetries(ctx, findDeviceSignature(log), 10)
 		defer cancel()
 		if err != nil {
-			return nil, err
+			log.Errorw("device onboarding failed", "error", err)
 		}
 		log.Infow("device onboarded", "deviceId", deviceId)
 
