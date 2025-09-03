@@ -12,11 +12,11 @@ import (
 
 // Config struct
 type Config struct {
-	DeviceID     string                      `yaml:"deviceId" validate:"required"`
-	Wfm          WFMConfig                   `yaml:"wfm" validate:"required"`
-	StateSeeking StateSeekingConfig          `yaml:"stateSeeking" validate:"required"`
-	Capabilities CapabilitiesDiscoveryConfig `yaml:"capabilities" validate:"required"`
-	Runtimes     []RuntimeInfo               `yaml:"runtimes"`
+	DeviceSignature string                      `yaml:"deviceSignature" validate:"required"`
+	Wfm             WFMConfig                   `yaml:"wfm" validate:"required"`
+	StateSeeking    StateSeekingConfig          `yaml:"stateSeeking" validate:"required"`
+	Capabilities    CapabilitiesDiscoveryConfig `yaml:"capabilities" validate:"required"`
+	Runtimes        []RuntimeInfo               `yaml:"runtimes"`
 }
 
 type StateSeekingConfig struct {
