@@ -108,10 +108,9 @@ func (da *DeviceAuth) OnboardWithRetries(ctx context.Context, deviceSign []byte,
 		// Wait for next tick or overall timeout
 		<-ticker.C
 
-		da.log.Infow("executing onboard operation", "tryCount", totalRetries-retries)
 		deviceId, err := da.Onboard(ctx, deviceSign)
 		if err != nil {
-			retries--
+			da.log.Infow("onboard operation failed", "tryCount", totalRetries-retries, "totalRetriesAllowed", totalRetries, "err", err.Error())
 			continue
 		}
 		return deviceId, err
