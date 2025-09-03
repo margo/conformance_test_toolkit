@@ -107,5 +107,9 @@ func validateConfig(config *Config) error {
 		return fmt.Errorf("there are no runtimes defined in agent configuration")
 	}
 
+	if config.Capabilities.ReadFromFile == "" {
+		return fmt.Errorf("capabilities file path is mandatory check the capabilties section in the config file")
+	}
+
 	return nil
 }

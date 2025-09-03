@@ -143,8 +143,14 @@ func (a *Agent) Start() error {
 	deviceId = deviceDetails.DeviceID
 
 	// 2. Report capabilities
-	capabilities, err := types.LoadCapabilities("config/capabilities.json")
-	if err == nil {
+	capabilities, err := types.LoadCapabilities(a.config.Capabilities.ReadFromFile)
+	if err != nil {
+		a.log.Errorw(
+			"failed to load the capabilities file, please resolve the issue as the capabilities will not be reported until next restart",
+			"err",
+			err.Error(),
+		)
+	} else {
 		capabilities.Properties.Id = deviceId
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		a.auth.ReportCapabilities(ctx, *capabilities)
