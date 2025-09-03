@@ -61,7 +61,7 @@ func (da *DeviceAuth) Onboard(ctx context.Context, deviceSign []byte) (deviceId 
 	onboardingReq := sbi.OnboardingRequest{
 		"ApiVersion":      "device.margo/v1",
 		"Kind":            "OnboardingRequest",
-		"DeviceSignature": deviceSign,
+		"DeviceSignature": string(deviceSign),
 	}
 
 	resp, err := da.apiClient.PostOnboardingDevice(ctx, onboardingReq)

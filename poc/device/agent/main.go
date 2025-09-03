@@ -218,6 +218,6 @@ func main() {
 
 func findDeviceSignature(logger *zap.SugaredLogger) []byte {
 	sign := "test-device-signature"
-	logger.Info("find device signature", "signature", sign)
+	logger.Infow("find device signature", "signature", sign)
 	return []byte(sign)
 }

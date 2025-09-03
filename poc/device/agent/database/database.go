@@ -25,19 +25,19 @@ type DeploymentRecord struct {
 type DeploymentChangeType string
 
 const (
-	DeploymentChangeTypeRecordAdded           DeploymentChangeType = "record-added"
-	DeploymentChangeTypeRecordDeleted         DeploymentChangeType = "record-deleted"
-	DeploymentChangeTypeComponentPhaseChanged DeploymentChangeType = "component-phase-changed"
-	DeploymentChangeTypeDesiredStateAdded     DeploymentChangeType = "desired-state-added"
-	DeploymentChangeTypeCurrentStateAdded     DeploymentChangeType = "current-state-added"
+	DeploymentChangeTypeRecordAdded           DeploymentChangeType = "RECORD-ADDED"
+	DeploymentChangeTypeRecordDeleted         DeploymentChangeType = "RECORD-DELETED"
+	DeploymentChangeTypeComponentPhaseChanged DeploymentChangeType = "COMPONENT-PHASE-CHANGED"
+	DeploymentChangeTypeDesiredStateAdded     DeploymentChangeType = "DESIRED-STATE-ADDED"
+	DeploymentChangeTypeCurrentStateAdded     DeploymentChangeType = "CURRENT-STATE-ADDED"
 )
 
 type DeviceOnboardState string
 
 const (
-	DeviceOnboardStateOnboardInProgress DeviceOnboardState = "onboard-in-progress"
-	DeviceOnboardStateOnboarded         DeviceOnboardState = "onboarded"
-	DeviceOnboardStateOnboardFailed     DeviceOnboardState = "onboard-failed"
+	DeviceOnboardStateOnboardInProgress DeviceOnboardState = "IN-PROGRESS"
+	DeviceOnboardStateOnboarded         DeviceOnboardState = "ONBOARDED"
+	DeviceOnboardStateOnboardFailed     DeviceOnboardState = "FAILED"
 )
 
 type DeviceSettingsRecord struct {
