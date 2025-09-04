@@ -77,9 +77,16 @@ const (
 	AuthTypeCustom AuthType = "custom"
 )
 
-type option = func(context.Context, *http.Request) error
+type AuthOption = func(context.Context, *http.Request) error
 
-func WithOAuth(ctx context.Context, clientId, clientSecret, tokenUrl string) option {
+func WithDeviceSignature(ctx context.Context, sign string) AuthOption {
+	return func(ctx context.Context, req *http.Request) error {
+		req.Header.Set("X-DEVICE-SIGNATURE", sign)
+		return nil
+	}
+}
+
+func WithOAuth(ctx context.Context, clientId, clientSecret, tokenUrl string) AuthOption {
 	return func(ctx context.Context, req *http.Request) error {
 		tokenResp, err := GetOAuthToken(ctx, clientId, clientSecret, tokenUrl)
 		if err != nil {
@@ -93,7 +100,7 @@ func WithOAuth(ctx context.Context, clientId, clientSecret, tokenUrl string) opt
 	}
 }
 
-func WithBasicAuth(ctx context.Context, username, password string) option {
+func WithBasicAuth(ctx context.Context, username, password string) AuthOption {
 	return func(ctx context.Context, req *http.Request) error {
 		if username == "" || password == "" {
 			return fmt.Errorf("username and password required for basic authentication")

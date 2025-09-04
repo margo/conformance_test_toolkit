@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
@@ -82,11 +83,22 @@ func (ss *StateSyncer) performSync() {
 
 	// Send to orchestrator and get desired states
 	device, _ := ss.database.GetDeviceSettings()
-	resp, err := ss.apiClient.State(
-		ctx,
-		currentStates,
-		auth.WithOAuth(ctx, device.ClientId, device.ClientSecret, device.TokenEndpointUrl),
-	)
+	var resp *http.Response
+	var err error
+	if device.AuthEnabled {
+		resp, err = ss.apiClient.State(
+			ctx,
+			currentStates,
+			auth.WithDeviceSignature(ctx, string(device.DeviceSignature)),
+			auth.WithOAuth(ctx, device.OAuthClientId, device.OAuthClientSecret, device.OAuthTokenEndpointUrl),
+		)
+	} else {
+		resp, err = ss.apiClient.State(
+			ctx,
+			currentStates,
+			auth.WithDeviceSignature(ctx, string(device.DeviceSignature)),
+		)
+	}
 	if err != nil {
 		ss.log.Errorw("Failed to sync states", "error", err)
 		return
@@ -112,6 +124,9 @@ func (ss *StateSyncer) performSync() {
 		if err != nil {
 			ss.database.SetPhase(desiredState.AppId, "FAILED", fmt.Sprintf("Conversion failed: %v", err))
 			return
+		}
+		if !ss.database.CanDeployAppProfile(string(appDeployment.Spec.DeploymentProfile.Type)) {
+			ss.log.Warnw("Received unsupported file type for this agent/runtime, will skip it", "profileType", appDeployment.Spec.DeploymentProfile.Type)
 		}
 		deploymentId := appDeployment.Metadata.Id
 		ss.database.SetDesiredState(*deploymentId, desiredState)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,12 +45,16 @@ type DeviceSettingsRecord struct {
 	DeviceID        string             `json:"deviceId"`
 	DeviceSignature []byte             `json:"deviceSignature"`
 	State           DeviceOnboardState `json:"state"`
-	// ClientId The client ID for OAuth 2.0 authentication.
-	ClientId string `json:"clientId"`
-	// ClientSecret The client secret for OAuth 2.0 authentication.
-	ClientSecret string `json:"clientSecret"`
-	// TokenEndpointUrl The URL for the OAuth 2.0 token endpoint.
-	TokenEndpointUrl string `json:"tokenEndpointUrl"`
+	AuthEnabled     bool               `json:"authEnabled"`
+	// OAuthClientId The client ID for OAuth 2.0 authentication.
+	OAuthClientId string `json:"clientId"`
+	// OAuthClientSecret The client secret for OAuth 2.0 authentication.
+	OAuthClientSecret string `json:"clientSecret"`
+	// OAuthTokenEndpointUrl The URL for the OAuth 2.0 token endpoint.
+	OAuthTokenEndpointUrl string `json:"tokenEndpointUrl"`
+	// the applications that the device can deploy
+	CanDeployHelm    bool
+	CanDeployCompose bool
 }
 
 type DatabaseIfc interface {
@@ -335,4 +340,17 @@ func (db *Database) SetDeviceOnboardState(state DeviceOnboardState) error {
 
 func (db *Database) IsDeviceOnboarded() (*DeviceSettingsRecord, bool, error) {
 	return db.deviceSettings, db.deviceSettings.State == DeviceOnboardStateOnboarded, nil
+}
+
+func (db *Database) SetDeviceCanDeployHelm(deployable bool) {
+	db.deviceSettings.CanDeployHelm = deployable
+}
+
+func (db *Database) SetDeviceCanDeployCompose(deployable bool) {
+	db.deviceSettings.CanDeployCompose = deployable
+}
+
+func (db *Database) CanDeployAppProfile(profileType string) bool {
+	return (strings.ToLower(profileType) == "helm.v3" && db.deviceSettings.CanDeployHelm) ||
+		(strings.ToLower(profileType) == "compose" && db.deviceSettings.CanDeployCompose)
 }
