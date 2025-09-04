@@ -132,8 +132,8 @@ func (a *Agent) Start() error {
 	var err error
 
 	// 1. Onboard device
-	deviceDetails, _ := a.database.GetDeviceSettings()
-	deviceId = deviceDetails.DeviceID
+	deviceSettings, _ := a.database.GetDeviceSettings()
+	deviceId = deviceSettings.DeviceID
 
 	// 2. Report capabilities
 	capabilities, err := types.LoadCapabilities(a.config.Capabilities.ReadFromFile)

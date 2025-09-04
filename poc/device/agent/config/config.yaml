@@ -1,5 +1,4 @@
-deviceSignature: "sign-101-this-is-a-test-signature-binded-to-this-device-only"
-
+deviceSignature: "sign-104-this-is-a-test-signature-binded-to-this-device-only"
 wfm: 
   sbiUrl: http://localhost:8082/v1alpha2/margo/sbi/v1 #http://172.19.59.148:8082/v1alpha2/margo/sbi/v1
   # the auth info is auto-fetched by the agent when it gets onboarded

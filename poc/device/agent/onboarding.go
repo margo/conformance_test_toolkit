@@ -155,7 +155,7 @@ func (da *DeviceSettings) Onboard(ctx context.Context) (deviceId string, err err
 	da.log.Infow("Device onboarding successful", "deviceId", da.deviceID)
 
 	da.db.SetDeviceSettings(database.DeviceSettingsRecord{
-		DeviceID:              deviceId,
+		DeviceID:              da.deviceID,
 		DeviceSignature:       da.deviceSignature,
 		State:                 database.DeviceOnboardStateOnboarded,
 		OAuthClientId:         da.oauthClientId,
