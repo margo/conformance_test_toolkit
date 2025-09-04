@@ -93,6 +93,26 @@ func NewDeviceSettings(client sbi.ClientInterface, db database.DatabaseIfc, log 
 	for _, opt := range opts {
 		opt(settings)
 	}
+
+	// NOTE: need to move this out of here, not a good pattern
+	newDeviceRecord := database.DeviceSettingsRecord{}
+	if s != nil {
+		newDeviceRecord = *s
+	}
+	newDeviceRecord.CanDeployCompose = settings.canDeployCompose
+	newDeviceRecord.CanDeployHelm = settings.canDeployHelm
+	newDeviceRecord.AuthEnabled = settings.authEnabled
+	newDeviceRecord.DeviceID = settings.deviceID
+	newDeviceRecord.DeviceSignature = settings.deviceSignature
+	newDeviceRecord.OAuthClientId = settings.oauthClientId
+	newDeviceRecord.OAuthClientSecret = settings.oAuthClientSecret
+	newDeviceRecord.OAuthTokenEndpointUrl = settings.oauthTokenUrl
+	// s.State = settings.
+
+	if err := db.SetDeviceSettings(newDeviceRecord); err != nil {
+		return nil, err
+	}
+
 	return settings, nil
 }
 
