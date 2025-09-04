@@ -127,6 +127,7 @@ func (ss *StateSyncer) performSync() {
 		}
 		if !ss.database.CanDeployAppProfile(string(appDeployment.Spec.DeploymentProfile.Type)) {
 			ss.log.Warnw("Received unsupported file type for this agent/runtime, will skip it", "profileType", appDeployment.Spec.DeploymentProfile.Type)
+			continue
 		}
 		deploymentId := appDeployment.Metadata.Id
 		ss.database.SetDesiredState(*deploymentId, desiredState)

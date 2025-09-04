@@ -62,6 +62,7 @@ func WithEnableHelmDeployment() Option {
 func NewDeviceSettings(client sbi.ClientInterface, db database.DatabaseIfc, log *zap.SugaredLogger, opts ...Option) (*DeviceSettings, error) {
 	s, _ := db.GetDeviceSettings()
 
+	canDeployHelm, canDeployCompose := false, false
 	deviceId, signature := "", ""
 	authEnabled, clientId, clientSecret, tokenUrl := false, "", "", ""
 	if s != nil {
@@ -71,6 +72,8 @@ func NewDeviceSettings(client sbi.ClientInterface, db database.DatabaseIfc, log 
 		clientId = s.OAuthClientId
 		clientSecret = s.OAuthClientSecret
 		tokenUrl = s.OAuthTokenEndpointUrl
+		canDeployHelm = s.CanDeployHelm
+		canDeployCompose = s.CanDeployCompose
 	}
 
 	settings := &DeviceSettings{
@@ -83,6 +86,8 @@ func NewDeviceSettings(client sbi.ClientInterface, db database.DatabaseIfc, log 
 		oauthClientId:     clientId,
 		oAuthClientSecret: clientSecret,
 		oauthTokenUrl:     tokenUrl,
+		canDeployHelm:     canDeployHelm,
+		canDeployCompose:  canDeployCompose,
 	}
 
 	for _, opt := range opts {

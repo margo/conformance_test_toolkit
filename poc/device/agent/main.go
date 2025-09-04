@@ -98,6 +98,8 @@ func NewAgent(configPath string) (*Agent, error) {
 	log.Infow("device details",
 		"deviceId", deviceSettings.deviceID,
 		"deviceSignature", string(deviceSettings.deviceSignature),
+		"canDeployHelm", deviceSettings.canDeployHelm,
+		"canDeployCompose", deviceSettings.canDeployCompose,
 		"isAuthEnabled", deviceSettings.authEnabled,
 		"hasClientId", len(deviceSettings.oauthClientId) != 0,
 		"hasClientSecret", len(deviceSettings.oAuthClientSecret) != 0,
