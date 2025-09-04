@@ -75,7 +75,7 @@ func NewAgent(configPath string) (*Agent, error) {
 		}
 	}
 
-	opts = append(opts, WithDeviceSignature(findDeviceSignature(log)))
+	opts = append(opts, WithDeviceSignature(findDeviceSignature(*cfg, log)))
 
 	var deviceSettings *DeviceSettings
 	deviceSettings, _ = NewDeviceSettings(apiClient, db, log, opts...)
@@ -176,6 +176,12 @@ func (a *Agent) Stop() error {
 	return nil
 }
 
+func findDeviceSignature(cfg types.Config, logger *zap.SugaredLogger) []byte {
+	sign := cfg.DeviceSignature
+	logger.Infow("find device signature", "signature", sign)
+	return []byte(sign)
+}
+
 func main() {
 	// Define command-line flags
 	configPath := flag.String(
@@ -211,10 +217,4 @@ func main() {
 	<-sigChan
 
 	agent.Stop()
-}
-
-func findDeviceSignature(logger *zap.SugaredLogger) []byte {
-	sign := "test-device-signature"
-	logger.Infow("find device signature", "signature", sign)
-	return []byte(sign)
 }
