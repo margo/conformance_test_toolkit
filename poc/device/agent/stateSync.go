@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/margo/dev-repo/poc/device/agent/database"
+	"github.com/margo/dev-repo/shared-lib/http/auth"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 	"github.com/margo/dev-repo/standard/pkg"
 	"go.uber.org/zap"
@@ -80,7 +81,12 @@ func (ss *StateSyncer) performSync() {
 	}
 
 	// Send to orchestrator and get desired states
-	resp, err := ss.apiClient.State(ctx, currentStates)
+	device, _ := ss.database.GetDeviceSettings()
+	resp, err := ss.apiClient.State(
+		ctx,
+		currentStates,
+		auth.WithOAuth(ctx, device.ClientId, device.ClientSecret, device.TokenEndpointUrl),
+	)
 	if err != nil {
 		ss.log.Errorw("Failed to sync states", "error", err)
 		return

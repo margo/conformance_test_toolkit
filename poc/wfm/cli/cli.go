@@ -41,6 +41,8 @@ type (
 	DeploymentResp       = nonStdWfmNbi.ApplicationDeploymentManifestResp
 	DeploymentListResp   = nonStdWfmNbi.ApplicationDeploymentListResp
 	DeploymentListParams = nonStdWfmNbi.ListApplicationDeploymentsParams
+
+	DeviceListResp = nonStdWfmNbi.DeviceListResp
 )
 
 // WFMCli provides a client interface for the Margo Northbound API.
@@ -464,6 +466,39 @@ func (cli *WFMCli) DeleteDeployment(deploymentId string) error {
 		return nil
 	default:
 		return cli.handleErrorResponse(deploymentResp.Body, deploymentResp.StatusCode(), "delete app deployment")
+	}
+}
+
+func (cli *WFMCli) ListDevices() (*DeviceListResp, error) {
+	client, err := cli.createNonStdNbiClient()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := cli.createContext()
+	defer cancel()
+
+	resp, err := client.ListDevices(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list devices request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	deviceListResp, err := nonStdWfmNbi.ParseListDevicesResponse(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse list device response: %w", err)
+	}
+
+	switch deviceListResp.StatusCode() {
+	case 200:
+		deviceCount := 0
+		if deviceListResp.JSON200 != nil {
+			deviceCount = len(deviceListResp.JSON200.Items)
+		}
+		cli.logger.Printf("Successfully listed %d devices", deviceCount)
+		return deviceListResp.JSON200, nil
+	default:
+		return nil, cli.handleErrorResponse(deviceListResp.Body, deviceListResp.StatusCode(), "list devices")
 	}
 }
 

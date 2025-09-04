@@ -2,7 +2,7 @@
     "apiVersion": "device.margo/v1",
     "kind": "DeviceCapability",
     "properties": {
-        "id": "northstarida.xtapro.k8s.edge",
+        "id": "",
         "vendor": "Northstar Industrial Applications",
         "modelNumber": "332ANZE1-N1",
         "serialNumber": "PF45343-AA",

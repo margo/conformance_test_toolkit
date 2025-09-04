@@ -366,6 +366,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /devices:
+    get:
+      summary: List Devices
+      description: Retrieve a paginated list of devices.
+      operationId: listDevices
+      tags: [Devices]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, default: 20 }
+          description: Maximum number of items to return
+        - name: continue
+          in: query
+          schema: { type: string }
+          description: Token for pagination
+      responses:
+        '200':
+          description: List of Devices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceListResp'
+        '400':
+          description: Bad request - invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     APIResponse:
@@ -1492,6 +1527,73 @@ components:
           format: date-time
           description: Last update time
           readOnly: true
+
+    DeviceListResp:
+      type: object
+      description: List of Devices
+      required: [apiVersion, kind, items]
+      properties:
+        apiVersion:
+          type: string
+          description: API version
+        kind:
+          type: string
+          default: DeviceList
+        metadata:
+          type: object
+          $ref: '#/components/schemas/PaginationMetadata'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceManifestResp'
+    
+    # Device Schemas
+    DeviceManifestResp:
+      type: object
+      description: Device manifest
+      required: [apiVersion, kind, metadata, spec, state]
+      properties:
+        apiVersion:
+          type: string
+          default: non-margo.org
+          description: API version
+        kind:
+          type: string
+          default: Device
+          description: Resource kind
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+          description: Metadata of the device
+        spec:
+          $ref: '#/components/schemas/DeviceSpec'
+          description: Specification of the device
+        state:
+          $ref: '#/components/schemas/DeviceState'
+          description: State of the device
+    
+    DeviceSpec:
+      type: object
+      required: [signature, capabilities]
+      properties:
+        signature:
+          type: string
+          description: Unique signature of the device
+        capabilities:
+          # type: object
+          x-go-type: interface{}
+          type: object
+          additionalProperties: true
+    
+    DeviceState:
+      type: object
+      required: [onboard]
+      properties:
+        onboard:
+          $ref: '#/components/schemas/DeviceOnboardStatus'
+    
+    DeviceOnboardStatus:
+      type: string
+      enum: [IN-PROGRESS, ONBOARDED, FAILED]
 
     # Common Schemas
     ContextualInfo:

@@ -1,4 +1,4 @@
-deviceId: device-101
+deviceSignature: "sign-101-this-is-a-test-signature-binded-to-this-device-only"
 
 wfm: 
   sbiUrl: http://localhost:8082/v1alpha2/margo/sbi/v1 #http://172.19.59.148:8082/v1alpha2/margo/sbi/v1
@@ -22,19 +22,19 @@ stateSeeking:
 # but keep this in mind that it adds more cognitive complexity for somebody to understand when
 # multiple such kind of agents will be running in an environment
 runtimes:
-  # - type: KUBERNETES
-  #   kubernetes:
-  #     kubeconfigPath: /root/.kube/config
-  - type: DOCKER
-    docker:
-      url: unix:///var/run/docker.sock #http://localhost:8080 #unix://var/unix/socket
-      tlsSkipVerification: true
+  - type: KUBERNETES
+    kubernetes:
+      kubeconfigPath: /root/.kube/config
+  # - type: DOCKER
+  #   docker:
+  #     url: unix:///var/run/docker.sock #http://localhost:8080 #unix://var/unix/socket
+  #     tlsSkipVerification: true
       # tls:
       #   cacertPath: null
       #   certPath: null
       #   keyPath: null
 
-# Note: Auto-discovery of device capabilities is not defined and hence implemented yet,
+# Note: Auto-discovery of device capabilities is not defined and hence not implemented yet,
 # hence you are supposed to provide the details
 # in the file.
 # Path to the capabilities file (required).

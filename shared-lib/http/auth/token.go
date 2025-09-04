@@ -77,83 +77,28 @@ const (
 	AuthTypeCustom AuthType = "custom"
 )
 
-// applyAuthentication applies the specified authentication method to the HTTP request
-func ApplyAuthentication(req *http.Request, auth *AuthConfig) error {
-	if auth == nil {
-		return nil // No authentication required
-	}
+type option = func(context.Context, *http.Request) error
 
-	switch auth.Type {
-	case AuthTypeNone:
-		// No authentication
+func WithOAuth(ctx context.Context, clientId, clientSecret, tokenUrl string) option {
+	return func(ctx context.Context, req *http.Request) error {
+		tokenResp, err := GetOAuthToken(ctx, clientId, clientSecret, tokenUrl)
+		if err != nil {
+			return err
+		}
+		if tokenResp.AccessToken == "" {
+			return fmt.Errorf("got empty oauth token from the url: %s, and no error received", tokenUrl)
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenResp.AccessToken))
 		return nil
+	}
+}
 
-	case AuthTypeBasic:
-		if auth.Username == "" || auth.Password == "" {
+func WithBasicAuth(ctx context.Context, username, password string) option {
+	return func(ctx context.Context, req *http.Request) error {
+		if username == "" || password == "" {
 			return fmt.Errorf("username and password required for basic authentication")
 		}
-		req.SetBasicAuth(auth.Username, auth.Password)
-
-	case AuthTypeBearer:
-		if auth.Token == "" {
-			return fmt.Errorf("token required for bearer authentication")
-		}
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.Token))
-
-	case AuthTypeAPIKey:
-		if auth.APIKey == "" {
-			return fmt.Errorf("API key required for API key authentication")
-		}
-		// Common API key header patterns
-		req.Header.Set("X-API-Key", auth.APIKey)
-		// Alternative patterns:
-		// req.Header.Set("Authorization", fmt.Sprintf("ApiKey %s", auth.APIKey))
-		// req.Header.Set("X-Auth-Token", auth.APIKey)
-
-	case AuthTypeCustom:
-		if len(auth.Headers) == 0 {
-			return fmt.Errorf("custom headers required for custom authentication")
-		}
-		for key, value := range auth.Headers {
-			if key == "" || value == "" {
-				continue
-			}
-			req.Header.Set(key, value)
-		}
-
-	default:
-		return fmt.Errorf("unsupported authentication type: %s", auth.Type)
-	}
-
-	return nil
-}
-
-// Helper function to create AuthConfig for different scenarios
-func NewBasicAuth(username, password string) *AuthConfig {
-	return &AuthConfig{
-		Type:     AuthTypeBasic,
-		Username: username,
-		Password: password,
-	}
-}
-
-func NewBearerAuth(token string) *AuthConfig {
-	return &AuthConfig{
-		Type:  AuthTypeBearer,
-		Token: token,
-	}
-}
-
-func NewAPIKeyAuth(apiKey string) *AuthConfig {
-	return &AuthConfig{
-		Type:   AuthTypeAPIKey,
-		APIKey: apiKey,
-	}
-}
-
-func NewCustomAuth(headers map[string]string) *AuthConfig {
-	return &AuthConfig{
-		Type:    AuthTypeCustom,
-		Headers: headers,
+		req.SetBasicAuth(username, password)
+		return nil
 	}
 }
