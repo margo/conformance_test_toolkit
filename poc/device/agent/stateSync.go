@@ -125,10 +125,10 @@ func (ss *StateSyncer) performSync() {
 			ss.database.SetPhase(desiredState.AppId, "FAILED", fmt.Sprintf("Conversion failed: %v", err))
 			return
 		}
-		if !ss.database.CanDeployAppProfile(string(appDeployment.Spec.DeploymentProfile.Type)) {
-			ss.log.Warnw("Received unsupported file type for this agent/runtime, will skip it", "profileType", appDeployment.Spec.DeploymentProfile.Type)
-			continue
-		}
+		// if !ss.database.CanDeployAppProfile(string(appDeployment.Spec.DeploymentProfile.Type)) {
+		// 	ss.log.Warnw("Received unsupported file type for this agent/runtime, will skip it", "profileType", appDeployment.Spec.DeploymentProfile.Type)
+		// 	continue
+		// }
 		deploymentId := appDeployment.Metadata.Id
 		ss.database.SetDesiredState(*deploymentId, desiredState)
 	}
