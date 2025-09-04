@@ -1,0 +1,62 @@
+apiVersion: margo.org/v1-alpha1
+kind: ApplicationDescription
+metadata:
+  id: com-go-otel-service
+  name: Go OTEL Service
+  description: A lightweight observability service using OpenTelemetry
+  version: 1.0.0
+  catalog:
+    application:
+      icon: ./resources/otel-icon.png
+      tagline: A simple, containerized OpenTelemetry service for distributed tracing and metrics.
+      descriptionFile: ./resources/description.md
+      releaseNotes: ./resources/release-notes.md
+      licenseFile: ./resources/license.pdf
+      site: http://localhost:8080
+      tags: ["observability", "telemetry", "monitoring"]
+    organization:
+      - name: OpenTelemetry Lab
+        site: https://opentelemetry.io
+deploymentProfiles:
+  - type: helm.v3
+    id: otel-demo
+    description: Deploys the go-otel-service using Helm v3. Requires network connectivity to the OTEL collector and basic compute resources.
+    components:
+      - name: otel-app
+        properties:
+          repository: oci://172.19.59.148/library/otel-app
+          revision: latest
+          wait: true
+          timeout: 5m
+    requiredResources:
+      cpu:
+        cores: 1
+        architectures:
+          - amd64
+          - x86_64
+      memory: 512Mi
+      storage: 1Gi
+      peripherals:
+        - type: display
+      interfaces:
+        - type: ethernet
+parameters:
+  # Frontend service configuration
+  otlpEndpoint:
+    value: "http://otel-collector-opentelemetry-collector:4318"
+    targets:
+    - pointer: env.OTEL_EXPORTER_OTLP_ENDPOINT
+      components: ["otel-demo"]
+
+configuration:
+  sections:
+    - name: Observability Settings
+      settings:
+        - parameter: otlpEndpoint
+          name: Endpoint of the OTLP collector
+          description: Endpoint of the OTLP collector
+          schema: endpoint
+  schema:
+    - name: endpoint
+      dataType: string
+      allowEmpty: false

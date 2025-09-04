@@ -87,17 +87,17 @@ parameters:
   
   # Feature flags
   enablePrometheus:
-    value: true
+    value: false
     targets:
     - pointer: prometheus.enabled
       components: ["otel-demo"]
   enableJaeger:
-    value: true
+    value: false
     targets:
     - pointer: jaeger.enabled
       components: ["otel-demo"]
   enableGrafana:
-    value: true
+    value: false
     targets:
     - pointer: grafana.enabled
       components: ["otel-demo"]
