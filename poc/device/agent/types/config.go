@@ -61,6 +61,7 @@ type RuntimeInfo struct {
 }
 
 type AuthConfig struct {
+	Enable       bool   `yaml:"enable"`
 	ClientId     string `yaml:"clientId"`
 	ClientSecret string `yaml:"clientSecret"`
 	TokenUrl     string `yaml:"tokenUrl"`

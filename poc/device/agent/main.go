@@ -20,7 +20,7 @@ import (
 
 type Agent struct {
 	log            *zap.SugaredLogger
-	auth           *DeviceAuth
+	auth           *DeviceSettings
 	config         types.Config
 	database       database.DatabaseIfc
 	syncer         StateSyncerIfc
@@ -48,6 +48,7 @@ func NewAgent(configPath string) (*Agent, error) {
 		return nil, err
 	}
 
+	opts := []Option{}
 	var helmClient *workloads.HelmClient
 	var composeClient *workloads.DockerComposeCliClient
 	for _, runtime := range cfg.Runtimes {
@@ -57,6 +58,7 @@ func NewAgent(configPath string) (*Agent, error) {
 			if err != nil {
 				return nil, err
 			}
+			opts = append(opts, WithEnableHelmDeployment())
 		}
 
 		if runtime.Docker != nil {
@@ -69,63 +71,52 @@ func NewAgent(configPath string) (*Agent, error) {
 			if err != nil {
 				return nil, err
 			}
+			opts = append(opts, WithEnableComposeDeployment())
 		}
 	}
 
-	var deviceAuth *DeviceAuth
-	settings, isOnboarded, err := db.IsDeviceOnboarded()
+	opts = append(opts, WithDeviceSignature(findDeviceSignature(log)))
+
+	var deviceSettings *DeviceSettings
+	deviceSettings, _ = NewDeviceSettings(apiClient, db, log, opts...)
+	isOnboarded, err := deviceSettings.IsOnboarded()
 	if err != nil {
+		log.Errorw("failed to check onboarding status", "error", err)
 		return nil, err
 	}
+
 	if !isOnboarded {
-		deviceAuth = NewDeviceAuth(apiClient, log)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		deviceId, err := deviceAuth.OnboardWithRetries(ctx, findDeviceSignature(log), 10)
+		deviceId, err := deviceSettings.OnboardWithRetries(ctx, 10)
 		defer cancel()
 		if err != nil {
 			log.Errorw("device onboarding failed", "error", err)
 		}
 		log.Infow("device onboarded", "deviceId", deviceId)
-
-		db.SetDeviceSettings(database.DeviceSettingsRecord{
-			DeviceID:         deviceId,
-			DeviceSignature:  deviceAuth.deviceSignature,
-			State:            database.DeviceOnboardStateOnboarded,
-			ClientId:         deviceAuth.clientId,
-			ClientSecret:     deviceAuth.clientSecret,
-			TokenEndpointUrl: deviceAuth.tokenUrl,
-		})
-	} else {
-		deviceAuth = NewDeviceAuth(
-			apiClient,
-			log,
-			WithDeviceID(settings.DeviceID),
-			WithDeviceSignature(settings.DeviceSignature),
-			WithDeviceClientSecret(settings.ClientId, settings.ClientSecret, settings.TokenEndpointUrl),
-		)
 	}
 
 	log.Infow("device details",
-		"deviceId", deviceAuth.deviceID,
-		"deviceSignature", string(deviceAuth.deviceSignature),
-		"hasClientId", len(deviceAuth.clientId) != 0,
-		"hasClientSecret", len(deviceAuth.clientSecret) != 0,
-		"hasTokenUrl", len(deviceAuth.tokenUrl) != 0,
-		"tokenBasedAuthDetails", (len(deviceAuth.clientId) != 0) && (len(deviceAuth.clientSecret) != 0) && (len(deviceAuth.tokenUrl) != 0),
+		"deviceId", deviceSettings.deviceID,
+		"deviceSignature", string(deviceSettings.deviceSignature),
+		"isAuthEnabled", deviceSettings.authEnabled,
+		"hasClientId", len(deviceSettings.oauthClientId) != 0,
+		"hasClientSecret", len(deviceSettings.oAuthClientSecret) != 0,
+		"hasTokenUrl", len(deviceSettings.oauthTokenUrl) != 0,
+		"tokenBasedAuthDetails", (len(deviceSettings.oauthClientId) != 0) && (len(deviceSettings.oAuthClientSecret) != 0) && (len(deviceSettings.oauthTokenUrl) != 0),
 	)
 
 	// Create components
 	deployer := NewDeploymentManager(db, helmClient, composeClient, log)
 	monitor := NewDeploymentMonitor(db, helmClient, composeClient, log)
-	syncer := NewStateSyncer(db, apiClient, deviceAuth.deviceID, cfg.StateSeeking.Interval, log)
-	statusReporter := NewStatusReporter(db, apiClient, deviceAuth.deviceID, log)
+	syncer := NewStateSyncer(db, apiClient, deviceSettings.deviceID, cfg.StateSeeking.Interval, log)
+	statusReporter := NewStatusReporter(db, apiClient, deviceSettings.deviceID, log)
 
 	return &Agent{
 		database:       db,
 		syncer:         syncer,
 		deployer:       deployer,
 		monitor:        monitor,
-		auth:           deviceAuth,
+		auth:           deviceSettings,
 		statusReporter: statusReporter,
 		log:            log,
 		config:         *cfg,
