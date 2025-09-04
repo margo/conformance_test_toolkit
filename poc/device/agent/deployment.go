@@ -164,7 +164,8 @@ func (dm *DeploymentManager) deployOrUpdateHelm(ctx context.Context, deploymentI
 	// Deploy/Update
 	release, err := dm.helmClient.GetReleaseStatus(ctx, releaseName, "")
 	if err != nil {
-		return fmt.Errorf("failed to check existing release info: %v", err)
+		dm.log.Infow("failed to check whether a release exists or not, assuming that it doesn't exist, will proceed with installation", "releaseName", releaseName, "deploymentId", deploymentId, "err", err.Error())
+		// return fmt.Errorf("failed to check existing release info: %v", err)
 	}
 
 	if release != nil {
