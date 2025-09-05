@@ -21,10 +21,11 @@ spec:
           args: ["-config", "config/config.yaml"]
           volumeMounts:
             - name: kubeconfig-volume
-              mountPath: "/root/.kube/config" 
+              subPath: kubeconfig
+              mountPath: /root/.kube/config 
               readOnly: true
             - name: agent-config-volume
-              mountPath: "/config"
+              mountPath: /config
               readOnly: true
               
       volumes:
