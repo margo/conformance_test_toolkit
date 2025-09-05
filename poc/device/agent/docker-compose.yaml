@@ -7,9 +7,11 @@ services:
       dockerfile: poc/device/agent/Dockerfile
     container_name: device-agent
     volumes:
-      - ${HOME}/.kube/config:/root/.kube/config:ro
-      - ./config/config.yaml:/app/config/config.yaml
-      - ./config/capabilities.yaml:/app/config/capabilities.yaml
+      - /root/.kube/config:/root/.kube/config:ro # to manage kubernetes runtimes
+      # - /var/run/docker.sock:/var/run/docker.sock # to manage docker runtimes
+      - ./config/config.yaml:/config/config.yaml
+      - ./config/capabilities.yaml:/config/capabilities.yaml
+      - ./data:/data
     restart: unless-stopped
     entrypoint: ["./device-agent"]
     command: ["-config", "config/config.yaml"]

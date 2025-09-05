@@ -24,7 +24,7 @@ spec:
               mountPath: "/root/.kube/config" 
               readOnly: true
             - name: agent-config-volume
-              mountPath: "/app/config"
+              mountPath: "/config"
               readOnly: true
               
       volumes:

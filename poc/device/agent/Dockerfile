@@ -15,13 +15,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o device-ag
 # Stage 2: Runtime
 FROM scratch
 
-WORKDIR /app
+WORKDIR /
 
 COPY --from=builder /app/device-agent .
 COPY --from=builder /app/poc/device/agent/config ./config
 
 # Create volume for config override
-VOLUME ["/app/config"]
+VOLUME ["/config"]
 
 # Add metadata labels
 LABEL description="Margo Device Agent for edge workload management" \
