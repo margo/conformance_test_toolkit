@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  device-agent:
+    image: device-agent:latest
+    container_name: device-agent
+    volumes:
+      - ${HOME}/.kube/config:/root/.kube/config:ro
+    restart: unless-stopped
+    entrypoint: ["./device-agent"]
+    command: ["-config", "config/config.yaml"]

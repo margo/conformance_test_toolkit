@@ -1,0 +1,8 @@
+image:
+  repository: device-agent
+  tag: latest
+  pullPolicy: IfNotPresent
+
+kubeConfig:
+  hostPath: /home/azureuser/.kube/config
+  containerPath: /home/azureuser/.kube/config
