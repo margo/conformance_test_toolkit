@@ -31,12 +31,7 @@ spec:
       volumes:
         - name: kubeconfig-volume
           secret:
-            # References the secret created in the step above.
             secretName: {{ include "agentchart.k8ssecret" . }}
-            items:
-              # Maps the 'kubeconfig' key in the secret to the filename 'config' in the volume.
-              - key: kubeconfig
-                path: config
         - name: agent-config-volume
           configMap:
             name: {{ include "agentchart.configmapname" . }}
