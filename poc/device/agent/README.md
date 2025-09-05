@@ -102,8 +102,8 @@ docker build -t device-agent .
 # Run container
 docker run -d \
   -v $(pwd)/config:/app/config \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /root/.kube/config:/app/config/kubeconfig \
+  # -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /root/.kube/config:/root/.kube/config \
   --name device-agent \
   device-agent
 ```
