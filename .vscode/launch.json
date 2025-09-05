@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Margo Agent",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/poc/device/agent",
+      "args": [
+        "--config",
+        "${workspaceFolder}/poc/device/agent/config/config.yaml"
+      ]
+    }
+  ]
+}
