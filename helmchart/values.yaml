@@ -1,8 +1,11 @@
 image:
-  repository: device-agent
-  tag: latest
+  # there is no such repo as of now, while building the image we tagged it as margo.org/device-agent:dev-sprint-6
+  # and we expected that you have run that build command, else
+  # you can change this as per your need
+  repository: margo.org/device-agent
+  tag: dev-sprint-6
   pullPolicy: IfNotPresent
 
-kubeConfig:
-  hostPath: /home/azureuser/.kube/config
-  containerPath: /home/azureuser/.kube/config
+kubeconfig:
+  # the name of the k8s secret that contains the kubeconfig
+  secretName: agent-kubeconfig
