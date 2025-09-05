@@ -2,10 +2,14 @@ version: '3.8'
 
 services:
   device-agent:
-    image: device-agent:latest
+    build:
+      context: ../../../
+      dockerfile: poc/device/agent/Dockerfile
     container_name: device-agent
     volumes:
       - ${HOME}/.kube/config:/root/.kube/config:ro
+      - ./config/config.yaml:/app/config/config.yaml
+      - ./config/capabilities.yaml:/app/config/capabilities.yaml
     restart: unless-stopped
     entrypoint: ["./device-agent"]
     command: ["-config", "config/config.yaml"]
