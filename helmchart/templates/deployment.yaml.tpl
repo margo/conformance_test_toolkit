@@ -27,6 +27,8 @@ spec:
             - name: agent-config-volume
               mountPath: /config
               readOnly: true
+            - name: data-volume
+              mountPath: /data
               
       volumes:
         - name: kubeconfig-volume
@@ -35,3 +37,11 @@ spec:
         - name: agent-config-volume
           configMap:
             name: {{ include "agentchart.configmapname" . }}
+        {{- if eq .Values.persistence.enabled true}}
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: {{.Values.persistence.claimName}}
+        {{- else }}
+        - name: data-volume
+          emptyDir: {}
+        {{- end }}

@@ -9,3 +9,12 @@ image:
 kubeconfig:
   # the name of the k8s secret that contains the kubeconfig
   secretName: agent-kubeconfig
+
+# if persistence.enabled=true then you need to give a volume claim name
+# the agent will use this volume claim to store its data, make sure that the volume claim is in the same namespace
+# where you have installed the chart
+# if persistence.enabled=false then an ephemeral volume will be used
+# which means that data will not be persisted if things crash, or restart
+persistence:
+  enabled: false
+  claimName: ""
