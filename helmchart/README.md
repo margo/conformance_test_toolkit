@@ -1,9 +1,12 @@
 # Pre-requisites:
 - Kubernetes runtime
-- Ensure that you have the container image for the device agent with you, if not you can build it using the following command(assuming that you cloned the entire dev-repo at one place). To build, please run the following command:
+- Ensure that you have the container image for the device agent with you, if not you can build it using the following command(assuming that you cloned the entire dev-repo at one place). To build, please run the following command (you can use nordctl or other tools as per your preference):
 ```bash
 cd ..
 docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
+docker save -o device-agent.tar margo.org/device-agent:dev-sprint-6
+ctr image import device-agent.tar  # use this command if on k8s cluster
+k3s ctr -n k8s.io image import device-agent.tar # use this command if on k3s cluster
 cd helmchart
 ```
 
