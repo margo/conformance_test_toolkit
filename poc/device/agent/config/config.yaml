@@ -1,3 +1,5 @@
+# what the device signature will be and how it will be fetched is not yet properly defined in the Margo spec
+# hence any unique random string is valid, given no other device possess it, else the wfm will reject with a Conflict HTTP Status Code 
 deviceSignature: "sign-104-this-is-a-test-signature-binded-to-this-device-only"
 wfm: 
   sbiUrl: http://172.19.59.148:8082/v1alpha2/margo/sbi/v1 #http://172.19.59.148:8082/v1alpha2/margo/sbi/v1
