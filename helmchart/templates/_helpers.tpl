@@ -7,15 +7,15 @@
 {{- end -}}
 
 {{- define "agentchart.deploymentname" -}}
-{{- printf "%s-%s" {{ include "agentchart.fullname" . }} "-deploy" -}}
+{{- printf "%s-%s" ( include "agentchart.fullname" . ) "-deploy" -}}
 {{- end -}}
 
 {{- define "agentchart.podname" -}}
-{{- printf "%s-%s" {{ include "agentchart.fullname" . }} "-pod" -}}
+{{- printf "%s-%s" ( include "agentchart.fullname" . ) "-pod" -}}
 {{- end -}}
 
 {{- define "agentchart.configmapname" -}}
-{{- printf "%s-%s" {{ include "agentchart.fullname" . }} "-cm" -}}
+{{- printf "%s-%s" ( include "agentchart.fullname" . ) "-cm" -}}
 {{- end -}}
 
 

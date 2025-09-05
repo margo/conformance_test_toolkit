@@ -25,9 +25,12 @@ kubectl create secret generic agent-kubeconfig \
 
 3. Copy the config.yaml and capabilities.yaml files in this directory.
 ```bash
-cp -r ../poc/device/agent/config .
+cp -r ../poc/device/agent/config/* .
 ```
 
 4. Change the params as per your need in these config.yaml and capabilities.yaml .
 
-5. 
+5. Install the chart in the namespace:
+```bash
+helm install device-agent . --namespace device-agent
+```
