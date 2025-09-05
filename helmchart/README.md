@@ -1,6 +1,13 @@
+# Pre-requisites:
+- Kubernetes runtime
+- Ensure that you have the container image for the device agent with you, if not you can build it using the following command(assuming that you cloned the entire dev-repo at one place). To build, please run the following command:
+```bash
+cd ..
 docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
+cd helmchart
+```
 
-
+# Main steps:
 1. Create a namespace
 ```bash
 kubectl create namespace device-agent
@@ -18,7 +25,7 @@ kubectl create secret generic agent-kubeconfig \
 
 3. Copy the config.yaml and capabilities.yaml files in this directory.
 ```bash
-cp ../poc/device/agent/config .
+cp -r ../poc/device/agent/config .
 ```
 
 4. Change the params as per your need in these config.yaml and capabilities.yaml .
