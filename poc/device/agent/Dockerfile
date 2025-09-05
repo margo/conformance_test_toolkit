@@ -9,7 +9,8 @@ RUN go mod download
 COPY . .
 
 # Build a static binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o device-agent ./poc/device/agent
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o device-agent ./poc/device/agent
+
 
 # Stage 2: Runtime
 FROM scratch
