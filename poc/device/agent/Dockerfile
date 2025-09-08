@@ -9,16 +9,20 @@ RUN go mod download
 COPY . .
 
 # Build a static binary
+
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o device-agent ./poc/device/agent
 
+# Stage 2: Get Docker binary from official image
+FROM docker:24.0.7-cli AS docker-source
 
-# Stage 2: Runtime
+# Stage 3: Runtime
 FROM scratch
 
 WORKDIR /
 
 COPY --from=builder /app/device-agent .
 COPY --from=builder /app/poc/device/agent/config ./config
+COPY --from=docker-source /usr/local/bin/docker /usr/bin/docker
 
 # Create volume for config override
 VOLUME ["/config"]
