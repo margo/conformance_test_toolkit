@@ -3,13 +3,13 @@ version: '3.8'
 services:
   device-agent:
     build:
-      context: ../../../
+      context: ../
       dockerfile: poc/device/agent/Dockerfile
     container_name: device-agent
     volumes:
-      - /root/.kube/config:/root/.kube/config:ro # to manage kubernetes runtimes
-      # - /var/run/docker.sock:/var/run/docker.sock # to manage docker runtimes
-      # - /usr/bin/docker:/usr/bin/docker # to manage docker runtimes
+      # - /root/.kube/config:/root/.kube/config:ro # to manage kubernetes runtimes
+      - /var/run/docker.sock:/var/run/docker.sock # to manage docker runtimes
+      - /usr/bin/docker:/usr/bin/docker # to manage docker runtimes
       - ./config/config.yaml:/config/config.yaml
       - ./config/capabilities.yaml:/config/capabilities.yaml
       - ./data:/data
