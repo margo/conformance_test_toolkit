@@ -11,7 +11,7 @@ services:
       - SETGID
       - SETUID
     volumes:
-      - /opt/aricent/ec/harbor_registry/log/harbor/:/var/log/docker/:z
+      - /opt/harbor_registry/log/harbor/:/var/log/docker/:z
       - type: bind
         source: ./common/config/log/logrotate.conf
         target: /etc/logrotate.d/logrotate.conf
@@ -33,10 +33,10 @@ services:
       - SETGID
       - SETUID
     volumes:
-      - /opt/aricent/ec/harbor_registry/data/registry:/storage:z
+      - /opt/harbor_registry/data/registry:/storage:z
       - ./common/config/registry/:/etc/registry/:z
       - type: bind
-        source: /opt/aricent/ec/harbor_registry/data/secret/registry/root.crt
+        source: /opt/harbor_registry/data/secret/registry/root.crt
         target: /etc/registry/root.crt
       - type: bind
         source: ./common/config/shared/trust-certificates
@@ -63,7 +63,7 @@ services:
       - SETGID
       - SETUID
     volumes:
-      - /opt/aricent/ec/harbor_registry/data/registry:/storage:z
+      - /opt/harbor_registry/data/registry:/storage:z
       - ./common/config/registry/:/etc/registry/:z
       - type: bind
         source: ./common/config/registryctl/config.yml
@@ -92,7 +92,7 @@ services:
       - SETGID
       - SETUID
     volumes:
-      - /opt/aricent/ec/harbor_registry/data/database:/var/lib/postgresql/data:z
+      - /opt/harbor_registry/data/database:/var/lib/postgresql/data:z
     networks:
       harbor:
     env_file:
@@ -117,17 +117,17 @@ services:
       - SETGID
       - SETUID
     volumes:
-      - /opt/aricent/ec/harbor_registry/data/ca_download/:/etc/core/ca/:z
-      - /opt/aricent/ec/harbor_registry/data/:/data/:z
+      - /opt/harbor_registry/data/ca_download/:/etc/core/ca/:z
+      - /opt/harbor_registry/data/:/data/:z
       - ./common/config/core/certificates/:/etc/core/certificates/:z
       - type: bind
         source: ./common/config/core/app.conf
         target: /etc/core/app.conf
       - type: bind
-        source: /opt/aricent/ec/harbor_registry/data/secret/core/private_key.pem
+        source: /opt/harbor_registry/data/secret/core/private_key.pem
         target: /etc/core/private_key.pem
       - type: bind
-        source: /opt/aricent/ec/harbor_registry/data/secret/keys/secretkey
+        source: /opt/harbor_registry/data/secret/keys/secretkey
         target: /etc/core/key
       - type: bind
         source: ./common/config/shared/trust-certificates
@@ -182,7 +182,7 @@ services:
       - SETGID
       - SETUID
     volumes:
-      - /opt/aricent/ec/harbor_registry/data/job_logs:/var/log/jobs:z
+      - /opt/harbor_registry/data/job_logs:/var/log/jobs:z
       - type: bind
         source: ./common/config/jobservice/config.yml
         target: /etc/jobservice/config.yml
@@ -209,7 +209,7 @@ services:
       - SETGID
       - SETUID
     volumes:
-      - /opt/aricent/ec/harbor_registry/data/redis:/var/lib/redis
+      - /opt/harbor_registry/data/redis:/var/lib/redis
     networks:
       harbor:
     depends_on:
@@ -232,7 +232,7 @@ services:
       - NET_BIND_SERVICE
     volumes:
       - ./common/config/nginx:/etc/nginx:z
-      - /opt/aricent/ec/harbor_registry/data/secret/cert:/etc/cert:z
+      - /opt/harbor_registry/data/secret/cert:/etc/cert:z
       - type: bind
         source: ./common/config/shared/trust-certificates
         target: /harbor_cust_cert
@@ -264,10 +264,10 @@ services:
       - harbor
     volumes:
       - type: bind
-        source: /opt/aricent/ec/harbor_registry/data/trivy-adapter/trivy
+        source: /opt/harbor_registry/data/trivy-adapter/trivy
         target: /home/scanner/.cache/trivy
       - type: bind
-        source: /opt/aricent/ec/harbor_registry/data/trivy-adapter/reports
+        source: /opt/harbor_registry/data/trivy-adapter/reports
         target: /home/scanner/.cache/reports
       - type: bind
         source: ./common/config/shared/trust-certificates

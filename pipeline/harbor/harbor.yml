@@ -2,12 +2,12 @@
 
 # The IP address or hostname to access admin UI and registry service.
 # DO NOT use localhost or 127.0.0.1, because Harbor needs to be accessed by external clients.
-hostname: localhost
+hostname: 0.0.0.0
 
 # http related config
 http:
   # port for http, default is 80. If https enabled, this port will redirect to https port
-  port: 80
+  port: 8081
 
 # https related config
 #https:
@@ -63,7 +63,7 @@ database:
   conn_max_idle_time: 0
 
 # The default data volume
-data_volume: /opt/aricent/ec/harbor_registry/data
+data_volume: /opt/harbor_registry/data
 
 # Harbor Storage settings by default is using /data dir on local filesystem
 # Uncomment storage_service setting If you want to using external storage
@@ -162,7 +162,7 @@ log:
     # are all valid.
     rotate_size: 200M
     # The directory on your host that store log
-    location: /opt/aricent/ec/harbor_registry/log/harbor
+    location: /opt/harbor_registry/log/harbor
 
   # Uncomment following lines to enable external syslog endpoint.
   # external_endpoint:
