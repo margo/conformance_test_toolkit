@@ -9,6 +9,7 @@ services:
     volumes:
       - /root/.kube/config:/root/.kube/config:ro # to manage kubernetes runtimes
       # - /var/run/docker.sock:/var/run/docker.sock # to manage docker runtimes
+      # - /usr/bin/docker:/usr/bin/docker # to manage docker runtimes
       - ./config/config.yaml:/config/config.yaml
       - ./config/capabilities.yaml:/config/capabilities.yaml
       - ./data:/data
