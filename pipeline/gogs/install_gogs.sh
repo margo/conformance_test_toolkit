@@ -15,7 +15,7 @@ services:
     image: gogs/gogs:latest
     container_name: gogs
     ports:
-      - "3000:3000"
+      - "8084:3000"
       - "10022:22"
     volumes:
       - ./gogs-data:/data
@@ -26,6 +26,6 @@ echo "🚀 Starting Gogs with Docker Compose..."
 docker-compose up -d
 
 echo "✅ Gogs deployed successfully!"
-echo "🌐 Access Gogs at: http://$(curl -s ifconfig.me):3000"
+echo "🌐 Access Gogs at: http://$(curl -s ifconfig.me):8084"
 echo "📦 Gogs data stored in: ~/gogs-docker/gogs-data"
 
