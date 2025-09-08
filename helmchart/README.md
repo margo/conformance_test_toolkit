@@ -5,8 +5,10 @@
 cd ..
 docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
 docker save -o device-agent.tar margo.org/device-agent:dev-sprint-6
-ctr image import device-agent.tar  # use this command if on k8s cluster
-k3s ctr -n k8s.io image import device-agent.tar # use this command if on k3s cluster
+# use this command if on k8s cluster
+ctr -n k8s.io image import device-agent.tar 
+# use this command if on k3s cluster
+k3s ctr -n k8s.io image import device-agent.tar 
 cd helmchart
 ```
 
@@ -22,7 +24,7 @@ Note: There is no provisioning to provide service account, rbac etc at this poin
 
 ```bash
 kubectl create secret generic agent-kubeconfig \
-  --from-file=kubeconfig=/home/user/.kube/config \
+  --from-file=kubeconfig=/root/.kube/config \
   --namespace=device-agent
 ```
 
