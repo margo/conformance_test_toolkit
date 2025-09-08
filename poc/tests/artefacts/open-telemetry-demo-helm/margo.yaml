@@ -102,8 +102,21 @@ parameters:
     - pointer: grafana.enabled
       components: ["otel-demo"]
 
+  otelCollectorName:
+    value: "otel-collector-opentelemetry-collector.default"
+    targets:
+    - pointer: default.envOverrides[0].value
+      components: ["otel-demo"]
+
 configuration:
   sections:
+    - name: Environment Configuration
+      settings:
+        - parameter: otelCollectorName
+          name: OpenTelemetry Collector Name
+          description: Name and namespace for the OpenTelemetry Collector service
+          schema: collectorName
+
     - name: Service Configuration
       settings:
         - parameter: frontendServiceType
