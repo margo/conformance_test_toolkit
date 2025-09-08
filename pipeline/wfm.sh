@@ -37,6 +37,14 @@ vm_ssh() {
   sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no "$USER@$HOST" "$CMD"
 }
 
+# Function to create repository on VM1
+create_repo() {
+    local repo_name="$1"
+    echo "Creating repository: $repo_name"
+    vm_ssh "$VM1_USER" "$VM1_HOST" "$VM1_PASS" \
+    "curl -s -o /tmp/resp.json -w '\nHTTP %{http_code}\n' -H 'Authorization: token $GOGS_TOKEN' -H 'Content-Type: application/json' -d '{\"name\":\"$repo_name\",\"private\":false}' http://$VM1_HOST:8084/api/v1/user/repos; cat /tmp/resp.json"
+}
+
 # ----------------------------
 # Symphony Start/Stop
 # ----------------------------
@@ -235,8 +243,11 @@ vm_ssh "$VM1_USER" "$VM1_HOST" "$VM1_PASS" \
 
 # Create OTEL repo on VM1 using token
 vm_ssh "$VM1_USER" "$VM1_HOST" "$VM1_PASS" \
-"curl -s -o /tmp/resp.json -w '\nHTTP %{http_code}\n' -H 'Authorization: token $GOGS_TOKEN' -H 'Content-Type: application/json' -d '{\"name\":\"OTEL-repo\",\"private\":false}' http://$VM1_HOST:8084/api/v1/user/repos; cat /tmp/resp.json"
+"curl -s -o /tmp/resp.json -w '\nHTTP %{http_code}\n' -H 'Authorization: token $GOGS_TOKEN' -H 'Content-Type: application/json' -d '{\"name\":\"custom-otel-repo\",\"private\":false}' http://$VM1_HOST:8084/api/v1/user/repos; cat /tmp/resp.json"
 
+# Create nextcloud repo on VM1 using token
+vm_ssh "$VM1_USER" "$VM1_HOST" "$VM1_PASS" \
+"curl -s -o /tmp/resp.json -w '\nHTTP %{http_code}\n' -H 'Authorization: token $GOGS_TOKEN' -H 'Content-Type: application/json' -d '{\"name\":\"otel-repo\",\"private\":false}' http://$VM1_HOST:8084/api/v1/user/repos; cat /tmp/resp.json"
 
 # Push files into Nextcloud repo
 vm_ssh "$VM1_USER" "$VM1_HOST" "$VM1_PASS" "
@@ -284,7 +295,7 @@ git push -u origin main --force
 
 # Push files into OTEL repo
 vm_ssh "$VM1_USER" "$VM1_HOST" "$VM1_PASS" "
-cd ~/dev-repo/poc/tests/artefacts/open-telemetry-demo-helm || { echo '❌ OTEL dir missing'; exit 1; }
+cd ~/dev-repo/poc/tests/artefacts/open-telemetry-demo-helm || { echo '❌ otel dir missing'; exit 1; }
 
 [ ! -d .git ] && git init && \
   git config user.name 'gogsadmin' && \
@@ -292,6 +303,27 @@ cd ~/dev-repo/poc/tests/artefacts/open-telemetry-demo-helm || { echo '❌ OTEL d
 
 git remote remove origin 2>/dev/null || true
 git remote add origin http://gogsadmin:${GOGS_TOKEN}@${VM1_HOST}:8084/gogsadmin/otel-repo.git
+
+git add margo.yaml resources/ 2>/dev/null || true
+
+if ! git diff --cached --quiet; then
+  git commit -m 'Initial commit with OTEL files'
+fi
+
+git branch -M main
+git push -u origin main --force
+"
+
+# Push files into Custom OTEL repo
+vm_ssh "$VM1_USER" "$VM1_HOST" "$VM1_PASS" "
+cd ~/dev-repo/poc/tests/artefacts/custom-otel-helm-app || { echo '❌ custom-otel-helm-app dir missing'; exit 1; }
+
+[ ! -d .git ] && git init && \
+  git config user.name 'gogsadmin' && \
+  git config user.email 'nitin.parihar@capgemini.com'
+
+git remote remove origin 2>/dev/null || true
+git remote add origin http://gogsadmin:${GOGS_TOKEN}@${VM1_HOST}:8084/gogsadmin/custom-otel-repo.git
 
 git add margo.yaml resources/ 2>/dev/null || true
 
