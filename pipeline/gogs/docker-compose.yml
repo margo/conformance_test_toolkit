@@ -5,7 +5,7 @@ services:
     build: .
     container_name: custom-gogs
     ports:
-      - "8084:3000"   # HTTP access
+      - "8084:8084"   # HTTP access
       - "2222:22"     # SSH access
     volumes:
       - ./gogs-data:/data  # Persist Gogs data locally
@@ -13,4 +13,5 @@ services:
       - USER_UID=1000
       - USER_GID=1000
     restart: always
+
 
