@@ -2,12 +2,14 @@ version: '3'
 
 services:
   gogs:
-    build: .
-    container_name: custom-gogs
+    # build: .
+    image: gogs/gogs:latest
+    container_name: gogs
     ports:
       - "8084:8084"   # HTTP access
       - "2222:22"     # SSH access
     volumes:
+      - ./app.ini:/data/gogs/conf/app.ini
       - ./gogs-data:/data  # Persist Gogs data locally
     environment:
       - USER_UID=1000
