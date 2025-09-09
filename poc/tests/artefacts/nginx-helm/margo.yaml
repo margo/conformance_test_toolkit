@@ -25,8 +25,8 @@ deploymentProfiles:
     components:
       - name: nginx
         properties:  
-          repository: oci://ghcr.io/nginxinc/charts/nginx-ingress
-          revision: "1.2.2"
+          repository: oci://ghcr.io/nginx/charts/nginx-ingress
+          revision: "2.2.2"
           wait: true
 parameters:
   serviceType:

@@ -10,7 +10,7 @@ COPY . .
 
 # Build a static binary
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=tobedone" -o device-agent ./poc/device/agent
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=tobedone" -o device-agent ./poc/device/agent
 
 # Stage 2: Get Docker binary from official image
 FROM docker:24.0.7-cli AS docker-source
