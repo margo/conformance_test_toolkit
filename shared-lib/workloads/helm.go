@@ -329,13 +329,6 @@ func (c *HelmClient) installChartFromOCI(ctx context.Context, install *action.In
 	}
 
 	chartRef = fmt.Sprintf("%s:%s", chartRef, version) // "ghcr.io/nginxinc/charts/nginx-ingress:0.0.0-edge"
-	if err := c.registryClient.Login(chartRef, registry.LoginOptInsecure(true)); err != nil {
-		return &HelmError{
-			Type:    ErrorTypeRegistry,
-			Message: "invalid uri of the oci registry",
-			Err:     err,
-		}
-	}
 	result, err := c.registryClient.Pull(chartRef, registry.PullOptWithChart(true))
 	if err != nil {
 		fmt.Println("installChartFromOCI", "err", err.Error())
