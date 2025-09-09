@@ -75,6 +75,10 @@ func NewAgent(configPath string) (*Agent, error) {
 		}
 	}
 
+	if helmClient == nil && composeClient == nil {
+		return nil, fmt.Errorf("neither kubernetes nor docker runtime objects were able to be attached, please check info if you have misplaced there settings")
+	}
+
 	opts = append(opts, WithDeviceSignature(findDeviceSignature(*cfg, log)))
 
 	var deviceSettings *DeviceSettings
