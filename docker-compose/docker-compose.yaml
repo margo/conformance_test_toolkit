@@ -4,6 +4,7 @@ services:
   device-agent:
     container_name: device-agent
     image: margo.org/device-agent:dev-sprint-6
+    pull_policy: never  # Options: always, never, missing, build
     volumes:
       # - /root/.kube/config:/root/.kube/config:ro # to manage kubernetes runtimes
       - /var/run/docker.sock:/var/run/docker.sock # to manage docker runtimes

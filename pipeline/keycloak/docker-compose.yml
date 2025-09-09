@@ -20,6 +20,9 @@ services:
       - postgresdb
     ports:
       - "8083:8080"
+    volumes:
+      - ./init.sh:/opt/keycloak/keycloak-init.sh
+    entrypoint: ["/opt/keycloak/keycloak-init.sh"]
     healthcheck:
       test: ["CMD", "true"]
       interval: 60s
@@ -39,8 +42,12 @@ services:
       KC_DB_URL: jdbc:postgresql://postgresdb:5432/usermgmt_keycloak
       KC_DB_USERNAME: postgres
       KC_DB_PASSWORD: admin123
+      KC_HTTPS_ENABLED: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY: "edge"
     command: start-dev
 
 volumes:
   pgdata:
-
