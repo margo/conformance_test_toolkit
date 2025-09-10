@@ -139,6 +139,7 @@ install_go() {
     tar -C /usr/local -xzf go.tar.gz;
     rm go.tar.gz
     export PATH="$PATH:/usr/local/go/bin";
+    source ~/.bashrc
     which go;
     go version;
   fi
@@ -968,6 +969,7 @@ install_prerequisites() {
 
 start_symphony() {
   echo "Starting Symphony API server on..."
+  export PATH="$PATH:/usr/local/go/bin";
   # Build phase
   build_rust
   build_symphony_api_server
