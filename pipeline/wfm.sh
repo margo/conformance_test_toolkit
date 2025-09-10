@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# ----------------------------
+# Environment & Validation
+# ----------------------------
+
 #--- Github Settings to pull the code (can be overridden via env)
 GITHUB_USER="${GITHUB_USER:-}"  # Set via env or leave empty
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"  # Set via env or leave empty
@@ -32,12 +36,12 @@ validate_passwordless_sudo() {
   local username="${1:-$(whoami)}"
   local exit_code=0
   
-  echo "Validating passwordless sudo for user: $username"
+  echo "Validating passwordless for user: $username"
   echo "==============================================="
   
-  # Test 1: Basic sudo test
-  echo -n "Test 1 - Basic sudo access: "
-  if sudo -n true 2>/dev/null; then
+  # Test 1: Basic test
+  echo -n "Test 1 - Basic access: "
+  if -n true 2>/dev/null; then
       echo "✓ PASS"
   else
       echo "✗ FAIL"
@@ -46,7 +50,7 @@ validate_passwordless_sudo() {
   
   # Test 2: Specific command test
   echo -n "Test 2 - Command execution: "
-  if sudo -n whoami >/dev/null 2>&1; then
+  if -n whoami >/dev/null 2>&1; then
       echo "✓ PASS"
   else
       echo "✗ FAIL"
@@ -55,7 +59,7 @@ validate_passwordless_sudo() {
   
   # Test 3: File access test
   echo -n "Test 3 - File access: "
-  if sudo -n test -r /etc/shadow 2>/dev/null; then
+  if -n test -r /etc/shadow 2>/dev/null; then
       echo "✓ PASS"
   else
       echo "✗ FAIL"
@@ -64,7 +68,7 @@ validate_passwordless_sudo() {
   
   # Test 4: Configuration verification
   echo -n "Test 4 - Config verification: "
-  if sudo grep -q "$username.*NOPASSWD\|%.*NOPASSWD" /etc/sudoers /etc/sudoers.d/* 2>/dev/null; then
+  if grep -q "$username.*NOPASSWD\|%.*NOPASSWD" /etc/sudoers /etc/sudoers.d/* 2>/dev/null; then
       echo "✓ PASS"
   else
       echo "✗ FAIL"
@@ -73,9 +77,9 @@ validate_passwordless_sudo() {
   
   echo "==============================================="
   if [ $exit_code -eq 0 ]; then
-      echo "✓ All tests passed - Passwordless sudo is properly configured"
+      echo "✓ All tests passed - Passwordless is properly configured"
   else
-      echo "✗ Some tests failed - Passwordless sudo may not be fully configured"
+      echo "✗ Some tests failed - Passwordless may not be fully configured"
   fi
   
   return $exit_code
@@ -84,20 +88,21 @@ validate_passwordless_sudo() {
 # ----------------------------
 # Installation Functions
 # ----------------------------
+install_basic_utilities() {
+  apt update && apt install curl -y
+}
+
 install_go() {
   if which go >/dev/null 2>&1; then
     echo 'Go already installed, skipping installation';
     go version;
   else
     echo 'Go not found, installing...';
-    dpkg -l | grep golang;
-    sudo apt remove --purge -y golang-go golang;
-    sudo apt autoremove -y;
-    sudo rm -rf /usr/local/go /usr/bin/go /usr/local/go/bin/go
-    sudo rm -rf /home/*/go
-    wget `https://go.dev/dl/go1.23.2.linux-amd64.tar.gz` -O /tmp/go.tar.gz;
-    sudo tar -C /usr/local -xzf /tmp/go.tar.gz;
-    export PATH=\$PATH:/usr/local/go/bin;
+    rm -rf /usr/local/go /usr/bin/go
+    wget "https://go.dev/dl/go1.23.2.linux-amd64.tar.gz" -O go.tar.gz;
+    tar -C /usr/local -xzf go.tar.gz;
+    rm go.tar.gz
+    export PATH="$PATH:/usr/local/go/bin";
     which go;
     go version;
   fi
@@ -106,30 +111,30 @@ install_go() {
 install_docker_compose() {
   if ! command -v docker >/dev/null 2>&1; then
     echo 'Docker not found. Installing Docker...';
-    sudo apt-get remove -y docker docker-engine docker.io containerd runc || true;
-    curl -fsSL `https://get.docker.com` -o get-docker.sh; sudo sh get-docker.sh;
-    sudo usermod -aG docker \$USER;
+    apt-get remove -y docker docker-engine docker.io containerd runc || true;
+    curl -fsSL "https://get.docker.com" -o get-docker.sh; sh get-docker.sh;
+    usermod -aG docker $USER;
   else
     echo 'Docker already installed.';
   fi;
 
   if ! command -v docker-compose >/dev/null 2>&1; then
     echo 'Docker Compose not found. Installing Docker Compose...';
-    sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose;
-    sudo chmod +x /usr/local/bin/docker-compose;
+    curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose;
+    chmod +x /usr/local/bin/docker-compose;
   else
     echo 'Docker Compose already installed.';
   fi
   # Start and enable Docker daemon
-  sudo systemctl start docker
-  sudo systemctl enable docker
+  systemctl start docker
+  systemctl enable docker
   # Wait for Docker daemon to be active (max 30s)
   for i in $(seq 1 30); do
-    if sudo systemctl is-active --quiet docker; then
+    if systemctl is-active --quiet docker; then
       echo 'Docker daemon is running.'
       break
     else
-      echo 'Waiting for Docker daemon to start... (\$i/30)'
+      echo 'Waiting for Docker daemon to start... ($i/30)'
       sleep 1
     fi
   done 
@@ -147,7 +152,7 @@ install_rust() {
 clone_symphony_repo() {
   echo 'Cloning symphony...'
   rm -rf "$HOME/symphony"
-  git clone https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/symphony.git $HOME/symphony
+  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/symphony.git" "$HOME/symphony"
   cd $HOME/symphony
   git checkout ${SYMPHONY_BRANCH} || echo 'Branch ${SYMPHONY_BRANCH} not found'
   echo 'symphony checkout to branch ${SYMPHONY_BRANCH} done'
@@ -155,7 +160,7 @@ clone_symphony_repo() {
 
 clone_dev_repo() {
   rm -rf "dev-repo";
-  git clone https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git;
+  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git";
   cd dev-repo;
   git checkout ${DEV_REPO_BRANCH}
 }
@@ -169,6 +174,7 @@ setup_keycloak() {
    else
     echo 'Starting Keycloak...'
     cd $HOME/dev-repo/pipeline/keycloak
+    chmod +x init.sh
     docker compose up -d
     sleep 90
     docker ps | grep keycloak || echo 'Keycloak did not start properly'
@@ -188,18 +194,24 @@ setup_gogs_directories() {
   GOGS_IP="$EXPOSED_GOGS_IP"
   GOGS_PORT=$EXPOSED_GOGS_PORT
   
-  sudo rm -rf "$DATA_DIR" "$LOGS_DIR"
+  rm -rf "$DATA_DIR" "$LOGS_DIR"
   mkdir -p "$GOGS_BASE_DIR" "$DATA_DIR" "$LOGS_DIR"
-  sudo chown -R 1000:1000 "$DATA_DIR" "$LOGS_DIR"
-  sudo chmod -R 755 "$DATA_DIR" "$LOGS_DIR"
+  chown -R 1000:1000 "$DATA_DIR" "$LOGS_DIR"
+  chmod -R 755 "$DATA_DIR" "$LOGS_DIR"
   # Fix line endings + permissions for entrypoint
   # chmod +x "$GOGS_BASE_DIR/entrypoint.sh"
   # Update template with remote GOGS_IP details
-  sed -i 's/\r$//' $APP_INI_PATH
-  sed -i 's/^DOMAIN.*/DOMAIN              = $GOGS_IP/' $APP_INI_PATH
-  sed -i 's/^HTTP_PORT.*/HTTP_PORT        = $GOGS_PORT/' $APP_INI_PATH
-  sed -i 's|^EXTERNAL_URL.*|EXTERNAL_URL  = http://$GOGS_IP:GOGS_PORT/|' $APP_INI_PATH
+  # Use printf to build the replacement strings safely
+  DOMAIN_LINE=$(printf "DOMAIN              = %s" "$GOGS_IP")
+  HTTP_PORT_LINE=$(printf "HTTP_PORT        = %s" "$GOGS_PORT")
+  EXTERNAL_URL_LINE=$(printf "EXTERNAL_URL  = http://%s:%s/" "$GOGS_IP" "$GOGS_PORT")
+
+  sed -i 's/\r$//' "$APP_INI_PATH"
+  sed -i "s/^DOMAIN.*/$DOMAIN_LINE/" "$APP_INI_PATH"
+  sed -i "s/^HTTP_PORT.*/$HTTP_PORT_LINE/" "$APP_INI_PATH"
+  sed -i "s|^EXTERNAL_URL.*|$EXTERNAL_URL_LINE|" "$APP_INI_PATH"
   sudo chown 1000:1000 "$APP_INI_PATH"
+
   echo 'Final runtime app.ini:'
   grep -E 'DOMAIN|HTTP_PORT|EXTERNAL_URL' "$APP_INI_PATH"
 }
@@ -425,7 +437,7 @@ start_symphony_api() {
 # ----------------------------
 run_install() {
   echo "Running all setup tasks and starting Symphony API..."
-  
+  install_basic_utilities
   install_go
   install_docker_compose
   install_rust
@@ -456,7 +468,7 @@ run_install() {
 
 run_uninstall() {
   echo "Stopping Symphony API on..."
-  PID=$(ps -ef | grep '[s]ymphony-api-margo.json' | awk '{print \$2}'); 
+  PID=$(ps -ef | grep '[s]ymphony-api-margo.json' | awk '{print $2}'); 
   if [ -z "$PID" ]; then 
     echo '❌ Symphony API is not running'; 
   else 
