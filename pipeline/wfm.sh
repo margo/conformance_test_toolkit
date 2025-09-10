@@ -374,7 +374,7 @@ create_gogs_repositories() {
 }
 
 push_nextcloud_files() {
-  cd "$HOME/dev-repo/poc/tests/artefacts/nextcloud-compose" || { echo '❌ Nextcloud dir missing'; exit 1; }
+  cd "$HOME/dev-repo/poc/tests/artefacts/nextcloud-compose/margo-package" || { echo '❌ Nextcloud dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
@@ -384,12 +384,12 @@ push_nextcloud_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with Nextcloud files'
   fi
-  git branch -M master
+  git branch -m master
   git push -u origin master --force
 }
 
 push_nginx_files() {
-  cd "$HOME/dev-repo/poc/tests/artefacts/nginx-helm" || { echo '❌ nginx-helm dir missing'; exit 1; }
+  cd "$HOME/dev-repo/poc/tests/artefacts/nginx-helm/margo-package" || { echo '❌ nginx-helm dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
@@ -399,12 +399,12 @@ push_nginx_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with nginx-helm files'
   fi
-  git branch -M master
+  git branch -m master
   git push -u origin master --force
 }
 
 push_otel_files() {
-  cd "$HOME/dev-repo/poc/tests/artefacts/open-telemetry-demo-helm" || { echo '❌ OTEL dir missing'; exit 1; }
+  cd "$HOME/dev-repo/poc/tests/artefacts/open-telemetry-demo-helm/margo-package" || { echo '❌ OTEL dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
@@ -414,12 +414,12 @@ push_otel_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with OTEL files'
   fi
-  git branch -M master
+  git branch -m master
   git push -u origin master --force
 }
 
 push_custom_otel_files() {
-  cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app" || { echo '❌ Custom OTEL dir missing'; exit 1; }
+  cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package" || { echo '❌ Custom OTEL dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
@@ -429,7 +429,7 @@ push_custom_otel_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with Custom OTEL files'
   fi
-  git branch -M master
+  git branch -m master
   git push -u origin master --force
 }
 
@@ -648,7 +648,7 @@ stop_gogs_service() {
     docker-compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Gogs containers"
     
     # Remove Gogs images
-    docker images | grep gogs | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Gogs images"
+    # docker images | grep gogs | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Gogs images"
   fi
 }
 
@@ -694,7 +694,7 @@ stop_keycloak_service() {
   [ -d "$HOME/dev-repo/pipeline/keycloak" ] && rm -rf "$HOME/dev-repo/pipeline/keycloak" && echo "✅ Removed Keycloak compose directory"
   
   # Remove Keycloak images
-  docker images | grep keycloak | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Keycloak images"
+  # docker images | grep keycloak | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Keycloak images"
 }
 
 stop_harbor_service() {
@@ -703,17 +703,15 @@ stop_harbor_service() {
   # Stop Harbor container
   if docker ps --format '{{.Names}}' | grep -q harbor; then
     cd "$HOME/dev-repo/pipeline/harbor"
-    sudo chmod +x cleanup_harbor.sh
-    sudo bash cleanup_harbor.sh
+    docker-compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Harbor containers"
     sleep 10
-    echo "✅ Removed Harbor containers"
   fi
   
   # Remove Harbor compose directory
   [ -d "$HOME/dev-repo/pipeline/harbor" ] && rm -rf "$HOME/dev-repo/pipeline/harbor" && echo "✅ Removed Harbor compose directory"
   
   # Remove Harbor images
-  docker images | grep harbor | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Harbor images"
+  # docker images | grep harbor | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Harbor images"
 }
 
 remove_cloned_repositories() {
