@@ -998,7 +998,7 @@ show_menu() {
   echo "1) Prepare-Environment"
   echo "2) Symphony-Start"
   echo "3) Symphony-Stop"
-  echo "4) Uninstall-Prerequisites"
+  echo "4) Tearup-Environment"
   read -p "Enter choice [1-4]: " choice
   case $choice in
     1) install_prerequisites ;;
@@ -1021,7 +1021,7 @@ else
     Prepare-Environment) install_prerequisites ;;
     Symphony-Start) start_symphony ;;
     Symphony-Stop) stop_symphony ;;
-    Uninstall-Prerequisites) uninstall_prerequisites ;;
+    Tearup-Environment) uninstall_prerequisites ;;
     *) echo "Usage: $0 {prepare-environment|symphony-start|symphony-stop|uninstall-prerequisites}"; exit 1 ;;
   esac
 fi
