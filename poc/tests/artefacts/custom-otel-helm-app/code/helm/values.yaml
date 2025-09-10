@@ -1,0 +1,16 @@
+replicaCount: 1
+
+image:
+  repository: otel-app
+  tag: latest
+  pullPolicy: Never  # Prevents Kubernetes from trying to pull from Docker Hub
+
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-opentelemetry-collector:4318"
+
+service:
+  type: ClusterIP
+  port: 80
+
+collector:
+  name: collector

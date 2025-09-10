@@ -10,7 +10,7 @@ services:
       - "2222:22"     # SSH access
     volumes:
       - ./app.ini:/data/gogs/conf/app.ini
-      - ./gogs-data:/data  # Persist Gogs data locally
+      - ./data:/data  # Persist Gogs data locally
     environment:
       - USER_UID=1000
       - USER_GID=1000

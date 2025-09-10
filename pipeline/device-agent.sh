@@ -28,35 +28,23 @@ validate_required_vars() {
 # ----------------------------
 # Go Installation Functions
 # ----------------------------
-check_go_installed() {
-  if command -v go >/dev/null 2>&1; then
-    echo 'Go is already installed. Skipping installation.'
-    go version
-    return 0
-  else
-    return 1
-  fi
-}
-
-remove_existing_go() {
-  echo 'Removing existing Go installations...'
-  dpkg -l | grep golang
-  sudo apt remove --purge -y golang-go golang || true
-  sudo apt autoremove -y
-  ls -ld /usr/local/go || true
-  sudo rm -rf /usr/local/go
-  sudo rm -rf /usr/bin/go
-  sudo rm -rf /usr/local/go/bin/go
-  rm -rf ~/go
+install_basic_utilities() {
+  apt update && apt install curl -y
 }
 
 install_go() {
-  if ! check_go_installed; then
-    echo 'Go not found. Installing...'
-    remove_existing_go
-    sudo apt update
-    sudo apt install -y golang-go
-    go version
+  if which go >/dev/null 2>&1; then
+    echo 'Go already installed, skipping installation';
+    go version;
+  else
+    echo 'Go not found, installing...';
+    # rm -rf /usr/local/go /usr/bin/go
+    wget "https://go.dev/dl/go1.23.2.linux-amd64.tar.gz" -O go.tar.gz;
+    tar -C /usr/local -xzf go.tar.gz;
+    rm go.tar.gz
+    export PATH="$PATH:/usr/local/go/bin";
+    which go;
+    go version;
   fi
 }
 
@@ -80,6 +68,11 @@ update_agent_sbi_url() {
   sed -i "s|sbiUrl:.*|sbiUrl: http://$WFM_IP:$WFM_PORT/v1alpha2/margo/sbi/v1|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
 }
 
+update_agent_kubepath() {
+  echo 'Updating kubeconfigPath in agent config...'
+  sed -i "s|kubeconfigPath:.*|kubeconfigPath: $HOME/.kube/config|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
+}
+
 update_agent_capabilities_path() {
   echo 'Updating capabilities.readFromFile in agent config...'
   sed -i "s|readFromFile:.*|readFromFile: $HOME/dev-repo/poc/device/agent/config/capabilities.json|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
@@ -88,6 +81,7 @@ update_agent_capabilities_path() {
 update_agent_config() {
   update_agent_sbi_url
   update_agent_capabilities_path
+  update_agent_kubepath
   echo 'Config updates completed.'
 }
 
@@ -144,25 +138,9 @@ setup_k3s() {
 # Device Agent Build Functions
 # ----------------------------
 build_device_agent() {
-  cd ~/dev-repo/poc/device/agent/
+  cd "$HOME/dev-repo/poc/device/agent/"
   echo 'Building device-agent...'
-  go build -o device-agent &
-}
-
-wait_for_device_agent_binary() {
-  echo 'Waiting for device-agent binary to be created...'
-  for i in {1..15}; do
-    if [ -f device-agent ]; then
-      echo 'device-agent binary found.'
-      ls -lrt device-agent
-      return 0
-    fi
-    echo 'device-agent not ready yet, retrying in 10s...'
-    sleep 10
-  done
-  
-  echo 'device-agent binary was not created within timeout.'
-  exit 1
+  go build -o device-agent
 }
 
 # ----------------------------
@@ -170,7 +148,7 @@ wait_for_device_agent_binary() {
 # ----------------------------
 start_device_agent_service() {
   echo 'Starting device-agent...'
-  cd ~/dev-repo
+  cd "$HOME/dev-repo"
   nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
   echo $! > "$HOME/device-agent.pid"
 }
@@ -210,16 +188,14 @@ cleanup_device_agent() {
 start_device_agent() {
   echo "Installing k3s and starting device-agent ..."
   
-  load_environment
   validate_required_vars
   
   install_go
   clone_dev_repo
-  update_agent_config
   setup_k3s
+  update_agent_config
   
   build_device_agent
-  wait_for_device_agent_binary
   start_device_agent_service
   verify_device_agent_running
   

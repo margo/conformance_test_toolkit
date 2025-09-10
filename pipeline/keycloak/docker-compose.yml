@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: admin123
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - /opt/margo/postgres:/var/lib/postgresql/data
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.3
@@ -48,6 +48,3 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_PROXY: "edge"
     command: start-dev
-
-volumes:
-  pgdata:

@@ -8,7 +8,13 @@ sudo -E bash wfm.sh
 # How to setup device agent?
 export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-token>
-export SYMPHONY_BRANCH=margo-dev-sprint-6
+export DEV_REPO_BRANCH=margo-dev-sprint-6
 export WFM_IP=127.0.0.1
 export WFM_PORT=8082
 sudo -E bash device-agent.sh
+
+
+# FAQ:
+Q1. Seeing the following errors while installing/uninstalling
+`Waiting for cache lock: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 7096 (unattended-upgr)`
+Ans: There is some other process on your OS that is using the package manager, and most likely it could be the upgrade happening for your OS. Wait for some time, and then retry it. Else please check the OS docs to debug the issue.
