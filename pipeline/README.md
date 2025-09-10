@@ -1,6 +1,10 @@
 # How to setup wfm?
 export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-token>
+export EXPOSED_HARBOR_IP=<machine-ip>
+export EXPOSED_GOGS_IP=<machine-ip>
+export EXPOSED_KEYCLOAK_IP=<machine-ip>
+export EXPOSED_SYMPHONY_IP=<machine-ip>
 export SYMPHONY_BRANCH=margo-dev-sprint-6
 export DEV_REPO_BRANCH=dev-sprint-6
 sudo -E bash wfm.sh
