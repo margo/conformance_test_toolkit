@@ -94,7 +94,7 @@ install_basic_utilities() {
   HELM_TAR="helm-v${HELM_VERSION}-linux-amd64.tar.gz"
   HELM_BIN_DIR="/usr/local/bin"
 
-  apt update && apt install curl dos2unix -y
+  apt update && apt install -y curl dos2unix build-essential gcc libc6-dev
   install_helm
 }
 
