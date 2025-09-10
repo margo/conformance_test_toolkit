@@ -2,7 +2,7 @@
 
 # The IP address or hostname to access admin UI and registry service.
 # DO NOT use localhost or 127.0.0.1, because Harbor needs to be accessed by external clients.
-hostname: localhost
+hostname: reg.mydomain.com
 
 # http related config
 http:
@@ -10,12 +10,12 @@ http:
   port: 80
 
 # https related config
-#https:
+https:
   # https port for harbor, default is 443
-  #port: 443
+  port: 443
   # The path of cert and key files for nginx
-  #certificate: /your/certificate/path
-  #private_key: /your/private/key/path
+  certificate: /your/certificate/path
+  private_key: /your/private/key/path
   # enable strong ssl ciphers (default: false)
   # strong_ssl_ciphers: false
 

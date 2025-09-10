@@ -89,7 +89,43 @@ validate_passwordless_sudo() {
 # Installation Functions
 # ----------------------------
 install_basic_utilities() {
-  apt update && apt install curl -y
+  INSTALL_HELM_V3_15_1=true
+  HELM_VERSION="3.15.1"
+  HELM_TAR="helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+  HELM_BIN_DIR="/usr/local/bin"
+
+  apt update && apt install curl dos2unix -y
+  install_helm
+}
+
+# Helm install/uninstall
+install_helm() {
+  if [ "${INSTALL_HELM_V3_15_1}" == "true" ]; then
+    echo "Helm Setup"
+    if command -v helm >/dev/null 2>&1 && [[ "$(helm version --short | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" == "${HELM_VERSION}" ]]; then
+        echo "Helm version ${HELM_VERSION} is already installed. Skipping."
+    else
+        echo "Downloading Helm version ${HELM_VERSION}..."
+        if ! wget -q "https://get.helm.sh/${HELM_TAR}" ; then
+            echo "Failed to download Helm."
+            exit 1
+        fi
+        echo "Extracting Helm..."
+        if ! tar -xzf "${HELM_TAR}" ; then
+            echo "Failed to extract Helm tarball."
+            exit 1
+        fi
+        echo "Moving Helm to ${HELM_BIN_DIR}..."
+        if ! sudo mv "linux-amd64/helm" "${HELM_BIN_DIR}/" ; then
+            echo "Failed to move Helm."
+            exit 1
+        fi
+        echo "Helm binary moved successfully."
+        echo "Cleaning up..."
+        rm "${HELM_TAR}"
+        rm -rf linux-amd64/
+    fi
+  fi
 }
 
 install_go() {
@@ -187,19 +223,14 @@ update_keycloak_config() {
 }
 
 setup_harbor() {
+  cd $HOME/dev-repo/pipeline/harbor
+  docker-compose down
   if docker ps --format '{{.Names}}' | grep -q harbor; then
     echo 'Harbor is already running, skipping startup.'
    else
     echo 'Starting Harbor...'
-    cd $HOME/dev-repo/pipeline/harbor
-    find . -type f -name "*.sh" -exec sed -i 's/\r$//' {} +
-    find . -type f -name "*.sh" -exec dos2unix {} +
-    file install.sh
-    chmod +x install.sh
-    dos2unix prepare
-    chmod +x prepare
-    file prepare
-    sudo ./install.sh
+    sudo chmod +x install.sh prepare common.sh
+    sudo bash install.sh
     docker ps
 
     # chown -R margo:margo .
@@ -208,7 +239,7 @@ setup_harbor() {
     # # sudo docker-compose -f docker-compose.yml up -d
     # chmod +x install.sh
     # sudo bash install.sh
-    sleep 30
+    sleep 10
     docker ps | grep harbor || echo 'Harbor did not start properly'
   fi
 }
@@ -828,12 +859,12 @@ download_custom_otel_container_images_from_external() {
   docker login "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}" -u admin -p Harbor12345
   # Docker push them to the harbor registry
   echo "Pushing otel images to Harbor..."
-  docker push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-demo:latest"
+  docker push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
 
   echo "pushing the custom-otel-app-chart"
   cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code"
-  helm package --destination custom-otel-helm.tgz helm/
-  helm push custom-otel-helm.tgz "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
+  helm package helm/
+  helm push go-otel-service-0.1.0.tgz "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
   echo "✅ custom otel images successfully pushed to Harbor"
 }
 
@@ -894,7 +925,7 @@ EOF
       return 0
     fi
     echo "Waiting for Docker... ($i/30)"
-    sleep 2
+    sleep 10
   done
   
   echo "❌ Docker daemon failed to restart properly"
@@ -908,24 +939,23 @@ EOF
 # ----------------------------
 install_prerequisites() {
   echo "Running all pre-req setup tasks..."
-  # install_basic_utilities
-  # install_go
-  # install_docker_compose
-  # install_rust
+  install_basic_utilities
+  install_go
+  install_docker_compose
+  install_rust
   
-  # clone_symphony_repo
-  # clone_dev_repo
+  clone_symphony_repo
+  clone_dev_repo
   
-  # setup_keycloak
-  # update_keycloak_config
+  setup_keycloak
+  update_keycloak_config
   
-  setup_harbor
   add_insecure_registry_to_daemon
+  setup_harbor
   download_nextcloud_container_images_from_external
   download_nginx_container_images_from_external
   download_otel_container_images_from_external
   download_custom_otel_container_images_from_external
-  exit 1
  
   setup_gogs_directories
   start_gogs
@@ -933,9 +963,9 @@ install_prerequisites() {
   create_gogs_admin
   create_gogs_token
   create_gogs_repositories
-  push_nextcloud_files
-  push_nginx_files
-  push_otel_files
+  # push_nextcloud_files
+  # push_nginx_files
+  # push_otel_files
   push_custom_otel_files  
   echo "setup completed"
 }
