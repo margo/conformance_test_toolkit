@@ -181,7 +181,7 @@ install_docker_compose() {
 }
 
 install_rust() {
-  cd $HOME
+  cd "$HOME"
   echo 'Installing Rust...';
   curl --proto "=https" --tlsv1.2 -sSf "https://sh.rustup.rs" | sh -s -- -y;
   source $HOME/.cargo/env
@@ -191,9 +191,9 @@ install_rust() {
 # Repository Functions
 # ----------------------------
 clone_symphony_repo() {
-  cd $HOME
+  cd "$HOME"
   echo 'Cloning symphony...'
-  rm -rf "$HOME/symphony"
+  sudo rm -rf "$HOME/symphony"
   git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/symphony.git" "$HOME/symphony"
   cd "$HOME/symphony"
   git checkout ${SYMPHONY_BRANCH} || echo 'Branch ${SYMPHONY_BRANCH} not found'
@@ -201,10 +201,11 @@ clone_symphony_repo() {
 }
 
 clone_dev_repo() {
-  cd $HOME
-  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git" "$HOME/dev-repo"
+  cd "$HOME"
+  sudo rm -rf "$HOME/dev-repo"
+  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git"
   cd "$HOME/dev-repo"
-  git checkout ${DEV_REPO_BRANCH}
+  git checkout ${DEV_REPO_BRANCH} || echo 'Branch ${DEV_REPO_BRANCH} not found'
   echo "dev-repo checkout to branch ${DEV_REPO_BRANCH} done"
 }
 
@@ -383,8 +384,8 @@ push_nextcloud_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with Nextcloud files'
   fi
-  git branch -M main
-  git push -u origin main --force
+  git branch -M master
+  git push -u origin master --force
 }
 
 push_nginx_files() {
@@ -398,8 +399,8 @@ push_nginx_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with nginx-helm files'
   fi
-  git branch -M main
-  git push -u origin main --force
+  git branch -M master
+  git push -u origin master --force
 }
 
 push_otel_files() {
@@ -413,8 +414,8 @@ push_otel_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with OTEL files'
   fi
-  git branch -M main
-  git push -u origin main --force
+  git branch -M master
+  git push -u origin master --force
 }
 
 push_custom_otel_files() {
@@ -428,8 +429,8 @@ push_custom_otel_files() {
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with Custom OTEL files'
   fi
-  git branch -M main
-  git push -u origin main --force
+  git branch -M master
+  git push -u origin master --force
 }
 
 # ----------------------------
@@ -505,7 +506,7 @@ uninstall_prerequisites() {
   echo "Running complete uninstallation in reverse chronological order..."
   
   # Step 1: Stop Symphony API (Last thing that would be running)
-  stop_symphony_api_process
+  # stop_symphony_api_process
   
   # Step 2: Remove Symphony binaries and builds
   cleanup_symphony_builds
@@ -530,20 +531,23 @@ uninstall_prerequisites() {
   
   # Step 9: Stop and remove Keycloak
   stop_keycloak_service
+
+  # Step 10: Stop and remove Keycloak
+  stop_harbor_service
   
-  # Step 10: Remove cloned repositories
+  # Step 11: Remove cloned repositories
   remove_cloned_repositories
   
-  # Step 11: Uninstall Rust
+  # Step 12: Uninstall Rust
   uninstall_rust
   
-  # Step 12: Uninstall Docker and Docker Compose
+  # Step 13: Uninstall Docker and Docker Compose
   uninstall_docker_compose
   
-  # Step 13: Uninstall Go
+  # Step 14: Uninstall Go
   uninstall_go
   
-  # Step 14: Remove basic utilities and cleanup
+  # Step 15: Remove basic utilities and cleanup
   cleanup_basic_utilities
   
   echo "Complete uninstallation finished"
@@ -693,15 +697,33 @@ stop_keycloak_service() {
   docker images | grep keycloak | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Keycloak images"
 }
 
+stop_harbor_service() {
+  echo "10. Stopping and removing Harbor service..."
+  
+  # Stop Harbor container
+  if docker ps --format '{{.Names}}' | grep -q harbor; then
+    cd "$HOME/dev-repo/pipeline/harbor"
+    sudo chmod +x cleanup_harbor.sh
+    sudo bash cleanup_harbor.sh
+    sleep 10
+    echo "✅ Removed Harbor containers"
+  fi
+  
+  # Remove Harbor compose directory
+  [ -d "$HOME/dev-repo/pipeline/harbor" ] && rm -rf "$HOME/dev-repo/pipeline/harbor" && echo "✅ Removed Harbor compose directory"
+  
+  # Remove Harbor images
+  docker images | grep harbor | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Harbor images"
+}
+
 remove_cloned_repositories() {
   echo "10. Removing cloned repositories..."
   
   # Remove dev-repo
-  [ -d "$HOME/dev-repo" ] && rm -rf "$HOME/dev-repo" && echo "✅ Removed dev-repo"
-  [ -d "dev-repo" ] && rm -rf "dev-repo" && echo "✅ Removed local dev-repo"
+  [ -d "$HOME/dev-repo" ] && sudo rm -rf "$HOME/dev-repo" && echo "✅ Removed dev-repo"
   
   # Remove symphony repo
-  [ -d "$HOME/symphony" ] && rm -rf "$HOME/symphony" && echo "✅ Removed symphony repository"
+  [ -d "$HOME/symphony" ] && sudo rm -rf "$HOME/symphony" && echo "✅ Removed symphony repository"
 }
 
 uninstall_rust() {
