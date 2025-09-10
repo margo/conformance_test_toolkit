@@ -100,6 +100,7 @@ install_basic_utilities() {
 
 # Helm install/uninstall
 install_helm() {
+  cd $HOME
   if [ "${INSTALL_HELM_V3_15_1}" == "true" ]; then
     echo "Helm Setup"
     if command -v helm >/dev/null 2>&1 && [[ "$(helm version --short | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" == "${HELM_VERSION}" ]]; then
@@ -129,6 +130,7 @@ install_helm() {
 }
 
 install_go() {
+  cd $HOME
   if which go >/dev/null 2>&1; then
     echo 'Go already installed, skipping installation';
     go version;
@@ -146,6 +148,7 @@ install_go() {
 }
 
 install_docker_compose() {
+  cd $HOME
   if ! command -v docker >/dev/null 2>&1; then
     echo 'Docker not found. Installing Docker...';
     apt-get remove -y docker docker-engine docker.io containerd runc || true;
@@ -178,6 +181,7 @@ install_docker_compose() {
 }
 
 install_rust() {
+  cd $HOME
   echo 'Installing Rust...';
   curl --proto "=https" --tlsv1.2 -sSf "https://sh.rustup.rs" | sh -s -- -y;
   source $HOME/.cargo/env
@@ -187,19 +191,21 @@ install_rust() {
 # Repository Functions
 # ----------------------------
 clone_symphony_repo() {
+  cd $HOME
   echo 'Cloning symphony...'
   rm -rf "$HOME/symphony"
   git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/symphony.git" "$HOME/symphony"
-  cd $HOME/symphony
+  cd "$HOME/symphony"
   git checkout ${SYMPHONY_BRANCH} || echo 'Branch ${SYMPHONY_BRANCH} not found'
-  echo 'symphony checkout to branch ${SYMPHONY_BRANCH} done'
+  echo "symphony checkout to branch ${SYMPHONY_BRANCH} done"
 }
 
 clone_dev_repo() {
-  rm -rf "dev-repo";
-  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git";
-  cd dev-repo;
+  cd $HOME
+  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git" "$HOME/dev-repo"
+  cd "$HOME/dev-repo"
   git checkout ${DEV_REPO_BRANCH}
+  echo "dev-repo checkout to branch ${DEV_REPO_BRANCH} done"
 }
 
 # ----------------------------
@@ -208,38 +214,32 @@ clone_dev_repo() {
 setup_keycloak() {
   if docker ps --format '{{.Names}}' | grep -q keycloak; then
     echo 'Keycloak is already running, skipping startup.'
-   else
+  else
     echo 'Starting Keycloak...'
     cd $HOME/dev-repo/pipeline/keycloak
     chmod +x init.sh
     docker compose up -d
-    sleep 90
+    sleep 60
     docker ps | grep keycloak || echo 'Keycloak did not start properly'
   fi
 }
 
 update_keycloak_config() {
+  cd $HOME
   echo "Updating keycloak URL in symphony-api-margo.json..."
   sed -i "s|\"keycloakURL\": *\"http://[^\"]*\"|\"keycloakURL\": \"http://"$EXPOSED_KEYCLOAK_IP":$EXPOSED_KEYCLOAK_PORT\"|" "$HOME/symphony/api/symphony-api-margo.json"
+  echo "Updated keycloak URL in symphony-api-margo.json"
 }
 
 setup_harbor() {
-  cd $HOME/dev-repo/pipeline/harbor
-  docker-compose down
   if docker ps --format '{{.Names}}' | grep -q harbor; then
     echo 'Harbor is already running, skipping startup.'
-   else
+  else
+    cd "$HOME/dev-repo/pipeline/harbor"
     echo 'Starting Harbor...'
     sudo chmod +x install.sh prepare common.sh
     sudo bash install.sh
     docker ps
-
-    # chown -R margo:margo .
-    # mkdir -p /opt/harbor_registry
-    # chown -R margo:margo /opt/harbor_registry
-    # # sudo docker-compose -f docker-compose.yml up -d
-    # chmod +x install.sh
-    # sudo bash install.sh
     sleep 10
     docker ps | grep harbor || echo 'Harbor did not start properly'
   fi
@@ -255,8 +255,7 @@ setup_gogs_directories() {
   
   rm -rf "$DATA_DIR" "$LOGS_DIR"
   mkdir -p "$GOGS_BASE_DIR" "$DATA_DIR" "$LOGS_DIR"
-  chown -R 1000:1000 "$DATA_DIR" "$LOGS_DIR"
-  chmod -R 755 "$DATA_DIR" "$LOGS_DIR"
+  chmod -R 777 "$DATA_DIR" "$LOGS_DIR"
   # Fix line endings + permissions for entrypoint
   # chmod +x "$GOGS_BASE_DIR/entrypoint.sh"
   # Update template with remote GOGS_IP details
@@ -269,7 +268,7 @@ setup_gogs_directories() {
   sed -i "s/^DOMAIN.*/$DOMAIN_LINE/" "$APP_INI_PATH"
   sed -i "s/^HTTP_PORT.*/$HTTP_PORT_LINE/" "$APP_INI_PATH"
   sed -i "s|^EXTERNAL_URL.*|$EXTERNAL_URL_LINE|" "$APP_INI_PATH"
-  chown 1000:1000 "$APP_INI_PATH"
+  # chown 1000:1000 "$APP_INI_PATH"
 
   echo 'Final runtime app.ini:'
   grep -E 'DOMAIN|HTTP_PORT|EXTERNAL_URL' "$APP_INI_PATH"
@@ -285,6 +284,8 @@ start_gogs() {
 }
 
 wait_for_gogs() {
+  GOGS_BASE_DIR="$HOME/dev-repo/pipeline/gogs/"
+  cd "$GOGS_BASE_DIR"
   GOGS_IP=$EXPOSED_GOGS_IP
   GOGS_PORT=$EXPOSED_GOGS_PORT
   for i in {1..32}; do
@@ -297,6 +298,8 @@ wait_for_gogs() {
 }
 
 create_gogs_admin() {
+  GOGS_BASE_DIR="$HOME/dev-repo/pipeline/gogs/"
+  cd "$GOGS_BASE_DIR"
   GOGS_IP=$EXPOSED_GOGS_IP
   GOGS_PORT=$EXPOSED_GOGS_PORT
   GOGS_CONTAINER=$(docker ps --filter "name=gogs" --format "{{.Names}}" | head -n 1)
@@ -313,6 +316,8 @@ create_gogs_admin() {
 }
 
 create_gogs_token() {
+  GOGS_BASE_DIR="$HOME/dev-repo/pipeline/gogs/"
+  cd "$GOGS_BASE_DIR"
   GOGS_IP=$EXPOSED_GOGS_IP
   GOGS_PORT=$EXPOSED_GOGS_PORT
   TOKEN_NAME="autogen-$(date +%s)"
@@ -324,6 +329,9 @@ create_gogs_token() {
 
 create_gogs_repositories() {
   # Create nextcloud repo
+  GOGS_BASE_DIR="$HOME/dev-repo/pipeline/gogs/"
+  cd "$GOGS_BASE_DIR"
+
   GOGS_IP=$EXPOSED_GOGS_IP
   GOGS_PORT=$EXPOSED_GOGS_PORT
   echo "GOGS TOKEN: $GOGS_TOKEN"
@@ -334,8 +342,8 @@ create_gogs_repositories() {
     "http://$GOGS_IP:$GOGS_PORT/api/v1/user/repos"
   cat /tmp/resp.json
 
-  GOGS_IP=$GOG
-  GOGS_PORT=8084
+  GOGS_IP=$EXPOSED_GOGS_IP
+  GOGS_PORT=$EXPOSED_GOGS_PORT
   curl -s -o /tmp/resp.json -w '\nHTTP %{http_code}\n' \
     -H "Authorization: token $GOGS_TOKEN" \
     -H "Content-Type: application/json" \
@@ -370,7 +378,7 @@ push_nextcloud_files() {
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
   git remote remove origin 2>/dev/null || true
-  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:EXPOSED_GOGS_PORT/gogsadmin/nextcloud.git"
+  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nextcloud.git"
   git add margo.yaml resources/ 2>/dev/null || true
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with Nextcloud files'
@@ -385,7 +393,7 @@ push_nginx_files() {
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
   git remote remove origin 2>/dev/null || true
-  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:EXPOSED_GOGS_PORT/gogsadmin/nginx.git"
+  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nginx.git"
   git add margo.yaml resources/ 2>/dev/null || true
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with nginx-helm files'
@@ -400,7 +408,7 @@ push_otel_files() {
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
   git remote remove origin 2>/dev/null || true
-  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:EXPOSED_GOGS_PORT/gogsadmin/otel.git"
+  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/otel.git"
   git add margo.yaml resources/ 2>/dev/null || true
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with OTEL files'
@@ -415,7 +423,7 @@ push_custom_otel_files() {
     git config user.name 'gogsadmin' && \
     git config user.email 'nitin.parihar@capgemini.com'
   git remote remove origin 2>/dev/null || true
-  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:EXPOSED_GOGS_PORT/gogsadmin/custom-otel.git"
+  git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/custom-otel.git"
   git add margo.yaml resources/ 2>/dev/null || true
   if ! git diff --cached --quiet; then
     git commit -m 'Initial commit with Custom OTEL files'
