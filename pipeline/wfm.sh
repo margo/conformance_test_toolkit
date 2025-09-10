@@ -942,19 +942,18 @@ install_prerequisites() {
   install_basic_utilities
   install_go
   install_docker_compose
+  add_insecure_registry_to_daemon
+
   install_rust
   
   clone_symphony_repo
   clone_dev_repo
   
+  
   setup_keycloak
   update_keycloak_config
   
-  add_insecure_registry_to_daemon
   setup_harbor
-  download_nextcloud_container_images_from_external
-  download_nginx_container_images_from_external
-  download_otel_container_images_from_external
   download_custom_otel_container_images_from_external
  
   setup_gogs_directories
@@ -963,9 +962,6 @@ install_prerequisites() {
   create_gogs_admin
   create_gogs_token
   create_gogs_repositories
-  # push_nextcloud_files
-  # push_nginx_files
-  # push_otel_files
   push_custom_otel_files  
   echo "setup completed"
 }
