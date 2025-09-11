@@ -7,7 +7,7 @@ hostname: 0.0.0.0
 # http related config
 http:
   # port for http, default is 80. If https enabled, this port will redirect to https port
-  port: 8081
+  port: 80
 
 # https related config
 #https:

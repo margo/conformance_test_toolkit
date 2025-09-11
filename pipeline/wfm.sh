@@ -1272,6 +1272,7 @@ build_custom_otel_container_images() {
   helm package helm/
   helm push go-otel-service-0.1.0.tgz "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
 
+  sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
   sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
   echo "✅ custom otel images successfully pushed to Harbor"
 }
@@ -1340,6 +1341,55 @@ EOF
   return 1
 }
 
+# ----------------------------
+# K3s Installation Functions
+# ----------------------------
+check_k3s_installed() {
+  if command -v k3s >/dev/null 2>&1; then
+    echo 'k3s already installed, skipping installation.'
+    k3s --version
+    return 0
+  else
+    return 1
+  fi
+}
+
+install_k3s_dependencies() {
+  echo 'Installing k3s dependencies...'
+  sudo apt update && sudo apt upgrade -y
+  sudo apt install -y curl
+}
+
+install_k3s() {
+  if ! check_k3s_installed; then
+    echo 'Installing k3s...'
+    install_k3s_dependencies
+    curl -sfL https://get.k3s.io | sh -
+  fi
+}
+
+verify_k3s_status() {
+  echo 'Verifying k3s status...'
+  sudo systemctl status k3s --no-pager || true
+  sudo k3s kubectl get nodes || true
+}
+
+setup_kubeconfig() {
+  echo 'Setting up kubeconfig...'
+  mkdir -p "$HOME/.kube"
+  sudo cp /etc/rancher/k3s/k3s.yaml "$HOME/.kube/config"
+  sudo chown $(id -u):$(id -g) "$HOME/.kube/config"
+  export KUBECONFIG="$HOME/.kube/config"
+  echo 'Kubeconfig setup complete.'
+  kubectl get nodes || true
+}
+
+setup_k3s() {
+  install_k3s
+  verify_k3s_status
+  setup_kubeconfig
+}
+
 
 
 # ----------------------------
@@ -1351,7 +1401,7 @@ install_prerequisites() {
   install_go
   install_docker_compose
   add_insecure_registry_to_daemon
-
+  setup_k3s
   install_rust
   
   clone_symphony_repo
