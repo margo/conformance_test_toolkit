@@ -797,6 +797,84 @@ observability_stack_uninstall(){
     echo "Observability stack uninstall completed"
 }
 
+add_container_registry_mirror_to_k3s() {
+  echo "Configuring container registry mirror for k3s..."
+  
+  # Ask for container registry URL or default to https://registry-1.docker.io
+  read -p "Enter container registry URL [https://registry-1.docker.io]: " registry_url
+  registry_url=${registry_url:-"https://registry-1.docker.io"}
+  
+  # Ask for registry username, no default
+  read -p "Enter registry username: " registry_user
+  if [ -z "$registry_user" ]; then
+    echo "❌ Registry username is required"
+    return 1
+  fi
+  
+  # Ask for registry password, no default (hidden input)
+  read -s -p "Enter registry password: " registry_password
+  echo  # New line after hidden input
+  if [ -z "$registry_password" ]; then
+    echo "❌ Registry password is required"
+    return 1
+  fi
+  
+  # Create k3s directory if it doesn't exist
+  sudo mkdir -p /var/lib/rancher/k3s
+  
+  # Backup existing registries.yml if it exists
+  if [ -f /var/lib/rancher/k3s/registries.yml ]; then
+    sudo cp /var/lib/rancher/k3s/registries.yml /var/lib/rancher/k3s/registries.yml.backup.$(date +%s)
+    echo "✅ Backed up existing registries.yml"
+  fi
+  
+  # Add docker registry mirror and credentials
+  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml
+mirrors:
+  docker.io:
+    endpoint:
+      - "$registry_url"
+
+configs:
+  docker.io:
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+EOF
+
+  echo "✅ Created k3s registries configuration"
+  
+  # Restart k3s to apply changes
+  echo "Restarting k3s to apply registry changes..."
+  if sudo systemctl restart k3s; then
+    echo "✅ k3s restarted successfully"
+    
+    # Wait for k3s to be ready
+    echo "Waiting for k3s to be ready..."
+    for i in {1..30}; do
+      if sudo systemctl is-active --quiet k3s; then
+        echo "✅ k3s is active and running"
+        break
+      else
+        echo "Waiting for k3s... ($i/30)"
+        sleep 2
+      fi
+    done
+    
+    # Verify k3s is working
+    if sudo k3s kubectl get nodes >/dev/null 2>&1; then
+      echo "✅ k3s cluster is responding"
+    else
+      echo "⚠️ k3s cluster may not be fully ready yet"
+    fi
+  else
+    echo "❌ Failed to restart k3s"
+    return 1
+  fi
+  
+  echo "✅ Container registry mirror configuration completed"
+}
+
 # ----------------------------
 # Uninstall Functions (Reverse Chronological Order)
 # ----------------------------
@@ -1177,8 +1255,8 @@ download_otel_container_images_from_external() {
   echo "✅ otel images successfully pushed to Harbor"
 }
 
-download_custom_otel_container_images_from_external() {
-  echo "Downloading Custom Otel images from external source..."
+build_custom_otel_container_images() {
+  echo "Building/Downloading Custom Otel images..."
 
   cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/app"
   docker build . -t "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
@@ -1187,11 +1265,14 @@ download_custom_otel_container_images_from_external() {
   # Docker push them to the harbor registry
   echo "Pushing otel images to Harbor..."
   docker push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
+  OTEL_APP_CONTAINER_URL="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
 
   echo "pushing the custom-otel-app-chart"
   cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code"
   helm package helm/
   helm push go-otel-service-0.1.0.tgz "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
+
+  sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
   echo "✅ custom otel images successfully pushed to Harbor"
 }
 
@@ -1281,7 +1362,7 @@ install_prerequisites() {
   update_keycloak_config
   
   setup_harbor
-  download_custom_otel_container_images_from_external
+  build_custom_otel_container_images
  
   setup_gogs_directories
   start_gogs
@@ -1325,7 +1406,8 @@ show_menu() {
   echo "4) Obeservabiliy Stack-Install"
   echo "5) Obeservabiliy Stack-Uninstall"
   echo "6) Tearup-Environment"
-  read -p "Enter choice [1-6]: " choice
+  echo "7) Add-Container-Registry-Mirror-To-K3s"
+  read -p "Enter choice [1-7]: " choice
   case $choice in
     1) install_prerequisites ;;
     2) start_symphony ;;
@@ -1333,6 +1415,7 @@ show_menu() {
     4) observability_stack_install ;;
     5) observability_stack_uninstall ;;
     6) uninstall_prerequisites ;;
+    7) add_container_registry_mirror_to_k3s;;
     *) echo "⚠️ Invalid choice"; exit 1 ;;
   esac
 }
@@ -1352,7 +1435,8 @@ else
     Jaeger_Prometheus_Grafana_Loki-Installation) observability_stack_install ;;
     Jaeger_Prometheus_Grafana_Loki-Uninstallation) observability_stack_uninstall ;;
     Tearup-Environment) uninstall_prerequisites ;;
-    *) echo "Usage: $0 {prepare-environment|symphony-start|symphony-stop|uninstall-prerequisites|observability_stack_install|observability_stack_uninstall}"; exit 1 ;;
+    Add-Container-Registry-Mirror-To-K3s) add_container_registry_mirror_to_k3s;;
+    *) echo "Usage: $0 {prepare-environment|symphony-start|symphony-stop|uninstall-prerequisites|observability_stack_install|observability_stack_uninstall|add_container_registry_mirror_to_k3s}"; exit 1 ;;
   esac
 fi
 

@@ -189,6 +189,86 @@ cleanup_device_agent() {
   [ -f "$HOME/dev-repo/poc/device/agent/device-agent" ] && rm -f "$HOME/dev-repo/poc/device/agent/device-agent" && echo "Removed device-agent binary"
 }
 
+add_container_registry_mirror_to_k3s() {
+  echo "Configuring container registry mirror for k3s..."
+  
+  # Ask for container registry URL or default to https://registry-1.docker.io
+  read -p "Enter container registry URL [https://registry-1.docker.io]: " registry_url
+  registry_url=${registry_url:-"https://registry-1.docker.io"}
+  
+  # Ask for registry username, no default
+  read -p "Enter registry username: " registry_user
+  if [ -z "$registry_user" ]; then
+    echo "❌ Registry username is required"
+    return 1
+  fi
+  
+  # Ask for registry password, no default (hidden input)
+  read -s -p "Enter registry password: " registry_password
+  echo  # New line after hidden input
+  if [ -z "$registry_password" ]; then
+    echo "❌ Registry password is required"
+    return 1
+  fi
+  
+  # Create k3s directory if it doesn't exist
+  sudo mkdir -p /var/lib/rancher/k3s
+  
+  # Backup existing registries.yml if it exists
+  if [ -f /var/lib/rancher/k3s/registries.yml ]; then
+    sudo cp /var/lib/rancher/k3s/registries.yml /var/lib/rancher/k3s/registries.yml.backup.$(date +%s)
+    echo "✅ Backed up existing registries.yml"
+  fi
+  
+  # Add docker registry mirror and credentials
+  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml
+mirrors:
+  docker.io:
+    endpoint:
+      - "$registry_url"
+
+configs:
+  docker.io:
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+EOF
+
+  echo "✅ Created k3s registries configuration"
+  
+  # Restart k3s to apply changes
+  echo "Restarting k3s to apply registry changes..."
+  if sudo systemctl restart k3s; then
+    echo "✅ k3s restarted successfully"
+    
+    # Wait for k3s to be ready
+    echo "Waiting for k3s to be ready..."
+    for i in {1..30}; do
+      if sudo systemctl is-active --quiet k3s; then
+        echo "✅ k3s is active and running"
+        break
+      else
+        echo "Waiting for k3s... ($i/30)"
+        sleep 2
+      fi
+    done
+    
+    # Verify k3s is working
+    if sudo k3s kubectl get nodes >/dev/null 2>&1; then
+      echo "✅ k3s cluster is responding"
+    else
+      echo "⚠️ k3s cluster may not be fully ready yet"
+    fi
+  else
+    echo "❌ Failed to restart k3s"
+    return 1
+  fi
+  
+  echo "✅ Container registry mirror configuration completed"
+}
+
+
+
 # ----------------------------
 # Main Orchestration Functions
 # ----------------------------
@@ -409,7 +489,7 @@ install_otel_collector_promtail() {
   echo "✅ OTEL Collector and Promtail installation completed."
 }
 
-unnstall_otel_collector_promtail() {
+uninstall_otel_collector_promtail() {
   echo "🧹 Uninstalling Promtail and OTEL Collector..."
   cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
    
@@ -438,13 +518,15 @@ show_menu() {
   echo "3) device-agent-status"
   echo "4) otel-collector-promtail-installation"
   echo "5) otel-collector-promtail-uninstallation"
+  echo "6) add-container-registry-mirror-to-k3s"
   read -rp "Enter choice [1-5]: " choice
   case $choice in
     1) start_device_agent ;;
     2) stop_device_agent ;;
     3) show_status ;;
     4) install_otel_collector_promtail ;;
-    5) unnstall_otel_collector_promtail ;;
+    5) uninstall_otel_collector_promtail ;;
+    6) add_container_registry_mirror_to_k3s;;
     *) echo "Invalid choice" ;;
   esac
 }
@@ -460,7 +542,8 @@ else
     stop) stop_device_agent ;;
     status) show_status ;;
     install_otel_collector_promtail) install_otel_collector_promtail ;;
-    unnstall_otel_collector_promtail) unnstall_otel_collector_promtail ;;
-    *) echo "Usage: $0 {start|stop|status|install_otel_collector_promtail|unnstall_otel_collector_promtail}" ;;
+    uninstall_otel_collector_promtail) uninstall_otel_collector_promtail ;;
+    add_container_registry_mirror_to_k3s) add_container_registry_mirror_to_k3s ;;
+    *) echo "Usage: $0 {start|stop|status|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s}" ;;
   esac
 fi
