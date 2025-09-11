@@ -95,6 +95,7 @@ func NewAgent(configPath string) (*Agent, error) {
 		defer cancel()
 		if err != nil {
 			log.Errorw("device onboarding failed", "error", err)
+			return nil, fmt.Errorf("failed to onboard the device, %s", err.Error())
 		}
 		log.Infow("device onboarded", "deviceId", deviceId)
 	}
