@@ -29,7 +29,10 @@ validate_required_vars() {
 # Go Installation Functions
 # ----------------------------
 install_basic_utilities() {
-  apt update && apt install curl -y
+  # apt update && apt install curl -y
+  sudo apt update -y
+  sudo apt install -y curl git
+  echo "Installation complete: curl and git are installed."
 }
 
 install_go() {
