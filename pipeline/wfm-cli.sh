@@ -24,6 +24,11 @@ EXPOSED_GOGS_PORT="${EXPOSED_GOGS_PORT:-8084}"
 # Utility Functions
 # ----------------------------
 MAESTRO_CLI_PATH="$HOME/symphony/cli"
+
+install_basic_utilities() {
+  apt install jq -y
+}
+
 check_maestro_cli() {
   if [ ! -f "${MAESTRO_CLI_PATH}/maestro" ]; then
     echo "❌ maestro CLI not found in ${MAESTRO_CLI_PATH} directory"
@@ -67,7 +72,7 @@ list_devices() {
 list_deployments() {
   echo "🚀 Listing all deployments from WFM..."
   if check_maestro_cli; then
-    ${MAESTRO_CLI_PATH}/maestro wfm list deployments || echo "❌ Failed to list deployments"
+    ${MAESTRO_CLI_PATH}/maestro wfm list deployment || echo "❌ Failed to list deployment"
   fi
   echo ""
   read -p "Press Enter to continue..."
@@ -94,7 +99,7 @@ list_all() {
   echo "🚀 Deployments:"
   echo "---------------"
   if check_maestro_cli; then
-    ${MAESTRO_CLI_PATH}/maestro wfm list deployments || echo "❌ Failed to list deployments"
+    ${MAESTRO_CLI_PATH}/maestro wfm list deployment || echo "❌ Failed to list deployment"
   fi
   
   echo ""
@@ -109,13 +114,28 @@ get_package_upload_request_file_path() {
   case $choice in
     1) 
       GIT_URL="http://${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/custom-otel"
-      sed -i "s|\"url\": *\"http://[^\"]*\"|\"url\": \"$GIT_URL\"|" "$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml" && echo "$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml" ;;
+      original_pkg_file="$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml"
+      pkg_file="$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml.copy"
+      cp -f ${original_pkg_file} ${pkg_file} 
+      sed -i "s|{{URL}}|$GIT_URL|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{BRANCH}}|master|g" "$pkg_file" 2>/dev/null || true
+      echo $pkg_file ;;
     2)
       GIT_URL="http://${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nginx"
-      sed -i "s|\"url\": *\"http://[^\"]*\"|\"url\": \"$GIT_URL\"|" "$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml" && echo "$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml" ;;
+      original_pkg_file="$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml"
+      pkg_file="$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml.copy"
+      cp -f ${original_pkg_file} ${pkg_file}
+      sed -i "s|{{URL}}|$GIT_URL|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{BRANCH}}|master|g" "$pkg_file" 2>/dev/null || true
+      echo $pkg_file ;;
     3)
       GIT_URL="http://${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nextcloud"
-      sed -i "s|\"url\": *\"http://[^\"]*\"|\"url\": \"$GIT_URL\"|" "$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml" && echo "$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml" ;;
+      original_pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml"
+      pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml.copy"
+      cp -f ${original_pkg_file} ${pkg_file}
+      sed -i "s|{{URL}}|$GIT_URL|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{BRANCH}}|master|g" "$pkg_file" 2>/dev/null || true
+      echo $pkg_file ;;
     *) 
       echo "" ;;
   esac
@@ -215,32 +235,56 @@ delete_app_package() {
 # Add this helper function to get deployment file paths
 get_instance_file_path() {
   local package_name="$1"
+  local file_path=""
+  
+  # Validate HOME directory
+  if [ -z "$HOME" ]; then
+    echo "❌ HOME environment variable not set" >&2
+    return 1
+  fi
+  
   case $package_name in
-    "custom-otel-helm-app"|"custom-otel") 
-      echo "$HOME/symphony/cli/templates/margo/custom-otel-helm/deployment.yaml" ;;
-    "nginx-helm-app"|"nginx") 
-      echo "$HOME/symphony/cli/templates/margo/nginx-helm/deployment.yaml" ;;
-    "nextcloud-compose-app"|"nextcloud") 
-      echo "$HOME/symphony/cli/templates/margo/nextcloud-compose/deployment.yaml" ;;
-    *) 
-      echo "" ;;
+    "custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
+      original_file_path="$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml"
+      file_path="$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml.copy"
+      cp -f ${original_file_path} ${file_path} ;;
+    "nginx-helm-app"|"nginx"|"nginx-pkg") 
+      original_file_path="$HOME/symphony/cli/templates/margo/nginx-helm/instance.yaml"
+      file_path="$HOME/symphony/cli/templates/margo/nginx-helm/instance.yaml.copy"
+      cp -f ${original_file_path} ${file_path} ;;
+    "nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
+      original_file_path="$HOME/symphony/cli/templates/margo/nextcloud-compose/instance.yaml"
+      file_path="$HOME/symphony/cli/templates/margo/nextcloud-compose/instance.yaml.copy"
+      cp -f ${original_file_path} ${file_path} ;;
+    *)
+      return 1 ;;
   esac
+  
+  # Verify file exists before returning
+  if [ -f "$file_path" ]; then
+    echo "$file_path"
+  else
+    echo "❌ Deployment file not found: $file_path" >&2
+    return 1
+  fi
 }
 
 get_oci_repository_path() {
   local package_name="$1"
+  local container_url=""
+  
   case $package_name in
-    "custom-otel-helm-app"|"custom-otel")
-      CONTAINER_URL="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app";;
-      sed -i "s|\"url\": *\"http://[^\"]*\"|\"url\": \"$CONTAINER_URL\"|" "$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml";;
-      echo "$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml" ;; 
-    "nginx-helm-app"|"nginx")
-      echo "oci://ghcr.io/nginx/charts/nginx-ingress";; 
-    "nextcloud-compose-app"|"nextcloud") 
-      echo "https://raw.githubusercontent.com/docker/awesome-compose/refs/heads/master/nextcloud-redis-mariadb/compose.yaml";; # this is packageLocation and not oci, need to fix this
+    "custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
+      container_url="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app" ;;
+    "nginx-helm-app"|"nginx"|"nginx-pkg")
+      container_url="oci://ghcr.io/nginx/charts/nginx-ingress" ;; 
+    "nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
+      container_url="https://raw.githubusercontent.com/docker/awesome-compose/refs/heads/master/nextcloud-redis-mariadb/compose.yaml" ;;
     *)
-      echo "" ;;
+      container_url="" ;;
   esac
+  
+  echo "$container_url"
 }
 
 # Updated deploy_instance function
@@ -273,25 +317,34 @@ deploy_instance() {
     return 1
   fi
 
-  # Get app package details and extract metadata.name
+   # Get app package details and extract metadata.name
   echo "📋 Getting package details..."
-  app_package_details=$(${MAESTRO_CLI_PATH}/maestro wfm get app-pkg ${package_id} -o json 2>/dev/null)
+  app_packages=$(${MAESTRO_CLI_PATH}/maestro wfm list app-pkg -o json 2>/dev/null)
   
-  if [ $? -ne 0 ] || [ -z "$app_package_details" ]; then
-    echo "❌ Failed to get package details for '$package_id'"
+  if [ $? -ne 0 ] || [ -z "$app_packages" ]; then
+    echo "❌ Failed to get package list"
     return 1
   fi
   
-  # Parse JSON to extract metadata.name (using jq if available, otherwise grep/sed)
+  # Parse JSON to find the package and extract metadata.name
   if command -v jq >/dev/null 2>&1; then
-    package_name=$(echo "$app_package_details" | jq -r '.metadata.name // empty')
+    echo "🔍 Searching for package: $package_id"
+    
+    # Search by both ID and name in the nested structure
+    package_name=$(echo "$app_packages" | jq -r --arg pkg_id "$package_id" '
+      .Data[0].items[] | 
+      select(.metadata.id == $pkg_id or .metadata.name == $pkg_id) | 
+      .metadata.name
+    ')
+    
+    if [ -z "$package_name" ] || [ "$package_name" = "null" ]; then
+      echo "❌ Package '$package_id' not found in the package list"
+      echo "Available packages:"
+      echo "$app_packages" | jq -r '.Data[0].items[] | "  - Name: \(.metadata.name), ID: \(.metadata.id)"'
+      return 1
+    fi
   else
-    # Fallback parsing without jq
-    package_name=$(echo "$app_package_details" | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-  fi
-  
-  if [ -z "$package_name" ]; then
-    echo "❌ Could not extract package name from package details"
+    echo "❌ jq command is required but not installed. Please install it and retry."
     return 1
   fi
   
@@ -310,6 +363,8 @@ deploy_instance() {
   echo "📄 Using deployment file: $deploy_file"
 
   
+  
+
   # Update deployment file with device and package info if needed
   sed -i "s|{{DEVICE_ID}}|$device_id|g" "$deploy_file" 2>/dev/null || true
   sed -i "s|{{PACKAGE_ID}}|$package_id|g" "$deploy_file" 2>/dev/null || true
@@ -317,65 +372,12 @@ deploy_instance() {
 
   echo "🚀 Deploying '$package_id' to device '$device_id'..."
   if check_maestro_cli; then
-    if ${MAESTRO_CLI_PATH}/maestro wfm deploy -f "$deploy_file" -d "$device_id" -p "$package_id"; then
+    if ${MAESTRO_CLI_PATH}/maestro wfm apply -f "$deploy_file"; then
       echo "✅ Instance deployment request sent successfully!"
       
       echo ""
       echo "📋 Updated deployments:"
-      ${MAESTRO_CLI_PATH}/maestro wfm list deployments
-    else
-      echo "❌ Failed to deploy instance"
-    fi
-  fi
-  
-  echo ""
-  read -p "Press Enter to continue..."
-}
-
-
-deploy_instance() {
-  echo "🚀 Deploy Instance"
-  echo "=================="
-  
-  echo "📦 Available packages:"
-  if check_maestro_cli; then
-    ${MAESTRO_CLI_PATH}/maestro wfm list app-pkg
-  fi
-  
-  echo ""
-  read -p "Enter the package name/ID to deploy: " package_id
-  
-  if [ -z "$package_id" ]; then
-    echo "❌ Package name/ID is required"
-    return 1
-  fi
-  
-  echo ""
-  echo "🖥️  Available devices:"
-  ${MAESTRO_CLI_PATH}/maestro wfm list devices
-  
-  echo ""
-  read -p "Enter the device ID for deployment: " device_id
-  
-  if [ -z "$device_id" ]; then
-    echo "❌ Device ID is required"
-    return 1
-  fi
-
-
-  // TODO: please finish this code
-  app_package_details=$("${MAESTRO_CLI_PATH}/maestro wfm get app-pkg ${package_id} -o json")
-  app_package_details ... json parse it and extract ... .metadata.name
-  based on the package name, select one of the package path
-
-  echo "🚀 Deploying '$package_id' to device '$device_id'..."
-  if check_maestro_cli; then
-    if ${MAESTRO_CLI_PATH}/maestro wfm deploy -f $deploy_file -d "$device_id" -p "$package_id"; then
-      echo "✅ Instance deployment request sent successfully!"
-      
-      echo ""
-      echo "📋 Updated deployments:"
-      ${MAESTRO_CLI_PATH}/maestro wfm list deployments
+      ${MAESTRO_CLI_PATH}/maestro wfm list deployment
     else
       echo "❌ Failed to deploy instance"
     fi
@@ -391,7 +393,7 @@ delete_instance() {
   
   echo "🚀 Current deployments:"
   if check_maestro_cli; then
-    ${MAESTRO_CLI_PATH}/maestro wfm list deployments
+    ${MAESTRO_CLI_PATH}/maestro wfm list deployment
   fi
   
   echo ""
@@ -411,7 +413,7 @@ delete_instance() {
         
         echo ""
         echo "📋 Updated deployments:"
-        ${MAESTRO_CLI_PATH}/maestro wfm list deployments
+        ${MAESTRO_CLI_PATH}/maestro wfm list deployment
       else
         echo "❌ Failed to delete instance '$instance_id'"
       fi
@@ -434,7 +436,7 @@ show_menu() {
   echo "Choose an option:"
   echo "1) 📦 list app-pkg"
   echo "2) 🖥️  List Devices"
-  echo "3) 🚀 List Deployments"
+  echo "3) 🚀 List Deployment"
   echo "4) 📋 List All"
   echo "5) 📤 Upload App-Package"
   echo "6) 🗑️  Delete App-Package"
@@ -462,6 +464,7 @@ show_menu() {
 # Main Script Execution
 # ----------------------------
 main_loop() {
+  install_basic_utilities
   while true; do
     show_menu
   done
