@@ -37,6 +37,45 @@ install_basic_utilities() {
   sudo apt update -y
   sudo apt install -y curl git
   echo "Installation complete: curl and git are installed."
+
+  INSTALL_HELM_V3_15_1=true
+  HELM_VERSION="3.15.1"
+  HELM_TAR="helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+  HELM_BIN_DIR="/usr/local/bin"
+
+  apt update && apt install -y curl dos2unix build-essential gcc libc6-dev
+  install_helm
+}
+
+# Helm install/uninstall
+install_helm() {
+  cd $HOME
+  if [ "${INSTALL_HELM_V3_15_1}" == "true" ]; then
+    echo "Helm Setup"
+    if command -v helm >/dev/null 2>&1 && [[ "$(helm version --short | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" == "${HELM_VERSION}" ]]; then
+        echo "Helm version ${HELM_VERSION} is already installed. Skipping."
+    else
+        echo "Downloading Helm version ${HELM_VERSION}..."
+        if ! wget -q "https://get.helm.sh/${HELM_TAR}" ; then
+            echo "Failed to download Helm."
+            exit 1
+        fi
+        echo "Extracting Helm..."
+        if ! tar -xzf "${HELM_TAR}" ; then
+            echo "Failed to extract Helm tarball."
+            exit 1
+        fi
+        echo "Moving Helm to ${HELM_BIN_DIR}..."
+        if ! sudo mv "linux-amd64/helm" "${HELM_BIN_DIR}/" ; then
+            echo "Failed to move Helm."
+            exit 1
+        fi
+        echo "Helm binary moved successfully."
+        echo "Cleaning up..."
+        rm "${HELM_TAR}"
+        rm -rf linux-amd64/
+    fi
+  fi
 }
 
 install_go() {
