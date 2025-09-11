@@ -14,6 +14,10 @@ DEV_REPO_BRANCH="${DEV_REPO_BRANCH:-dev-sprint-6}"
 WFM_IP="${WFM_IP:-127.0.0.1}"
 WFM_PORT="${WFM_PORT:-8082}"
 
+# variables for observability stack
+NAMESPACE_OBSERVABILITY="observability"
+PROMTAIL_RELEASE="promtail"
+OTEL_RELEASE="otel-collector"
 
 validate_required_vars() {
   local required_vars=("GITHUB_USER" "GITHUB_TOKEN" "DEV_REPO_BRANCH" "WFM_IP" "WFM_PORT")
@@ -245,16 +249,202 @@ show_status() {
   fi
 }
 
+
+function install_promtail() {
+  echo "📦 Installing Promtail to push logs to Loki at $WFM_IP..."
+
+  cat <<EOF > promtail-values.yaml
+config:
+  server:
+    http_listen_port: 9080
+    grpc_listen_port: 0
+
+  positions:
+    filename: /tmp/positions.yaml
+
+  clients:
+    - url: http://${WFM_IP}:32100/loki/api/v1/push
+
+  scrape_configs:
+    - job_name: pod-logs
+      static_configs:
+        - targets:
+            - localhost
+          labels:
+            job: podlogs
+            __path__: /var/log/pods/*/*/*.log
+EOF
+
+  helm repo add grafana https://grafana.github.io/helm-charts
+  helm repo update
+
+  helm install $PROMTAIL_RELEASE grafana/promtail -f promtail-values.yaml --namespace $NAMESPACE_OBSERVABILITY
+
+  echo "✅ Promtail installed and configured to push logs to Loki"
+}
+function install_otel_collector() {
+  echo "📡 Installing OTEL Collector to send metrics and traces to WFM node..."
+
+  cat <<EOF > otel-values.yaml
+mode: deployment
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+extraEnvs:
+  - name: KUBE_NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+    hostmetrics:
+      collection_interval: 30s
+      scrapers:
+        cpu:
+        memory:
+        disk:
+        filesystem:
+        load:
+        network:
+        processes:
+        paging:
+
+    kubeletstats:
+      collection_interval: 30s
+      auth_type: "serviceAccount"
+      endpoint: "https://\${KUBE_NODE_NAME}:10250"
+      insecure_skip_verify: true
+      metric_groups:
+        - container
+        - pod
+        - node
+
+  exporters:
+    otlp:
+      endpoint: ${WFM_IP}:30417
+      tls:
+        insecure: true
+
+    prometheus:
+      endpoint: "0.0.0.0:8889"
+
+    debug:
+      verbosity: detailed
+
+  processors:
+    batch: {}
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp, debug]
+
+      metrics:
+        receivers: [otlp, hostmetrics, kubeletstats]
+        processors: [batch]
+        exporters: [prometheus, debug]
+EOF
+
+  helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+  helm repo update
+
+  helm install $OTEL_RELEASE open-telemetry/opentelemetry-collector -f otel-values.yaml --namespace $NAMESPACE_OBSERVABILITY
+
+  echo "🔧 Patching OTEL Collector service to expose Prometheus metrics on NodePort 30999..."
+  sudo kubectl patch svc otel-collector-opentelemetry-collector \
+    -n $NAMESPACE_OBSERVABILITY \
+    --type='json' \
+    -p='[
+      {
+        "op": "add",
+        "path": "/spec/ports/-",
+        "value": {
+          "name": "prometheus-metrics",
+          "port": 8889,
+          "protocol": "TCP",
+          "targetPort": 8889,
+          "nodePort": 30999
+        }
+      },
+      {
+        "op": "replace",
+        "path": "/spec/type",
+        "value": "NodePort"
+      }
+    ]'
+
+  echo "✅ OTEL Collector installed and Prometheus metrics exposed at NodePort 30999"
+}
+
+# Function to create observability namespace
+create_observability_namespace() {
+    echo "🔧 Checking observability namespace..."
+    
+    if sudo kubectl get namespace $NAMESPACE_OBSERVABILITY >/dev/null 2>&1; then
+        echo "✅ Namespace '$NAMESPACE_OBSERVABILITY' already exists"
+    else
+        echo "🔧 Creating namespace '$NAMESPACE_OBSERVABILITY'..."
+        sudo kubectl create namespace $NAMESPACE_OBSERVABILITY
+        echo "✅ Namespace '$NAMESPACE_OBSERVABILITY' created successfully"
+    fi
+}
+
+
+install_otel_collector_promtail() {
+  echo "Installing OTEL Collector and Promtail..."
+  cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
+  create_observability_namespace
+  install_promtail
+  install_otel_collector
+  echo "✅ OTEL Collector and Promtail installation completed."
+}
+
+unnstall_otel_collector_promtail() {
+  echo "🧹 Uninstalling Promtail and OTEL Collector..."
+  cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
+   
+   # Uninstall helm releases only if they exist
+    for release in $PROMTAIL_RELEASE $OTEL_RELEASE; do
+        if helm status $release -n "$NAMESPACE_OBSERVABILITY" >/dev/null 2>&1; then
+            echo "🗑️ Uninstalling $release..."
+            helm uninstall $release --namespace "$NAMESPACE_OBSERVABILITY"
+        else
+            echo "⏭️ $release not found, skipping..."
+        fi
+    done
+
+
+  rm -f promtail-values.yaml otel-values.yaml
+  echo "✅ Cleanup complete."
+
+}
+
+
+
 show_menu() {
   echo "Choose an option:"
   echo "1) device-agent-start"
   echo "2) device-agent-stop"
   echo "3) device-agent-status"
-  read -rp "Enter choice [1-3]: " choice
+  echo "4) otel-collector-promtail-installation"
+  echo "5) otel-collector-promtail-uninstallation"
+  read -rp "Enter choice [1-5]: " choice
   case $choice in
     1) start_device_agent ;;
     2) stop_device_agent ;;
     3) show_status ;;
+    4) install_otel_collector_promtail ;;
+    5) unnstall_otel_collector_promtail ;;
     *) echo "Invalid choice" ;;
   esac
 }
@@ -269,6 +459,8 @@ else
     start) start_device_agent ;;
     stop) stop_device_agent ;;
     status) show_status ;;
-    *) echo "Usage: $0 {start|stop|status}" ;;
+    install_otel_collector_promtail) install_otel_collector_promtail ;;
+    unnstall_otel_collector_promtail) unnstall_otel_collector_promtail ;;
+    *) echo "Usage: $0 {start|stop|status|install_otel_collector_promtail|unnstall_otel_collector_promtail}" ;;
   esac
 fi
