@@ -324,7 +324,7 @@ func (c *HelmClient) installChartFromOCI(ctx context.Context, install *action.In
 	}
 
 	// assuming that 80 port will be for plain http connections
-	if port == 80 {
+	if port == 80 || port == 8080 || port == 8081 {
 		registry.ClientOptPlainHTTP()(c.registryClient)
 	}
 
