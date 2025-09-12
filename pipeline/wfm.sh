@@ -1265,15 +1265,30 @@ build_custom_otel_container_images() {
   # Docker push them to the harbor registry
   echo "Pushing otel images to Harbor..."
   docker push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
-  OTEL_APP_CONTAINER_URL="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
-
+  OTEL_APP_CONTAINER_URL="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app"
+  deploy_file="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
+  tag="latest"
   echo "pushing the custom-otel-app-chart"
   cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code"
-  sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
+  #sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
+  #sed -i "s|repository: *.*|repository: \"oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
+  sed -i "s|{{REPOSITORY}}|$OTEL_APP_CONTAINER_URL|g" "$deploy_file" 2>/dev/null || true
+  sed -i "s|{{TAG}}|$tag|g" "$deploy_file" 2>/dev/null || true
+  
+    
   helm package helm/
-  helm push go-otel-service-0.1.0.tgz "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
+  helm push custom-otel-helm-0.1.0.tgz "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
+  HELM_REPOSITORY="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library"
+  HELM_REVISION="0.1.0"
+  helm_deploy_file="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
 
-  sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
+  #sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
+  #sed -i "s|repository: *oci://[^[:space:]]*|repository: \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
+  #sed -i 's|revision: *latest|revision: 0.1.0|' "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
+  sed -i "s|{{HELM_REPOSITORY}}|$HELM_REPOSITORY|g" "$helm_deploy_file" 2>/dev/null || true
+  sed -i "s|{{HELM_REVISION}}|$HELM_REVISION|g" "$helm_deploy_file" 2>/dev/null || true
+  
+  
   echo "✅ custom otel images successfully pushed to Harbor"
 }
 

@@ -1,8 +1,8 @@
 replicaCount: 1
 
 image:
-  repository: otel-app
-  tag: latest
+  repository: {{REPOSITORY}}  
+  tag: {{TAG}}
   pullPolicy: Never  # Prevents Kubernetes from trying to pull from Docker Hub
 
 env:
