@@ -574,7 +574,7 @@ show_menu() {
     4) install_otel_collector_promtail ;;
     5) uninstall_otel_collector_promtail ;;
     6) add_container_registry_mirror_to_k3s;;
-    7) cleanup_residual;
+    7) cleanup_residual;;
     *) echo "Invalid choice" ;;
   esac
 }
