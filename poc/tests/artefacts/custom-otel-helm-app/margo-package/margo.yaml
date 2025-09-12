@@ -43,7 +43,7 @@ deploymentProfiles:
 parameters:
   # Frontend service configuration
   otlpEndpoint:
-    value: "http://otel-collector-opentelemetry-collector:4318"
+    value: "http://otel-collector-opentelemetry-collector.observability:4318"
     targets:
     - pointer: env.OTEL_EXPORTER_OTLP_ENDPOINT
       components: ["otel-demo"]
