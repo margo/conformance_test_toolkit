@@ -275,7 +275,7 @@ get_oci_repository_path() {
   
   case $package_name in
     "custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
-      container_url="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app" ;;
+      container_url="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-helm" ;;
     "nginx-helm-app"|"nginx"|"nginx-pkg")
       container_url="oci://ghcr.io/nginx/charts/nginx-ingress" ;; 
     "nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
