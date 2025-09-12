@@ -1470,7 +1470,7 @@ show_menu() {
   echo "3) Symphony-Stop"
   echo "4) Obeservabiliy Stack-Install"
   echo "5) Obeservabiliy Stack-Uninstall"
-  echo "6) Tearup-Environment"
+  echo "6) Teardown-Environment"
   echo "7) Add-Container-Registry-Mirror-To-K3s"
   read -p "Enter choice [1-7]: " choice
   case $choice in
@@ -1499,7 +1499,7 @@ else
     Symphony-Stop) stop_symphony ;;
     Jaeger_Prometheus_Grafana_Loki-Installation) observability_stack_install ;;
     Jaeger_Prometheus_Grafana_Loki-Uninstallation) observability_stack_uninstall ;;
-    Tearup-Environment) uninstall_prerequisites ;;
+    Teardown-Environment) uninstall_prerequisites ;;
     Add-Container-Registry-Mirror-To-K3s) add_container_registry_mirror_to_k3s;;
     *) echo "Usage: $0 {prepare-environment|symphony-start|symphony-stop|uninstall-prerequisites|observability_stack_install|observability_stack_uninstall|add_container_registry_mirror_to_k3s}"; exit 1 ;;
   esac

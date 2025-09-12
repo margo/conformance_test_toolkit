@@ -548,6 +548,13 @@ uninstall_otel_collector_promtail() {
 
 }
 
+cleanup_residual() {
+  rm -rf "$HOME/dev-repo"
+  rm -rf "$HOME/symphony"
+  rm -rf "$HOME/device-agent.log"
+  rm -rf "$HOME/device-agent.pid"
+}
+
 
 
 show_menu() {
@@ -558,7 +565,8 @@ show_menu() {
   echo "4) otel-collector-promtail-installation"
   echo "5) otel-collector-promtail-uninstallation"
   echo "6) add-container-registry-mirror-to-k3s"
-  read -rp "Enter choice [1-5]: " choice
+  echo "7) cleanup-residual"
+  read -rp "Enter choice [1-7]: " choice
   case $choice in
     1) start_device_agent ;;
     2) stop_device_agent ;;
@@ -566,6 +574,7 @@ show_menu() {
     4) install_otel_collector_promtail ;;
     5) uninstall_otel_collector_promtail ;;
     6) add_container_registry_mirror_to_k3s;;
+    7) cleanup_residual;
     *) echo "Invalid choice" ;;
   esac
 }
@@ -583,6 +592,7 @@ else
     install_otel_collector_promtail) install_otel_collector_promtail ;;
     uninstall_otel_collector_promtail) uninstall_otel_collector_promtail ;;
     add_container_registry_mirror_to_k3s) add_container_registry_mirror_to_k3s ;;
-    *) echo "Usage: $0 {start|stop|status|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s}" ;;
+    cleanup_residual) cleanup_residual ;;
+    *) echo "Usage: $0 {start|stop|status|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s|cleanup_residual}" ;;
   esac
 fi
