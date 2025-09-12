@@ -32,14 +32,13 @@ EXPOSED_KEYCLOAK_PORT="${EXPOSED_KEYCLOAK_PORT:-8083}"
 EXPOSED_GOGS_IP="${EXPOSED_GOGS_IP:-127.0.0.1}"
 EXPOSED_GOGS_PORT="${EXPOSED_GOGS_PORT:-8084}"
 
-
-
 # variables for observability stack
 NAMESPACE_OBSERVABILITY="observability"
 JAEGER_RELEASE="jaeger"
 PROM_RELEASE="prometheus"
 GRAFANA_RELEASE="grafana"
 LOKI_RELEASE="loki"
+
 
 # ----------------------------
 # Utility Functions
@@ -666,7 +665,6 @@ function patch_prometheus_configmap() {
   rm -f "$CM_TARGET"
   echo "✅ ConfigMap applied and temporary file removed."
 }
-
 
 
 function install_loki() {
@@ -1435,6 +1433,8 @@ install_prerequisites() {
   create_gogs_admin
   create_gogs_token
   create_gogs_repositories
+  push_nextcloud_files
+  push_nginx_files
   push_custom_otel_files  
   echo "setup completed"
 }
