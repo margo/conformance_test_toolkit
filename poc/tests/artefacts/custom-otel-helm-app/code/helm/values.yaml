@@ -6,7 +6,8 @@ image:
   pullPolicy: Always  # Prevents Kubernetes from trying to pull from Docker Hub
 
 env:
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-opentelemetry-collector.observability:4318"
+  #OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-opentelemetry-collector.observability:4318"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318"
 
 service:
   type: ClusterIP

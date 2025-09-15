@@ -453,7 +453,7 @@ config:
         insecure: true
 
     prometheus:
-      endpoint: "${WFM_IP}:30999"
+      endpoint: "0.0.0.0:8899"
 
     debug:
       verbosity: detailed
