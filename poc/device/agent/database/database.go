@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,14 +26,41 @@ type DeploymentRecord struct {
 type DeploymentChangeType string
 
 const (
-	DeploymentChangeTypeRecordAdded           DeploymentChangeType = "record-added"
-	DeploymentChangeTypeRecordDeleted         DeploymentChangeType = "record-deleted"
-	DeploymentChangeTypeComponentPhaseChanged DeploymentChangeType = "component-phase-changed"
-	DeploymentChangeTypeDesiredStateAdded     DeploymentChangeType = "desired-state-added"
-	DeploymentChangeTypeCurrentStateAdded     DeploymentChangeType = "current-state-added"
+	DeploymentChangeTypeRecordAdded           DeploymentChangeType = "RECORD-ADDED"
+	DeploymentChangeTypeRecordDeleted         DeploymentChangeType = "RECORD-DELETED"
+	DeploymentChangeTypeComponentPhaseChanged DeploymentChangeType = "COMPONENT-PHASE-CHANGED"
+	DeploymentChangeTypeDesiredStateAdded     DeploymentChangeType = "DESIRED-STATE-ADDED"
+	DeploymentChangeTypeCurrentStateAdded     DeploymentChangeType = "CURRENT-STATE-ADDED"
 )
 
+type DeviceOnboardState string
+
+const (
+	DeviceOnboardStateOnboardInProgress DeviceOnboardState = "IN-PROGRESS"
+	DeviceOnboardStateOnboarded         DeviceOnboardState = "ONBOARDED"
+	DeviceOnboardStateOnboardFailed     DeviceOnboardState = "FAILED"
+)
+
+type DeviceSettingsRecord struct {
+	DeviceID        string             `json:"deviceId"`
+	DeviceSignature []byte             `json:"deviceSignature"`
+	State           DeviceOnboardState `json:"state"`
+	AuthEnabled     bool               `json:"authEnabled"`
+	// OAuthClientId The client ID for OAuth 2.0 authentication.
+	OAuthClientId string `json:"clientId"`
+	// OAuthClientSecret The client secret for OAuth 2.0 authentication.
+	OAuthClientSecret string `json:"clientSecret"`
+	// OAuthTokenEndpointUrl The URL for the OAuth 2.0 token endpoint.
+	OAuthTokenEndpointUrl string `json:"tokenEndpointUrl"`
+	// the applications that the device can deploy
+	CanDeployHelm    bool
+	CanDeployCompose bool
+}
+
 type DatabaseIfc interface {
+	// if your database engine already has persistence, then just keep the implementation empty
+	// we added an in-memory database implementation for this margo poc, hence needed this one
+	TriggerDataPersist()
 	Subscribe(callback func(string, *DeploymentRecord, DeploymentChangeType))
 	SetDesiredState(deploymentId string, state sbi.AppState)
 	SetCurrentState(deploymentId string, state sbi.AppState)
@@ -42,13 +70,17 @@ type DatabaseIfc interface {
 	ListDeployments() []*DeploymentRecord
 	RemoveDeployment(deploymentId string)
 	NeedsReconciliation(deploymentId string) bool
+	GetDeviceSettings() (*DeviceSettingsRecord, error)
+	SetDeviceSettings(settings DeviceSettingsRecord) error
+	IsDeviceOnboarded() (*DeviceSettingsRecord, bool, error)
 }
 
 type Database struct {
-	deployments  map[string]*DeploymentRecord
-	subscribers  []func(string, *DeploymentRecord, DeploymentChangeType) // appID, record
-	mu           sync.RWMutex
-	subscriberMu sync.RWMutex
+	deviceSettings *DeviceSettingsRecord
+	deployments    map[string]*DeploymentRecord
+	subscribers    []func(string, *DeploymentRecord, DeploymentChangeType) // appID, record
+	mu             sync.RWMutex
+	subscriberMu   sync.RWMutex
 
 	// for persistence
 	dataDir     string
@@ -58,11 +90,12 @@ type Database struct {
 
 func NewDatabase(dataDir string) *Database {
 	db := &Database{
-		deployments: make(map[string]*DeploymentRecord),
-		subscribers: make([]func(string, *DeploymentRecord, DeploymentChangeType), 0),
-		dataDir:     dataDir,
-		persistChan: make(chan struct{}, 1),
-		stopPersist: make(chan struct{}),
+		deployments:    make(map[string]*DeploymentRecord),
+		deviceSettings: &DeviceSettingsRecord{},
+		subscribers:    make([]func(string, *DeploymentRecord, DeploymentChangeType), 0),
+		dataDir:        dataDir,
+		persistChan:    make(chan struct{}, 1),
+		stopPersist:    make(chan struct{}),
 	}
 
 	// Load from disk
@@ -74,7 +107,7 @@ func NewDatabase(dataDir string) *Database {
 	return db
 }
 
-func (db *Database) triggerPersist() {
+func (db *Database) TriggerDataPersist() {
 	select {
 	case db.persistChan <- struct{}{}:
 	default: // Already queued
@@ -100,7 +133,15 @@ func (db *Database) persistenceLoop() {
 
 func (db *Database) save() {
 	db.mu.RLock()
-	data, err := json.MarshalIndent(db.deployments, "", "  ")
+	var dump = struct {
+		Deployments    map[string]*DeploymentRecord `json:"deployments"`
+		DeviceSettings *DeviceSettingsRecord        `json:"deviceSettings"`
+	}{
+		Deployments:    db.deployments,
+		DeviceSettings: db.deviceSettings,
+	}
+
+	data, err := json.MarshalIndent(dump, "", "  ")
 	db.mu.RUnlock()
 
 	if err != nil {
@@ -108,8 +149,8 @@ func (db *Database) save() {
 	}
 
 	os.MkdirAll(db.dataDir, 0755)
-	tempFile := filepath.Join(db.dataDir, "deployments.json.tmp")
-	finalFile := filepath.Join(db.dataDir, "deployments.json")
+	tempFile := filepath.Join(db.dataDir, "agent.database.json.tmp")
+	finalFile := filepath.Join(db.dataDir, "agent.database.json")
 
 	if err := os.WriteFile(tempFile, data, 0644); err != nil {
 		return
@@ -125,12 +166,15 @@ func (db *Database) load() {
 		return // File doesn't exist, start fresh
 	}
 
-	var deployments map[string]*DeploymentRecord
-	if err := json.Unmarshal(data, &deployments); err != nil {
+	var dump = struct {
+		Deployments    map[string]*DeploymentRecord `json:"deployments"`
+		DeviceSettings *DeviceSettingsRecord        `json:"deviceSettings"`
+	}{}
+	if err := json.Unmarshal(data, &dump); err != nil {
 		return
 	}
-
-	db.deployments = deployments
+	db.deployments = dump.Deployments
+	db.deviceSettings = dump.DeviceSettings
 }
 
 func (db *Database) Subscribe(callback func(string, *DeploymentRecord, DeploymentChangeType)) {
@@ -278,4 +322,35 @@ func (db *Database) NeedsReconciliation(deploymentId string) bool {
 
 	return record.DesiredState.AppDeploymentYAMLHash != record.CurrentState.AppDeploymentYAMLHash ||
 		record.DesiredState.AppState != record.CurrentState.AppState
+}
+
+func (db *Database) GetDeviceSettings() (*DeviceSettingsRecord, error) {
+	return db.deviceSettings, nil
+}
+
+func (db *Database) SetDeviceSettings(settings DeviceSettingsRecord) error {
+	db.deviceSettings = &settings
+	return nil
+}
+
+func (db *Database) SetDeviceOnboardState(state DeviceOnboardState) error {
+	db.deviceSettings.State = state
+	return nil
+}
+
+func (db *Database) IsDeviceOnboarded() (*DeviceSettingsRecord, bool, error) {
+	return db.deviceSettings, db.deviceSettings.State == DeviceOnboardStateOnboarded, nil
+}
+
+func (db *Database) SetDeviceCanDeployHelm(deployable bool) {
+	db.deviceSettings.CanDeployHelm = deployable
+}
+
+func (db *Database) SetDeviceCanDeployCompose(deployable bool) {
+	db.deviceSettings.CanDeployCompose = deployable
+}
+
+func (db *Database) CanDeployAppProfile(profileType string) bool {
+	return (strings.ToLower(profileType) == "helm.v3" && db.deviceSettings.CanDeployHelm) ||
+		(strings.ToLower(profileType) == "compose" && db.deviceSettings.CanDeployCompose)
 }

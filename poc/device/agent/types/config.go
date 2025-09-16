@@ -12,11 +12,11 @@ import (
 
 // Config struct
 type Config struct {
-	DeviceID     string                      `yaml:"deviceId" validate:"required"`
-	Wfm          WFMConfig                   `yaml:"wfm" validate:"required"`
-	StateSeeking StateSeekingConfig          `yaml:"stateSeeking" validate:"required"`
-	Capabilities CapabilitiesDiscoveryConfig `yaml:"capabilities" validate:"required"`
-	Runtimes     []RuntimeInfo               `yaml:"runtimes"`
+	DeviceSignature string                      `yaml:"deviceSignature" validate:"required"`
+	Wfm             WFMConfig                   `yaml:"wfm" validate:"required"`
+	StateSeeking    StateSeekingConfig          `yaml:"stateSeeking" validate:"required"`
+	Capabilities    CapabilitiesDiscoveryConfig `yaml:"capabilities" validate:"required"`
+	Runtimes        []RuntimeInfo               `yaml:"runtimes"`
 }
 
 type StateSeekingConfig struct {
@@ -61,6 +61,7 @@ type RuntimeInfo struct {
 }
 
 type AuthConfig struct {
+	Enable       bool   `yaml:"enable"`
 	ClientId     string `yaml:"clientId"`
 	ClientSecret string `yaml:"clientSecret"`
 	TokenUrl     string `yaml:"tokenUrl"`
@@ -105,6 +106,10 @@ func validateConfig(config *Config) error {
 
 	if len(config.Runtimes) == 0 {
 		return fmt.Errorf("there are no runtimes defined in agent configuration")
+	}
+
+	if config.Capabilities.ReadFromFile == "" {
+		return fmt.Errorf("capabilities file path is mandatory check the capabilties section in the config file")
 	}
 
 	return nil

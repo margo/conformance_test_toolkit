@@ -1,0 +1,194 @@
+apiVersion: margo.org/v1-alpha1
+kind: ApplicationDescription
+metadata:
+  id: margo-app-opentelemetry-demo
+  name: OpenTelemetry Demo
+  description: Microservices-based distributed system for demonstrating OpenTelemetry instrumentation
+  version: "1.10.0"
+  catalog:
+    application:
+      icon: ./resources/opentelemetry-logo.png
+      tagline: Complete microservices demo showcasing OpenTelemetry observability.
+      descriptionFile: ./resources/description.md
+      releaseNotes: ./resources/release-notes.md
+      licenseFile: ./resources/license.txt
+      site: https://github.com/open-telemetry/opentelemetry-demo
+      tags: ["observability", "microservices", "tracing", "metrics", "demo"]
+    author:
+      - name: OpenTelemetry Community
+        email: cncf-opentelemetry-community@lists.cncf.io
+    organization:
+      - name: OpenTelemetry
+        site: https://opentelemetry.io
+deploymentProfiles:
+  - type: helm.v3
+    components:
+      - name: otel-demo
+        properties:  
+          repository: https://open-telemetry.github.io/opentelemetry-helm-charts/opentelemetry-demo
+          # chart: 
+          revision: "0.31.0"
+          wait: true
+parameters:
+  # Frontend service configuration
+  frontendServiceType:
+    value: NodePort
+    targets:
+    - pointer: components.frontend.service.type
+      components: ["otel-demo"]
+  frontendPort:
+    value: 8080
+    targets:
+    - pointer: components.frontend.service.port
+      components: ["otel-demo"]
+  
+  # Jaeger configuration
+  jaegerServiceType:
+    value: NodePort
+    targets:
+    - pointer: jaeger.service.type
+      components: ["otel-demo"]
+  jaegerUIPort:
+    value: 16686
+    targets:
+    - pointer: jaeger.service.ports.ui
+      components: ["otel-demo"]
+  
+  # Grafana configuration
+  grafanaServiceType:
+    value: NodePort
+    targets:
+    - pointer: grafana.service.type
+      components: ["otel-demo"]
+  grafanaPort:
+    value: 3000
+    targets:
+    - pointer: grafana.service.port
+      components: ["otel-demo"]
+  
+  # OpenTelemetry Collector configuration
+  otelCollectorReplicas:
+    value: 1
+    targets:
+    - pointer: opentelemetry-collector.replicaCount
+      components: ["otel-demo"]
+  
+  # Resource limits
+  defaultCpuLimit:
+    value: "200m"
+    targets:
+    - pointer: default.resources.limits.cpu
+      components: ["otel-demo"]
+  defaultMemoryLimit:
+    value: "400Mi"
+    targets:
+    - pointer: default.resources.limits.memory
+      components: ["otel-demo"]
+  
+  # Feature flags
+  enablePrometheus:
+    value: false
+    targets:
+    - pointer: prometheus.enabled
+      components: ["otel-demo"]
+  enableJaeger:
+    value: false
+    targets:
+    - pointer: jaeger.enabled
+      components: ["otel-demo"]
+  enableGrafana:
+    value: false
+    targets:
+    - pointer: grafana.enabled
+      components: ["otel-demo"]
+
+  otelCollectorName:
+    value: "otel-collector-opentelemetry-collector.default"
+    targets:
+    - pointer: default.envOverrides[0].value
+      components: ["otel-demo"]
+
+configuration:
+  sections:
+    - name: Environment Configuration
+      settings:
+        - parameter: otelCollectorName
+          name: OpenTelemetry Collector Name
+          description: Name and namespace for the OpenTelemetry Collector service
+          schema: collectorName
+
+    - name: Service Configuration
+      settings:
+        - parameter: frontendServiceType
+          name: Frontend Service Type
+          description: Kubernetes service type for the frontend (NodePort, LoadBalancer, ClusterIP)
+          schema: serviceType
+        - parameter: frontendPort
+          name: Frontend Port
+          description: Port number for the frontend web interface
+          schema: portNumber
+        - parameter: jaegerUIPort
+          name: Jaeger UI Port
+          description: Port number for Jaeger tracing UI
+          schema: portNumber
+        - parameter: grafanaPort
+          name: Grafana Port
+          description: Port number for Grafana dashboard
+          schema: portNumber
+    
+    - name: Observability Settings
+      settings:
+        - parameter: enablePrometheus
+          name: Enable Prometheus
+          description: Enable Prometheus metrics collection
+          schema: boolean
+        - parameter: enableJaeger
+          name: Enable Jaeger
+          description: Enable Jaeger distributed tracing
+          schema: boolean
+        - parameter: enableGrafana
+          name: Enable Grafana
+          description: Enable Grafana dashboards
+          schema: boolean
+    
+    - name: Resource Configuration
+      settings:
+        - parameter: otelCollectorReplicas
+          name: Collector Replicas
+          description: Number of OpenTelemetry Collector replicas
+          schema: positiveInteger
+        - parameter: defaultCpuLimit
+          name: Default CPU Limit
+          description: Default CPU limit for microservices
+          schema: cpuValue
+        - parameter: defaultMemoryLimit
+          name: Default Memory Limit
+          description: Default memory limit for microservices
+          schema: memoryValue
+
+  schema:
+    - name: portNumber
+      dataType: integer
+      minimum: 1
+      maximum: 65535
+      allowEmpty: false
+    - name: positiveInteger
+      dataType: integer
+      minimum: 1
+      maximum: 100
+      allowEmpty: false
+    - name: boolean
+      dataType: boolean
+      allowEmpty: false
+    - name: serviceType
+      dataType: string
+      enum: ["ClusterIP", "NodePort", "LoadBalancer"]
+      allowEmpty: false
+    - name: cpuValue
+      dataType: string
+      pattern: "^[1-9][0-9]*m?$"
+      allowEmpty: false
+    - name: memoryValue
+      dataType: string
+      pattern: "^[1-9][0-9]*[KMGT]?i?$"
+      allowEmpty: false

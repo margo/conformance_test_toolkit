@@ -11,6 +11,7 @@ import (
 
 	"errors"
 
+	"github.com/margo/dev-repo/shared-lib/http"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
@@ -312,6 +313,21 @@ func (c *HelmClient) InstallChart(ctx context.Context, releaseName, chart, names
 // installChartFromOCI installs a chart from OCI registry
 func (c *HelmClient) installChartFromOCI(ctx context.Context, install *action.Install, chartRef, version string, values map[string]interface{}) error {
 	// Pull chart from OCI registry
+	// extract port from
+	port, err := http.ExtractPortFromURI(chartRef)
+	if err != nil {
+		return &HelmError{
+			Type:    ErrorTypeRegistry,
+			Message: "invalid uri of the oci registry",
+			Err:     err,
+		}
+	}
+
+	// assuming that 80 port will be for plain http connections
+	if port == 80 || port == 8080 || port == 8081 {
+		registry.ClientOptPlainHTTP()(c.registryClient)
+	}
+
 	chartRef = fmt.Sprintf("%s:%s", chartRef, version) // "ghcr.io/nginxinc/charts/nginx-ingress:0.0.0-edge"
 	result, err := c.registryClient.Pull(chartRef, registry.PullOptWithChart(true))
 	if err != nil {

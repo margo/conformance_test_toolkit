@@ -1,0 +1,20 @@
+image:
+  # there is no such repo as of now, while building the image we tagged it as margo.org/device-agent:dev-sprint-6
+  # and we expected that you have run that build command, else
+  # you can change this as per your need
+  repository: margo.org/device-agent
+  tag: dev-sprint-6
+  pullPolicy: IfNotPresent
+
+kubeconfig:
+  # the name of the k8s secret that contains the kubeconfig
+  secretName: agent-kubeconfig
+
+# if persistence.enabled=true then you need to give a volume claim name
+# the agent will use this volume claim to store its data, make sure that the volume claim is in the same namespace
+# where you have installed the chart
+# if persistence.enabled=false then an ephemeral volume will be used
+# which means that data will not be persisted if things crash, or restart
+persistence:
+  enabled: false
+  claimName: ""

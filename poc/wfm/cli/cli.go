@@ -13,7 +13,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/kr/pretty"
 	nonStdWfmNbi "github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
 	stdWfmSbi "github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 )
@@ -41,6 +40,8 @@ type (
 	DeploymentResp       = nonStdWfmNbi.ApplicationDeploymentManifestResp
 	DeploymentListResp   = nonStdWfmNbi.ApplicationDeploymentListResp
 	DeploymentListParams = nonStdWfmNbi.ListApplicationDeploymentsParams
+
+	DeviceListResp = nonStdWfmNbi.DeviceListResp
 )
 
 // WFMCli provides a client interface for the Margo Northbound API.
@@ -117,7 +118,7 @@ func NewWFMCli(host string, port uint16, nbiBasePath, sbiBasePath *string, opts 
 
 // createClient creates a new API client with proper error handling
 func (cli *WFMCli) createNonStdNbiClient() (*nonStdWfmNbi.Client, error) {
-	fmt.Println("nbi base url", cli.nbiBaseURL)
+	// fmt.Println("nbi base url", cli.nbiBaseURL)
 	client, err := nonStdWfmNbi.NewClient(cli.nbiBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
@@ -135,10 +136,10 @@ func (cli *WFMCli) handleErrorResponse(errBody []byte, statusCode int, operation
 	// Read response body safely
 	body, err := io.ReadAll(bytes.NewReader(errBody))
 	if err != nil {
-		cli.logger.Printf("%s request failed with error %d (could not read response body, reason: %s)", operation, statusCode, err.Error())
+		// cli.logger.Printf("%s request failed with error %d (could not read response body, reason: %s)", operation, statusCode, err.Error())
 		return fmt.Errorf("%s failed: error (status %d) (could not read response body, reason: %s)", operation, statusCode, err.Error())
 	}
-	cli.logger.Printf("%s request failed with error %d: %s", operation, statusCode, string(body))
+	// cli.logger.Printf("%s request failed with error %d: %s", operation, statusCode, string(body))
 	return fmt.Errorf("%s failed: error (status %d): %s", operation, statusCode, string(body))
 }
 
@@ -197,7 +198,7 @@ func (cli *WFMCli) OnboardAppPkg(params AppPkgOnboardingReq) (*AppPkgOnboardingR
 	// Handle response based on status code
 	switch pkgResp.StatusCode() {
 	case 200, 202:
-		cli.logger.Printf("Application onboard request accepted for package: %s", params.Metadata.Name)
+		// cli.logger.Printf("Application onboard request accepted for package: %s", params.Metadata.Name)
 		if pkgResp.JSON202 != nil {
 			return pkgResp.JSON202, nil
 		}
@@ -241,7 +242,7 @@ func (cli *WFMCli) GetAppPkg(pkgId string) (*AppPkgSummary, error) {
 
 	switch pkgResp.StatusCode() {
 	case 200:
-		cli.logger.Printf("Successfully retrieved package: %s", pkgId)
+		// cli.logger.Printf("Successfully retrieved package: %s", pkgId)
 		return pkgResp.JSON200, nil
 	default:
 		return nil, cli.handleErrorResponse(pkgResp.Body, pkgResp.StatusCode(), "get app package")
@@ -278,11 +279,11 @@ func (cli *WFMCli) ListAppPkgs(params ListAppPkgsParams) (*ListAppPkgsResp, erro
 
 	switch pkgResp.StatusCode() {
 	case 200:
-		packageCount := 0
-		if pkgResp.JSON200 != nil {
-			packageCount = len(pkgResp.JSON200.Items)
-		}
-		cli.logger.Printf("Successfully listed %d packages", packageCount)
+		// packageCount := 0
+		// if pkgResp.JSON200 != nil {
+		// 	packageCount = len(pkgResp.JSON200.Items)
+		// }
+		// cli.logger.Printf("Successfully listed %d packages", packageCount)
 		return pkgResp.JSON200, nil
 	default:
 		return nil, cli.handleErrorResponse(pkgResp.Body, pkgResp.StatusCode(), "list app packages")
@@ -322,7 +323,7 @@ func (cli *WFMCli) DeleteAppPkg(pkgId string) error {
 
 	switch pkgResp.StatusCode() {
 	case 200, 202:
-		cli.logger.Printf("Successfully deleted package: %s", pkgId)
+		// cli.logger.Printf("Successfully deleted package: %s", pkgId)
 		return nil
 	default:
 		return cli.handleErrorResponse(pkgResp.Body, pkgResp.StatusCode(), "delete app package")
@@ -356,7 +357,7 @@ func (cli *WFMCli) CreateDeployment(params DeploymentReq) (*DeploymentResp, erro
 	// Handle response based on status code
 	switch pkgResp.StatusCode() {
 	case 200, 202:
-		cli.logger.Printf("Application deployment request accepted for package: %s", params.Spec.AppPackageRef.Id)
+		// cli.logger.Printf("Application deployment request accepted for package: %s", params.Spec.AppPackageRef.Id)
 		if pkgResp.JSON202 != nil {
 			return pkgResp.JSON202, nil
 		}
@@ -393,7 +394,7 @@ func (cli *WFMCli) GetDeployment(deploymentId string) (*DeploymentResp, error) {
 
 	switch deploymentResp.StatusCode() {
 	case 200:
-		cli.logger.Printf("Successfully retrieved package: %s", deploymentId)
+		// cli.logger.Printf("Successfully retrieved package: %s", deploymentId)
 		return deploymentResp.JSON200, nil
 	default:
 		return nil, cli.handleErrorResponse(deploymentResp.Body, deploymentResp.StatusCode(), "get app deployment")
@@ -423,11 +424,11 @@ func (cli *WFMCli) ListDeployments(params DeploymentListParams) (*DeploymentList
 
 	switch deploymentListResp.StatusCode() {
 	case 200:
-		packageCount := 0
-		if deploymentListResp.JSON200 != nil {
-			packageCount = len(deploymentListResp.JSON200.Items)
-		}
-		cli.logger.Printf("Successfully listed %d deployments", packageCount)
+		// packageCount := 0
+		// if deploymentListResp.JSON200 != nil {
+		// 	packageCount = len(deploymentListResp.JSON200.Items)
+		// }
+		// cli.logger.Printf("Successfully listed %d deployments", packageCount)
 		return deploymentListResp.JSON200, nil
 	default:
 		return nil, cli.handleErrorResponse(deploymentListResp.Body, deploymentListResp.StatusCode(), "list app deployments")
@@ -460,10 +461,43 @@ func (cli *WFMCli) DeleteDeployment(deploymentId string) error {
 
 	switch deploymentResp.StatusCode() {
 	case 200, 202:
-		cli.logger.Printf("Successfully deleted deployment: %s", deploymentId)
+		// cli.logger.Printf("Successfully deleted deployment: %s", deploymentId)
 		return nil
 	default:
 		return cli.handleErrorResponse(deploymentResp.Body, deploymentResp.StatusCode(), "delete app deployment")
+	}
+}
+
+func (cli *WFMCli) ListDevices() (*DeviceListResp, error) {
+	client, err := cli.createNonStdNbiClient()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := cli.createContext()
+	defer cancel()
+
+	resp, err := client.ListDevices(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list devices request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	deviceListResp, err := nonStdWfmNbi.ParseListDevicesResponse(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse list device response: %w", err)
+	}
+
+	switch deviceListResp.StatusCode() {
+	case 200:
+		// deviceCount := 0
+		// if deviceListResp.JSON200 != nil {
+		// 	deviceCount = len(deviceListResp.JSON200.Items)
+		// }
+		// cli.logger.Printf("Successfully listed %d devices", deviceCount)
+		return deviceListResp.JSON200, nil
+	default:
+		return nil, cli.handleErrorResponse(deviceListResp.Body, deviceListResp.StatusCode(), "list devices")
 	}
 }
 
@@ -514,7 +548,7 @@ func (cli *WFMCli) PollAppState(deviceId string, params SyncAppStateReq) (*SyncA
 	// Handle response based on status code
 	switch desiredStateResp.StatusCode() {
 	case 200, 202:
-		cli.logger.Printf("Received desired state api response: %s", pretty.Sprint(desiredStateResp))
+		// cli.logger.Printf("Received desired state api response: %s", pretty.Sprint(desiredStateResp))
 		if desiredStateResp.JSON200 != nil {
 			return desiredStateResp.JSON200, nil
 		}

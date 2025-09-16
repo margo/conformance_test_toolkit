@@ -1,0 +1,5 @@
+apiVersion: v2
+name: custom-otel-helm
+description: A Helm chart for deploying go-otel-service
+version: 0.1.0
+appVersion: "1.0"

@@ -1,0 +1,10 @@
+**/.git
+**/tests
+**/README.md
+**/*.sh
+**/*.md
+**/pipeline
+**/.vscode
+**/.devcontainer
+**/helmchart
+**/docker-compose

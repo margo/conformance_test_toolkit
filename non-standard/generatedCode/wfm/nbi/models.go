@@ -96,6 +96,13 @@ const (
 	DeploymentExecutionProfileTypeHelmV3  DeploymentExecutionProfileType = "helm.v3"
 )
 
+// Defines values for DeviceOnboardStatus.
+const (
+	FAILED     DeviceOnboardStatus = "FAILED"
+	INPROGRESS DeviceOnboardStatus = "IN-PROGRESS"
+	ONBOARDED  DeviceOnboardStatus = "ONBOARDED"
+)
+
 // APIResponse defines model for APIResponse.
 type APIResponse struct {
 	// RequestId Request identifier
@@ -584,6 +591,43 @@ type DeploymentParameterValue struct {
 // DeploymentParameters Application Parameters
 type DeploymentParameters map[string]DeploymentParameterValue
 
+// DeviceListResp List of Devices
+type DeviceListResp struct {
+	// ApiVersion API version
+	ApiVersion string               `json:"apiVersion"`
+	Items      []DeviceManifestResp `json:"items"`
+	Kind       string               `json:"kind"`
+	Metadata   *PaginationMetadata  `json:"metadata,omitempty"`
+}
+
+// DeviceManifestResp Device manifest
+type DeviceManifestResp struct {
+	// ApiVersion API version
+	ApiVersion string `json:"apiVersion"`
+
+	// Kind Resource kind
+	Kind     string      `json:"kind"`
+	Metadata Metadata    `json:"metadata"`
+	Spec     DeviceSpec  `json:"spec"`
+	State    DeviceState `json:"state"`
+}
+
+// DeviceOnboardStatus defines model for DeviceOnboardStatus.
+type DeviceOnboardStatus string
+
+// DeviceSpec defines model for DeviceSpec.
+type DeviceSpec struct {
+	Capabilities interface{} `json:"capabilities"`
+
+	// Signature Unique signature of the device
+	Signature string `json:"signature"`
+}
+
+// DeviceState defines model for DeviceState.
+type DeviceState struct {
+	Onboard DeviceOnboardStatus `json:"onboard"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	// Details Additional details about the error
@@ -754,6 +798,15 @@ type ListAppPackagesParams struct {
 type DeleteAppPackageParams struct {
 	// Force Force deletion even if in use
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+}
+
+// ListDevicesParams defines parameters for ListDevices.
+type ListDevicesParams struct {
+	// Limit Maximum number of items to return
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Continue Token for pagination
+	Continue *string `form:"continue,omitempty" json:"continue,omitempty"`
 }
 
 // CreateApplicationDeploymentJSONRequestBody defines body for CreateApplicationDeployment for application/json ContentType.

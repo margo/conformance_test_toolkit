@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -18,7 +20,7 @@ import (
 
 type Agent struct {
 	log            *zap.SugaredLogger
-	auth           *DeviceAuth
+	auth           *DeviceSettings
 	config         types.Config
 	database       database.DatabaseIfc
 	syncer         StateSyncerIfc
@@ -38,7 +40,7 @@ func NewAgent(configPath string) (*Agent, error) {
 	}
 
 	// Create database
-	db := database.NewDatabase("")
+	db := database.NewDatabase("data/")
 
 	// Create API client
 	apiClient, err := sbi.NewClient(cfg.Wfm.SbiURL)
@@ -46,8 +48,9 @@ func NewAgent(configPath string) (*Agent, error) {
 		return nil, err
 	}
 
+	opts := []Option{}
 	var helmClient *workloads.HelmClient
-	var composeClient *workloads.DockerComposeClient
+	var composeClient *workloads.DockerComposeCliClient
 	for _, runtime := range cfg.Runtimes {
 		if runtime.Kubernetes != nil {
 			// Create Helm client
@@ -55,34 +58,72 @@ func NewAgent(configPath string) (*Agent, error) {
 			if err != nil {
 				return nil, err
 			}
+			opts = append(opts, WithEnableHelmDeployment())
 		}
 
 		if runtime.Docker != nil {
 			// Create docker compose client
-			composeClient, err = workloads.NewDockerComposeClient(workloads.DockerConnectivityParams{
+			composeClient, err = workloads.NewDockerComposeCliClient(workloads.DockerConnectivityParams{
 				ViaSocket: &workloads.DockerConnectionViaSocket{
 					SocketPath: runtime.Docker.Url,
 				},
-			})
+			}, "data/composeFiles")
 			if err != nil {
 				return nil, err
 			}
+			opts = append(opts, WithEnableComposeDeployment())
 		}
 	}
 
+	if helmClient == nil && composeClient == nil {
+		return nil, fmt.Errorf("neither kubernetes nor docker runtime objects were able to be attached, please check info if you have misplaced there settings")
+	}
+
+	opts = append(opts, WithDeviceSignature(findDeviceSignature(*cfg, log)))
+
+	var deviceSettings *DeviceSettings
+	deviceSettings, _ = NewDeviceSettings(apiClient, db, log, opts...)
+	isOnboarded, err := deviceSettings.IsOnboarded()
+	if err != nil {
+		log.Errorw("failed to check onboarding status", "error", err)
+		return nil, err
+	}
+
+	if !isOnboarded {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		deviceId, err := deviceSettings.OnboardWithRetries(ctx, 10)
+		defer cancel()
+		if err != nil {
+			log.Errorw("device onboarding failed", "error", err)
+			return nil, fmt.Errorf("failed to onboard the device, %s", err.Error())
+		}
+		log.Infow("device onboarded", "deviceId", deviceId)
+	}
+
+	log.Infow("device details",
+		"deviceId", deviceSettings.deviceID,
+		"deviceSignature", string(deviceSettings.deviceSignature),
+		"canDeployHelm", deviceSettings.canDeployHelm,
+		"canDeployCompose", deviceSettings.canDeployCompose,
+		"isAuthEnabled", deviceSettings.authEnabled,
+		"hasClientId", len(deviceSettings.oauthClientId) != 0,
+		"hasClientSecret", len(deviceSettings.oAuthClientSecret) != 0,
+		"hasTokenUrl", len(deviceSettings.oauthTokenUrl) != 0,
+		"tokenBasedAuthDetails", (len(deviceSettings.oauthClientId) != 0) && (len(deviceSettings.oAuthClientSecret) != 0) && (len(deviceSettings.oauthTokenUrl) != 0),
+	)
+
 	// Create components
-	deviceAuth := NewDeviceAuth(cfg.DeviceID, apiClient, log)
-	syncer := NewStateSyncer(db, apiClient, cfg.DeviceID, cfg.StateSeeking.Interval, log)
 	deployer := NewDeploymentManager(db, helmClient, composeClient, log)
 	monitor := NewDeploymentMonitor(db, helmClient, composeClient, log)
-	statusReporter := NewStatusReporter(db, apiClient, cfg.DeviceID, log)
+	syncer := NewStateSyncer(db, apiClient, deviceSettings.deviceID, cfg.StateSeeking.Interval, log)
+	statusReporter := NewStatusReporter(db, apiClient, deviceSettings.deviceID, log)
 
 	return &Agent{
 		database:       db,
 		syncer:         syncer,
 		deployer:       deployer,
 		monitor:        monitor,
-		auth:           deviceAuth,
+		auth:           deviceSettings,
 		statusReporter: statusReporter,
 		log:            log,
 		config:         *cfg,
@@ -92,17 +133,23 @@ func NewAgent(configPath string) (*Agent, error) {
 func (a *Agent) Start() error {
 	a.log.Info("Starting Agent")
 
+	var deviceId string
+	var err error
+
 	// 1. Onboard device
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	if err := a.auth.Onboard(ctx); err != nil {
-		cancel()
-		return err
-	}
-	cancel()
+	deviceSettings, _ := a.database.GetDeviceSettings()
+	deviceId = deviceSettings.DeviceID
 
 	// 2. Report capabilities
-	capabilities, err := types.LoadCapabilities("config/capabilities.json")
-	if err == nil {
+	capabilities, err := types.LoadCapabilities(a.config.Capabilities.ReadFromFile)
+	if err != nil {
+		a.log.Errorw(
+			"failed to load the capabilities file, please resolve the issue as the capabilities will not be reported until next restart",
+			"err",
+			err.Error(),
+		)
+	} else {
+		capabilities.Properties.Id = deviceId
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		a.auth.ReportCapabilities(ctx, *capabilities)
 		cancel()
@@ -116,7 +163,7 @@ func (a *Agent) Start() error {
 
 	a.log.Infow("Agent started successfully",
 		"capabilitiesFile", a.config.Capabilities.ReadFromFile,
-		"deviceId", a.config.DeviceID,
+		"hasDeviceSignature", a.config.DeviceSignature != "",
 		"stateSeekingInterval", a.config.StateSeeking.Interval,
 		"sbiUrl", a.config.Wfm.SbiURL,
 	)
@@ -130,13 +177,39 @@ func (a *Agent) Stop() error {
 	a.deployer.Stop()
 	a.monitor.Stop()
 	a.statusReporter.Stop()
+	a.database.TriggerDataPersist()
 
 	a.log.Info("Agent stopped")
 	return nil
 }
 
+func findDeviceSignature(cfg types.Config, logger *zap.SugaredLogger) []byte {
+	sign := cfg.DeviceSignature
+	logger.Infow("find device signature", "signature", sign)
+	return []byte(sign)
+}
+
 func main() {
-	agent, err := NewAgent("poc/device/agent/config/config.yaml")
+	// Define command-line flags
+	configPath := flag.String(
+		"config",
+		"poc/device/agent/config/config.yaml", // default value
+		"Path to the YAML configuration file for the Margo device agent",
+	)
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nMargo Device Agent\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+
+	if configPath == nil {
+		log.Fatal("--config is mandatory command line argument")
+	}
+
+	agent, err := NewAgent(*configPath)
 	if err != nil {
 		log.Fatal(err)
 	}

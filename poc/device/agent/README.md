@@ -93,19 +93,36 @@ chmod +x build.sh
 
 This creates an optimized, compressed binary with UPX compression.
 
-### Docker Deployment
+### Docker Deployment to support Kubernetes runtime (for HELM apps)
 
 ```bash
 # Build Docker image
-docker build -t device-agent .
+docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
+
+cd poc/device/agent
 
 # Run container
 docker run -d \
-  -v $(pwd)/config:/app/config \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /root/.kube/config:/app/config/kubeconfig \
+  -v $(pwd)/config:/config \
+  -v /root/.kube/config:/root/.kube/config \
+  -v ./data:/data \
   --name device-agent \
-  device-agent
+  margo.org/device-agent:dev-sprint-6
+```
+
+### Docker Deployment to manager Docker runtime (for compose apps)
+
+```bash
+# Build Docker image
+docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
+
+# Run container
+docker run -d \
+  -v $(pwd)/config:/config \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v ./data:/data \
+  --name device-agent \
+  margo.org/device-agent:dev-sprint-6
 ```
 
 ## Configuration
