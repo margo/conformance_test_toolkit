@@ -886,7 +886,7 @@ uninstall_prerequisites() {
   cleanup_symphony_builds
   
   # Step 3: Remove Git repositories and pushed files
-  cleanup_git_repositories
+  cleanup_app_supplier_git_repositories
   
   # Step 4: Remove Gogs repositories
   remove_gogs_repositories
@@ -960,8 +960,8 @@ cleanup_symphony_builds() {
   fi
 }
 
-cleanup_git_repositories() {
-  echo "3. Cleaning up local Git repositories..."
+cleanup_app_supplier_git_repositories() {
+  echo "3. Cleaning up app supplier's Git repositories..."
   
   # Clean up pushed file directories
   local dirs=(
@@ -1465,26 +1465,29 @@ stop_symphony() {
 # Update the show_menu function to include uninstall option
 show_menu() {
   echo "Choose an option:"
-  echo "1) Prepare-Environment"
-  echo "2) Symphony-Start"
-  echo "3) Symphony-Stop"
-  echo "4) Obeservabiliy Stack-Install"
-  echo "5) Obeservabiliy Stack-Uninstall"
-  echo "6) Teardown-Environment"
-  echo "7) Add-Container-Registry-Mirror-To-K3s"
+  echo "1) PreRequisites: Setup"
+  echo "2) PreRequisites: Cleanup"
+  echo "3) Symphony: Start"
+  echo "4) Symphony: Stop"
+  echo "5) ObeservabiliyStack: Start"
+  echo "6) ObeservabiliyStack: Stop"
+  echo "7) Registry-K3s: Add-Pull-Secrets"
+  # echo "8) Advanced: Setup"
+  # echo "9) Advanced: Cleanup"
   read -p "Enter choice [1-7]: " choice
   case $choice in
     1) install_prerequisites ;;
-    2) start_symphony ;;
-    3) stop_symphony ;;
-    4) observability_stack_install ;;
-    5) observability_stack_uninstall ;;
-    6) uninstall_prerequisites ;;
+    2) uninstall_prerequisites ;;
+    3) start_symphony ;;
+    4) stop_symphony ;;
+    5) observability_stack_install ;;
+    6) observability_stack_uninstall ;;
     7) add_container_registry_mirror_to_k3s;;
+    # 8) show_advance_setup_menu;;
+    # 9) show_advance_teardown_menu;;
     *) echo "⚠️ Invalid choice"; exit 1 ;;
   esac
 }
-
 
 # ----------------------------
 # Main Script Execution
@@ -1501,7 +1504,101 @@ else
     Jaeger_Prometheus_Grafana_Loki-Uninstallation) observability_stack_uninstall ;;
     Teardown-Environment) uninstall_prerequisites ;;
     Add-Container-Registry-Mirror-To-K3s) add_container_registry_mirror_to_k3s;;
-    *) echo "Usage: $0 {prepare-environment|symphony-start|symphony-stop|uninstall-prerequisites|observability_stack_install|observability_stack_uninstall|add_container_registry_mirror_to_k3s}"; exit 1 ;;
+    # Advanced-Options) advanced_options;;
+    *) echo "Usage: $0 {prepare-environment|symphony-start|symphony-stop|uninstall-prerequisites|observability_stack_install|observability_stack_uninstall|add_container_registry_mirror_to_k3s|advanced-options}"; exit 1 ;;
   esac
 fi
 
+
+
+show_advance_setup_menu() {
+  echo "Choose an option:"
+  echo "1) Install Basic Utilities"
+  echo "2) Install Golang"
+  echo "3) Install K3s"
+  echo "4) Bring up Gogs"
+  echo "5) Bring up Harbor"
+  echo "6) Bring up Keycloak"
+  echo "7) Clone Symphony"
+  echo "8) Build Symphony"
+  echo "9) Clone Dev-Repo"
+  echo "10) Build Custom OTEL Images"
+  echo "11) Install Observability"
+  echo "12) Push Nginx Package"
+  echo "13) Push Custom OTEL Package"
+  echo "14) Push Nextcloud Package"
+  echo "15) Go Back"
+  read -p "Enter choice [1-15]: " choice
+  case $choice in
+    1) install_basic_utilities ;;
+    2) install_go ;;
+    3) setup_k3s ;;
+    4) 
+      setup_gogs_directories
+      start_gogs
+      wait_for_gogs
+      create_gogs_admin
+      create_gogs_token
+      create_gogs_repositories ;;
+    5) setup_harbor ;;
+    6) 
+      setup_keycloak
+      update_keycloak_config ;;
+    7) clone_symphony_repo ;;
+    8) 
+      build_rust
+      build_symphony_api_server
+      build_maestro_cli
+      verify_symphony_api ;;
+    9) clone_dev_repo ;;
+    10) build_custom_otel_container_images ;;
+    11) observability_stack_install ;;
+    12) push_nginx_files ;;
+    13) push_custom_otel_files ;;
+    14) push_nextcloud_files ;;
+    15) show_menu ;;
+    *) echo "⚠️ Invalid choice"; show_advance_setup_menu ;;
+  esac
+}
+
+show_advance_tearup_menu() {
+  echo "Choose a teardown option:"
+  echo "1) Stop Symphony API Server"
+  echo "2) Remove Symphony Builds/Binaries" 
+  echo "3) Reset App Supplier Repositories Changes"
+  echo "4) Remove Gogs Repositories"
+  echo "5) Cleanup Gogs Admin & Token"
+  echo "6) Stop Gogs Service"
+  echo "7) Cleanup Gogs Data Directories"
+  echo "8) Revert Keycloak Config"
+  echo "9) Stop Keycloak Service"
+  echo "10) Stop Harbor Service"
+  echo "11) Remove Cloned Repositories"
+  echo "12) Uninstall Rust"
+  echo "13) Uninstall Docker Compose"
+  echo "14) Uninstall Go"
+  echo "15) Cleanup Basic Utilities"
+  echo "16) Uninstall Observability Stack"
+  echo "17) Go Back"
+  read -p "Enter choice [1-17]: " choice
+  case $choice in
+    1) stop_symphony_api_process ;;
+    2) cleanup_symphony_builds ;;
+    3) cleanup_app_supplier_git_repositories ;;
+    4) remove_gogs_repositories ;;
+    5) cleanup_gogs_admin ;;
+    6) stop_gogs_service ;;
+    7) cleanup_gogs_directories ;;
+    8) revert_keycloak_config ;;
+    9) stop_keycloak_service ;;
+    10) stop_harbor_service ;;
+    11) remove_cloned_repositories ;;
+    12) uninstall_rust ;;
+    13) uninstall_docker_compose ;;
+    14) uninstall_go ;;
+    15) cleanup_basic_utilities ;;
+    16) observability_stack_uninstall ;;
+    17) show_menu ;;
+    *) echo "⚠️ Invalid choice"; show_advance_tearup_menu ;;
+  esac
+}
