@@ -1,26 +1,227 @@
-# How to setup wfm?
+# WFM (Workflow Management) Setup Guide
+
+This directory contains scripts to set up a complete WFM environment with Symphony API, device agents, and observability stack.
+
+## 📋 Prerequisites
+
+- Ubuntu/Debian-based Linux system
+- Internet connectivity
+- GitHub account with access to the margo repositories
+
+## 🏗️ Architecture Overview
+
+The setup consists of three main components:
+
+1. **WFM Node** (`wfm.sh`) - Main workfleet management server (symphony)
+2. **WFM CLI** (`wfm-cli.sh`) - Interactive command-line interface for WFM
+3. **Device Agent Node** (`device-agent.sh`) - Device management agent
+
+## 🚀 Quick Start
+
+### Step 1: Environment Variables Setup
+
+Before running any scripts, export the required environment variables:
+
+```bash
+# Required for all setups
 export GITHUB_USER=<your-github-username>
-export GITHUB_TOKEN=<your-github-token>
-export EXPOSED_HARBOR_IP=<machine-ip>
-export EXPOSED_GOGS_IP=<machine-ip>
-export EXPOSED_KEYCLOAK_IP=<machine-ip>
-export EXPOSED_SYMPHONY_IP=<machine-ip>
-export DEVICE_NODE_IP=<device-ip>
+export GITHUB_TOKEN=<your-github-personal-access-token>
+
+# WFM Node specific (replace with actual IP addresses)
+export EXPOSED_HARBOR_IP=<wfm-machine-ip>
+export EXPOSED_GOGS_IP=<wfm-machine-ip>
+export EXPOSED_KEYCLOAK_IP=<wfm-machine-ip>
+export EXPOSED_SYMPHONY_IP=<wfm-machine-ip>
+export DEVICE_NODE_IP=<device-machine-ip>
+
+# Branch configuration (change as per your need)
 export SYMPHONY_BRANCH=margo-dev-sprint-6
 export DEV_REPO_BRANCH=dev-sprint-6
 
-sudo -E bash wfm.sh
-
-# How to setup device agent?
-export GITHUB_USER=<your-github-username>
-export GITHUB_TOKEN=<your-github-token>
-export DEV_REPO_BRANCH=dev-sprint-6
-export WFM_IP=127.0.0.1
+# Device Agent specific
+export WFM_IP=<wfm-machine-ip>
 export WFM_PORT=8082
+```
+
+### Step 2: WFM Node Setup
+
+Run the WFM setup script on your main server:
+
+```bash
+sudo -E bash wfm.sh
+```
+
+**Interactive Menu Options:**
+1. **PreRequisites: Setup** - Install all dependencies and services
+2. **PreRequisites: Cleanup** - Remove all installed components
+3. **Symphony: Start** - Start the Symphony API server
+4. **Symphony: Stop** - Stop the Symphony API server
+5. **ObservabilityStack: Start** - Install Jaeger, Prometheus, Grafana, Loki
+6. **ObservabilityStack: Stop** - Uninstall observability components
+7. **Registry-K3s: Add-Pull-Secrets** - Configure container registry access
+
+### Step 3: Device Agent Setup
+
+Run the device agent script on your device node:
+
+```bash
 sudo -E bash device-agent.sh
+```
 
+**Interactive Menu Options:**
+1. **device-agent-start** - Install and start the device agent
+2. **device-agent-stop** - Stop the device agent
+3. **device-agent-status** - Check agent status
+4. **otel-collector-promtail-installation** - Install observability collectors
+5. **otel-collector-promtail-uninstallation** - Remove observability collectors
+6. **add-container-registry-mirror-to-k3s** - Configure registry mirrors
+7. **cleanup-residual** - Clean up all residual files
 
-# FAQ:
-Q1. Seeing the following errors while installing/uninstalling
-`Waiting for cache lock: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 7096 (unattended-upgr)`
-Ans: There is some other process on your OS that is using the package manager, and most likely it could be the upgrade happening for your OS. Wait for some time, and then retry it. Else please check the OS docs to debug the issue.
+### Step 4: Using WFM CLI
+
+Interact with the WFM system using the CLI:
+
+```bash
+bash wfm-cli.sh
+```
+
+**CLI Features:**
+- 📦 List and manage app packages
+- 🖥️ List and manage devices
+- 🚀 Deploy and manage instances
+- 🗑️ Delete packages and deployments
+
+## 🔧 Detailed Setup Instructions
+
+### WFM Node Components
+
+The WFM setup installs and configures:
+
+- **Harbor** - Container registry (Port: 8081)
+- **Keycloak** - Identity management (Port: 8083)
+- **Gogs** - Git repository server (Port: 8084)
+- **Symphony API** - Main WFM server (Port: 8082)
+- **K3s** - Lightweight Kubernetes
+- **Observability Stack** - Jaeger, Prometheus, Grafana, Loki
+
+### Device Agent Components
+
+The device agent setup includes:
+
+- **K3s** - Kubernetes cluster
+- **Device Agent** - Connects to WFM server
+- **OTEL Collector** - Metrics and traces collection
+- **Promtail** - Log forwarding to Loki
+
+## 🌐 Service Access Points
+
+After successful setup, access services at:
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Symphony API | `http://<WFM_IP>:8082` | - |
+| Harbor Registry | `http://<WFM_IP>:8081` | admin/Harbor12345 |
+| Keycloak | `http://<WFM_IP>:8083` | - |
+| Gogs | `http://<WFM_IP>:8084` | gogsadmin/admin123 |
+| Grafana | `http://<WFM_IP>:32000` | admin/admin |
+| Prometheus | `http://<WFM_IP>:30900` | - |
+| Jaeger | `http://<WFM_IP>:32500` | - |
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**Q1: Package manager lock errors**
+```
+Waiting for cache lock: Could not get lock /var/lib/dpkg/lock-frontend
+```
+**Solution:** Wait for system updates to complete, or manually stop unattended upgrades:
+```bash
+sudo systemctl stop unattended-upgrades
+sudo killall unattended-upgrade-shutdown
+```
+
+**Q2: Docker daemon not starting**
+**Solution:** Check Docker service status and restart:
+```bash
+sudo systemctl status docker
+sudo systemctl restart docker
+```
+
+**Q3: K3s cluster not ready**
+**Solution:** Verify K3s installation and restart if needed:
+```bash
+sudo systemctl status k3s
+sudo systemctl restart k3s
+```
+
+**Q4: Symphony API not accessible**
+**Solution:** Check if the API is running and ports are open:
+```bash
+ps aux | grep symphony-api
+sudo netstat -tlnp | grep 8082
+```
+
+### Log Locations
+
+- Symphony API: `$HOME/symphony-api.log`
+- Device Agent: `$HOME/device-agent.log`
+- K3s: `sudo journalctl -u k3s`
+- Docker: `sudo journalctl -u docker`
+
+## 🧹 Cleanup
+
+To completely remove the installation:
+
+**WFM Node:**
+```bash
+sudo -E bash wfm.sh
+# Select option 2: PreRequisites: Cleanup
+```
+
+**Device Agent:**
+```bash
+sudo -E bash device-agent.sh
+# Select option 2: device-agent-stop
+# Select option 7: cleanup-residual
+```
+
+## 📚 Additional Information
+
+### Environment Variables Reference
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `GITHUB_USER` | GitHub username | - | ✅ |
+| `GITHUB_TOKEN` | GitHub personal access token | - | ✅ |
+| `EXPOSED_HARBOR_IP` | Harbor registry IP | 127.0.0.1 | ⚠️ |
+| `EXPOSED_SYMPHONY_IP` | Symphony API IP | 127.0.0.1 | ⚠️ |
+| `WFM_IP` | WFM server IP for device agent | 127.0.0.1 | ⚠️ |
+| `DEVICE_NODE_IP` | Device node IP for metrics | 127.0.0.1 | ⚠️ |
+
+⚠️ = Required for setup when device and wfm are on different machines
+
+### Port Requirements
+
+Ensure the following ports are available:
+
+**WFM Node:**
+- 8081 (Harbor)
+- 8082 (Symphony API)
+- 8083 (Keycloak)
+- 8084 (Gogs)
+- 30900 (Prometheus)
+- 32000 (Grafana)
+- 32500 (Jaeger)
+
+**Device Node:**
+- 6443 (K3s API)
+- 30999 (OTEL Collector metrics)
+
+## 🤝 Support
+
+For issues and questions:
+1. Check the troubleshooting section above
+2. Review log files for error details
+3. Ensure all environment variables are properly set
+4. Verify network connectivity between nodes
