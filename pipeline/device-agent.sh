@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-
+export PATH="$PATH:/usr/local/go/bin"
 # ----------------------------
 # Environment & Validation Functions
 # ----------------------------
@@ -19,8 +19,18 @@ NAMESPACE_OBSERVABILITY="observability"
 PROMTAIL_RELEASE="promtail"
 OTEL_RELEASE="otel-collector"
 
-validate_required_vars() {
+validate_pre_required_vars() {
   local required_vars=("GITHUB_USER" "GITHUB_TOKEN" "DEV_REPO_BRANCH" "WFM_IP" "WFM_PORT")
+  for var in "${required_vars[@]}"; do
+    if [ -z "${!var}" ]; then
+      echo "Error: Required environment variable $var is not set"
+      exit 1
+    fi
+  done
+}
+
+validate_start_required_vars() {
+  local required_vars=("WFM_IP" "WFM_PORT")
   for var in "${required_vars[@]}"; do
     if [ -z "${!var}" ]; then
       echo "Error: Required environment variable $var is not set"
@@ -311,30 +321,34 @@ EOF
 # ----------------------------
 # Main Orchestration Functions
 # ----------------------------
-start_device_agent() {
-  echo "Installing k3s and starting device-agent ..."
-  
-  validate_required_vars
-  
+install_prerequisites() {
+  echo "Installing prerequisites: k3s and others ..."
+  validate_pre_required_vars
   install_go
   clone_dev_repo
   setup_k3s
+}
+
+start_device_agent() {
+  echo "Building and starting device-agent ..."
+  validate_start_required_vars
   update_agent_config
   
   build_device_agent
   start_device_agent_service
   verify_device_agent_running
   
-  echo 'setup completed and device-agent started'
+  echo 'device-agent started'
 }
 
 stop_device_agent() {
   echo "Stopping device-agent on VM2 ($VM2_HOST)..."
-  
   stop_device_agent_service
-  cleanup_device_agent
-  
   echo "Device Agent stopped"
+}
+
+uninstall_prerequisites() {
+  cleanup_device_agent
 }
 
 show_status() {
@@ -559,22 +573,26 @@ cleanup_residual() {
 
 show_menu() {
   echo "Choose an option:"
-  echo "1) device-agent-start"
-  echo "2) device-agent-stop"
-  echo "3) device-agent-status"
-  echo "4) otel-collector-promtail-installation"
-  echo "5) otel-collector-promtail-uninstallation"
-  echo "6) add-container-registry-mirror-to-k3s"
-  echo "7) cleanup-residual"
-  read -rp "Enter choice [1-7]: " choice
+  echo "1) install-prerequisites"
+  echo "2) uninstall-prerequisites"
+  echo "3) device-agent-start"
+  echo "4) device-agent-stop"
+  echo "5) device-agent-status"
+  echo "6) otel-collector-promtail-installation"
+  echo "7) otel-collector-promtail-uninstallation"
+  echo "8) add-container-registry-mirror-to-k3s"
+  echo "9) cleanup-residual"
+  read -rp "Enter choice [1-9]: " choice
   case $choice in
-    1) start_device_agent ;;
-    2) stop_device_agent ;;
-    3) show_status ;;
-    4) install_otel_collector_promtail ;;
-    5) uninstall_otel_collector_promtail ;;
-    6) add_container_registry_mirror_to_k3s;;
-    7) cleanup_residual;;
+    1) install_prerequisites;;
+    2) uninstall_prerequisites;;
+    3) start_device_agent ;;
+    4) stop_device_agent ;;
+    5) show_status ;;
+    6) install_otel_collector_promtail ;;
+    7) uninstall_otel_collector_promtail ;;
+    8) add_container_registry_mirror_to_k3s;;
+    9) cleanup_residual;;
     *) echo "Invalid choice" ;;
   esac
 }
@@ -588,11 +606,13 @@ else
   case $1 in
     start) start_device_agent ;;
     stop) stop_device_agent ;;
+    install_prerequisites) install_prerequisites;;
+    uninstall_prerequisites) uninstall_prerequisites;;
     status) show_status ;;
     install_otel_collector_promtail) install_otel_collector_promtail ;;
     uninstall_otel_collector_promtail) uninstall_otel_collector_promtail ;;
     add_container_registry_mirror_to_k3s) add_container_registry_mirror_to_k3s ;;
     cleanup_residual) cleanup_residual ;;
-    *) echo "Usage: $0 {start|stop|status|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s|cleanup_residual}" ;;
+    *) echo "Usage: $0 {start|stop|status|install_prerequisites|uninstall_prerequisites|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s|cleanup_residual}" ;;
   esac
 fi
