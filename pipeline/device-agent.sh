@@ -109,6 +109,7 @@ install_go() {
 # ----------------------------
 clone_dev_repo() {
   echo "Cloning dev-repo on ($VM2_HOST)..."
+  cd $HOME
   sudo rm -rf dev-repo
   git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git"
   cd dev-repo
