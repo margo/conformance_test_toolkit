@@ -169,16 +169,20 @@ install_docker_compose() {
     echo 'Docker already installed.';
   fi;
 
-  if ! command -v docker-compose >/dev/null 2>&1; then
-    echo 'Docker Compose not found. Installing Docker Compose...';
+  # Docker Compose V2 is included with Docker by default now
+  if ! docker compose version >/dev/null 2>&1; then
+    echo 'Docker Compose plugin not available. Installing...';
+    # This should rarely be needed with modern Docker installations
     curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose;
     chmod +x /usr/local/bin/docker-compose;
   else
-    echo 'Docker Compose already installed.';
+    echo 'Docker Compose plugin already available.';
   fi
+  
   # Start and enable Docker daemon
   systemctl start docker
   systemctl enable docker
+  
   # Wait for Docker daemon to be active (max 30s)
   for i in $(seq 1 30); do
     if systemctl is-active --quiet docker; then
@@ -190,6 +194,7 @@ install_docker_compose() {
     fi
   done 
 }
+
 
 install_rust() {
   cd "$HOME"
@@ -290,9 +295,9 @@ start_gogs() {
   echo 'Starting Gogs container...'
   GOGS_BASE_DIR="$HOME/dev-repo/pipeline/gogs/"
   cd "$GOGS_BASE_DIR"
-  sudo docker-compose down
-  sudo docker-compose build --no-cache gogs
-  sudo docker-compose -f docker-compose.yml up -d
+  sudo docker compose down
+  sudo docker compose build --no-cache gogs
+  sudo docker compose -f docker-compose.yml up -d
 }
 
 wait_for_gogs() {
@@ -1019,7 +1024,7 @@ stop_gogs_service() {
   GOGS_BASE_DIR="$HOME/dev-repo/pipeline/gogs"
   if [ -d "$GOGS_BASE_DIR" ]; then
     cd "$GOGS_BASE_DIR"
-    docker-compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Gogs containers"
+    docker compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Gogs containers"
     
     # Remove Gogs images
     # docker images | grep gogs | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Gogs images"
@@ -1077,7 +1082,7 @@ stop_harbor_service() {
   # Stop Harbor container
   if docker ps --format '{{.Names}}' | grep -q harbor; then
     cd "$HOME/dev-repo/pipeline/harbor"
-    docker-compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Harbor containers"
+    docker compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Harbor containers"
     sleep 10
   fi
   
