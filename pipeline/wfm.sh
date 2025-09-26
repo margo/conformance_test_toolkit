@@ -290,9 +290,9 @@ start_gogs() {
   echo 'Starting Gogs container...'
   GOGS_BASE_DIR="$HOME/dev-repo/pipeline/gogs/"
   cd "$GOGS_BASE_DIR"
-  docker-compose down
-  docker-compose build --no-cache gogs
-  docker-compose -f docker-compose.yml up -d
+  sudo docker-compose down
+  sudo docker-compose build --no-cache gogs
+  sudo docker-compose -f docker-compose.yml up -d
 }
 
 wait_for_gogs() {
