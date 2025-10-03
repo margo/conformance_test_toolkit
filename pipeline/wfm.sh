@@ -831,15 +831,59 @@ add_container_registry_mirror_to_k3s() {
     echo "✅ Backed up existing registries.yml"
   fi
   
-  # Add docker registry mirror and credentials
+  # Add docker registry mirror and credentials in /var/lib/rancher/k3s
   cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml
 mirrors:
-  docker.io:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
     endpoint:
       - "$registry_url"
 
 configs:
-  docker.io:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+    tls:
+    insecure_skip_verify: true
+EOF
+
+  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yaml
+mirrors:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    endpoint:
+      - "$registry_url"
+
+configs:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+    tls:
+    insecure_skip_verify: true
+EOF
+
+# Add docker registry mirror and credentials in /etc/rancher/k3s
+cat <<EOF | sudo tee /etc/rancher/k3s/registries.yaml
+mirrors:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    endpoint:
+      - "$registry_url"
+
+configs:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+EOF
+
+cat <<EOF | sudo tee /etc/rancher/k3s/registries.yml
+mirrors:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    endpoint:
+      - "$registry_url"
+
+configs:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
     auth:
       username: "$registry_user"
       password: "$registry_password"

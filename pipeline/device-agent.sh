@@ -9,6 +9,10 @@ export PATH="$PATH:/usr/local/go/bin"
 GITHUB_USER="${GITHUB_USER:-}"  # Set via env or leave empty
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"  # Set via env or leave empty
 
+#--- harbor settings (can be overridden via env)
+EXPOSED_HARBOR_IP="${EXPOSED_HARBOR_IP:-127.0.0.1}"
+EXPOSED_HARBOR_PORT="${EXPOSED_HARBOR_PORT:-8081}"
+
 #--- branch details (can be overridden via env)
 DEV_REPO_BRANCH="${DEV_REPO_BRANCH:-dev-sprint-6}"
 WFM_IP="${WFM_IP:-127.0.0.1}"
@@ -270,15 +274,59 @@ add_container_registry_mirror_to_k3s() {
     echo "✅ Backed up existing registries.yml"
   fi
   
-  # Add docker registry mirror and credentials
+  # Add docker registry mirror and credentials in /var/lib/rancher/k3s
   cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml
 mirrors:
-  docker.io:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
     endpoint:
       - "$registry_url"
 
 configs:
-  docker.io:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+    tls:
+    insecure_skip_verify: true
+EOF
+
+  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yaml
+mirrors:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    endpoint:
+      - "$registry_url"
+
+configs:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+    tls:
+    insecure_skip_verify: true
+EOF
+
+# Add docker registry mirror and credentials in /etc/rancher/k3s
+cat <<EOF | sudo tee /etc/rancher/k3s/registries.yaml
+mirrors:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    endpoint:
+      - "$registry_url"
+
+configs:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    auth:
+      username: "$registry_user"
+      password: "$registry_password"
+EOF
+
+cat <<EOF | sudo tee /etc/rancher/k3s/registries.yml
+mirrors:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+    endpoint:
+      - "$registry_url"
+
+configs:
+  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
     auth:
       username: "$registry_user"
       password: "$registry_password"
