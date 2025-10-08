@@ -201,7 +201,8 @@ setup_k3s() {
 build_device_agent() {
   cd "$HOME/dev-repo/poc/device/agent/"
   echo 'Building device-agent...'
-  go build -o device-agent
+ # go build -o device-agent
+  docker-compose -f docker-compose.yml build
 }
 
 # ----------------------------
@@ -210,8 +211,9 @@ build_device_agent() {
 start_device_agent_service() {
   echo 'Starting device-agent...'
   cd "$HOME/dev-repo"
-  nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
-  echo $! > "$HOME/device-agent.pid"
+  #nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
+  #echo $! > "$HOME/device-agent.pid"
+  docker-compose -f poc/device/agent/docker-compose.yml up -d
 }
 
 verify_device_agent_running() {
@@ -222,19 +224,20 @@ verify_device_agent_running() {
 
 stop_device_agent_service() {
   echo "Stopping device-agent..."
-  
-  if [ -f "$HOME/device-agent.pid" ]; then
-    local pid=$(cat "$HOME/device-agent.pid")
-    if kill "$pid" 2>/dev/null; then
-      echo "device-agent stopped (PID: $pid)"
-    else
-      echo "Failed to stop device-agent with PID: $pid"
-    fi
-    rm -f "$HOME/device-agent.pid"
-  else
-    echo 'No PID file found. Attempting to find and kill device-agent processes...'
-    pkill -f "device-agent" && echo "device-agent processes killed" || echo "No device-agent processes found"
-  fi
+  cd "$HOME/dev-repo"
+  docker-compose -f poc/device/agent/docker-compose.yml down
+  #if [ -f "$HOME/device-agent.pid" ]; then
+  #  local pid=$(cat "$HOME/device-agent.pid")
+  #  if kill "$pid" 2>/dev/null; then
+  #    echo "device-agent stopped (PID: $pid)"
+  #  else
+  #    echo "Failed to stop device-agent with PID: $pid"
+  #  fi
+  #  rm -f "$HOME/device-agent.pid"
+  #else
+  #  echo 'No PID file found. Attempting to find and kill device-agent processes...'
+  #  pkill -f "device-agent" && echo "device-agent processes killed" || echo "No device-agent processes found"
+  #fi
 }
 
 cleanup_device_agent() {
