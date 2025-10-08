@@ -2,7 +2,7 @@
 # hence any unique random string is valid, given no other device possess it, else the wfm will reject with a Conflict HTTP Status Code 
 deviceSignature: "sign-104-this-is-a-test-signature-binded-to-this-device-only"
 wfm: 
-  sbiUrl: http://52.224.241.180:8082/v1alpha2/margo/sbi/v1 #http://172.19.59.148:8082/v1alpha2/margo/sbi/v1
+  sbiUrl: http://10.139.9.90:8082/v1alpha2/margo/sbi/v1
   # the auth info is auto-fetched by the agent when it gets onboarded
   # but if you, for any reason, want to specify the oauth info, then you can pass that info over here 
   auth:
@@ -43,4 +43,4 @@ runtimes:
 # in the file.
 # Path to the capabilities file (required).
 capabilities:
-  readFromFile: /config/capabilities.json
+  readFromFile: /root/dev-repo/poc/device/agent/config/capabilities.json

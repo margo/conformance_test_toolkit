@@ -199,7 +199,7 @@ setup_k3s() {
 # Device Agent Build Functions
 # ----------------------------
 build_device_agent() {
-  cd "$HOME/dev-repo/poc/device/agent/"
+  cd "$HOME/dev-repo"
   echo 'Building device-agent...'
  # go build -o device-agent
   docker-compose -f docker-compose.yml build
@@ -213,8 +213,8 @@ start_device_agent_service() {
   cd "$HOME/dev-repo"
   #nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
   #echo $! > "$HOME/device-agent.pid"
-  docker-compose -f poc/device/agent/docker-compose.yml up -d
-  docker-compose -f poc/device/agent/docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
+  docker-compose -f docker-c
+  docker-compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
 }
 
 verify_device_agent_running() {
