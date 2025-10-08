@@ -213,7 +213,7 @@ start_device_agent_service() {
   cd "$HOME/dev-repo"
   #nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
   #echo $! > "$HOME/device-agent.pid"
-  docker-compose -f docker-c
+  docker-compose -f docker-compose.yml up -d
   docker-compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
 }
 
@@ -226,7 +226,7 @@ verify_device_agent_running() {
 stop_device_agent_service() {
   echo "Stopping device-agent..."
   cd "$HOME/dev-repo"
-  docker-compose -f poc/device/agent/docker-compose.yml down
+  docker-compose -f docker-compose.yml down
   #if [ -f "$HOME/device-agent.pid" ]; then
   #  local pid=$(cat "$HOME/device-agent.pid")
   #  if kill "$pid" 2>/dev/null; then
@@ -244,7 +244,11 @@ stop_device_agent_service() {
 cleanup_device_agent() {
   echo "Cleaning up device-agent files..."
   [ -f "$HOME/device-agent.log" ] && rm -f "$HOME/device-agent.log" && echo "Removed device-agent.log"
-  [ -f "$HOME/dev-repo/poc/device/agent/device-agent" ] && rm -f "$HOME/dev-repo/poc/device/agent/device-agent" && echo "Removed device-agent binary"
+  if [ -d "$HOME/dev-repo/poc/device/agent/data" ]; then
+    rm -rf "$HOME/dev-repo/poc/device/agent/data"
+    echo "Removed old data directory."
+  fi
+  #[ -f "$HOME/dev-repo/poc/device/agent/device-agent" ] && rm -f "$HOME/dev-repo/poc/device/agent/device-agent" && echo "Removed device-agent binary"
 }
 
 add_container_registry_mirror_to_k3s() {
