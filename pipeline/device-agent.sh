@@ -214,6 +214,7 @@ start_device_agent_service() {
   #nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
   #echo $! > "$HOME/device-agent.pid"
   docker-compose -f poc/device/agent/docker-compose.yml up -d
+  docker-compose -f poc/device/agent/docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
 }
 
 verify_device_agent_running() {
