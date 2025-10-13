@@ -200,9 +200,17 @@ setup_k3s() {
 # ----------------------------
 build_device_agent() {
   cd "$HOME/dev-repo"
+  echo 'Checking if device-agent image already exists...'
+
+  # Check if the image exists
+  if docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
+    echo "device-agent image already exists. Skipping build."
+  else
   echo 'Building device-agent...'
- # go build -o device-agent
-  docker-compose -f docker-compose.yml build
+    # go build -o device-agent
+      docker-compose -f docker-compose.yml build
+   fi
+  echo 'device-agent build complete.'
 }
 
 # ----------------------------
@@ -211,8 +219,10 @@ build_device_agent() {
 start_device_agent_service() {
   echo 'Starting device-agent...'
   cd "$HOME/dev-repo"
-  #nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
-  #echo $! > "$HOME/device-agent.pid"
+  if ! docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
+    echo "device-agent image not found. Building it..."
+    docker-compose -f docker-compose.yml build
+  fi
   docker-compose -f docker-compose.yml up -d
   docker-compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
 }
