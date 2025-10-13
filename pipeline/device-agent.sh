@@ -208,7 +208,7 @@ build_device_agent() {
   else
   echo 'Building device-agent...'
     # go build -o device-agent
-      docker compose -f docker-compose.yml build
+      docker-compose -f docker-compose.yml build
    fi
   echo 'device-agent build complete.'
 }
@@ -221,10 +221,10 @@ start_device_agent_service() {
   cd "$HOME/dev-repo"
   if ! docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
     echo "device-agent image not found. Building it..."
-    docker compose -f docker-compose.yml build
+    docker-compose -f docker-compose.yml build
   fi
-  docker compose -f docker-compose.yml up -d
-  docker compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
+  docker-compose -f docker-compose.yml up -d
+  docker-compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
 }
 
 verify_device_agent_running() {
@@ -236,7 +236,7 @@ verify_device_agent_running() {
 stop_device_agent_service() {
   echo "Stopping device-agent..."
   cd "$HOME/dev-repo"
-  docker compose -f docker-compose.yml down
+  docker-compose -f docker-compose.yml down
   #if [ -f "$HOME/device-agent.pid" ]; then
   #  local pid=$(cat "$HOME/device-agent.pid")
   #  if kill "$pid" 2>/dev/null; then
