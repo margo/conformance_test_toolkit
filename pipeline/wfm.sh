@@ -253,6 +253,8 @@ setup_harbor() {
     echo 'Harbor is already running, skipping startup.'
   else
     cd "$HOME/dev-repo/pipeline/harbor"
+    //Update harbor.yml with EXPOSED_HARBOR_IP
+    sudo sed -i "s|^hostname: .*|hostname: $EXPOSED_HARBOR_IP|" harbor.yml
     echo 'Starting Harbor...'
     sudo chmod +x install.sh prepare common.sh
     sudo bash install.sh
