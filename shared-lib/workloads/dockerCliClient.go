@@ -41,7 +41,7 @@ type Publisher struct {
 }
 
 func NewDockerComposeCliClient(params DockerConnectivityParams, workingDir string) (*DockerComposeCliClient, error) {
-	if workingDir == "" {
+	if (workingDir == "") {
 		return nil, fmt.Errorf("working directory path should be a valid path, existing value was: %s", workingDir)
 	}
 
@@ -190,6 +190,9 @@ func (c *DockerComposeCliClient) GetComposeStatus(ctx context.Context, composeFi
 		return nil, fmt.Errorf("project name cannot be empty")
 	}
 
+	fmt.Printf("[DEBUG] composeFile: %s\n", composeFile)
+	fmt.Printf("[DEBUG] projectName: %s\n", projectName)
+	fmt.Printf("[DEBUG] dockerBinary: %s\n", c.dockerBinary)
 	cmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
 		"-f", composeFile,
 		"-p", projectName,
