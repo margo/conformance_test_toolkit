@@ -41,7 +41,7 @@ type Publisher struct {
 }
 
 func NewDockerComposeCliClient(params DockerConnectivityParams, workingDir string) (*DockerComposeCliClient, error) {
-	if (workingDir == "") {
+	if workingDir == "" {
 		return nil, fmt.Errorf("working directory path should be a valid path, existing value was: %s", workingDir)
 	}
 
@@ -74,6 +74,67 @@ func NewDockerComposeCliClient(params DockerConnectivityParams, workingDir strin
 	}, nil
 }
 
+// func (c *DockerComposeCliClient) DeployCompose(ctx context.Context, projectName string, composeFile string, envVars map[string]string) error {
+// 	if strings.TrimSpace(projectName) == "" {
+// 		return fmt.Errorf("project name cannot be empty")
+// 	}
+
+// 	fmt.Printf("Starting deployment for project: %s\n", projectName)
+// 	fmt.Printf("Using compose file: %s\n", composeFile)
+
+// 	// Ensure compose file exists
+// 	if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+// 		return fmt.Errorf("compose file does not exist: %s", composeFile)
+// 	}
+
+// 	// Extract directory and filename separately
+// 	projectDir := filepath.Dir(composeFile)
+// 	composeFileName := filepath.Base(composeFile)
+
+// 	fmt.Printf("Project directory: %s\n", projectDir)
+// 	fmt.Printf("Compose filename: %s\n", composeFileName)
+
+// 	// Step 1: Bring down existing deployment
+// 	fmt.Printf("Bringing down existing containers for project: %s\n", projectName)
+// 	downCmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
+// 		"-f", composeFileName,
+// 		"-p", projectName,
+// 		"down")
+
+// 	downCmd.Dir = projectDir
+// 	downCmd.Env = prepareDockerEnv(c.params, envVars)
+
+// 	downOutput, err := downCmd.CombinedOutput()
+// 	fmt.Printf("Down command output: %s\n", string(downOutput))
+// 	if err != nil {
+// 		fmt.Printf("Down command failed (continuing anyway): %v\n", err)
+// 	}
+
+// 	// Step 5: Start containers
+// 	fmt.Printf("Starting containers for project: %s\n", projectName)
+// 	upCmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
+// 		"-f", composeFileName,
+// 		"-p", projectName,
+// 		"up", "-d")
+
+// 	upCmd.Dir = projectDir
+// 	upCmd.Env = prepareDockerEnv(c.params, envVars)
+
+// 	upOutput, err := upCmd.CombinedOutput()
+// 	fmt.Printf("Up command output: %s\n", string(upOutput))
+// 	if err != nil {
+// 		return fmt.Errorf("failed to start containers: %s", string(upOutput))
+// 	}
+
+// 	status, err := c.GetComposeStatus(ctx, composeFile, projectName)
+// 	if err != nil {
+// 		return fmt.Errorf("deployment verification failed: %w", err)
+// 	}
+
+// 	fmt.Printf("Deployment successful. Status: %s, Services: %d\n", status.Status, len(status.Services))
+// 	return nil
+// }
+
 func (c *DockerComposeCliClient) DeployCompose(ctx context.Context, projectName string, composeFile string, envVars map[string]string) error {
 	if strings.TrimSpace(projectName) == "" {
 		return fmt.Errorf("project name cannot be empty")
@@ -94,12 +155,14 @@ func (c *DockerComposeCliClient) DeployCompose(ctx context.Context, projectName 
 	fmt.Printf("Project directory: %s\n", projectDir)
 	fmt.Printf("Compose filename: %s\n", composeFileName)
 
-	// Step 1: Bring down existing deployment
-	fmt.Printf("Bringing down existing containers for project: %s\n", projectName)
+	// Step 1: Force cleanup of existing containers
+	fmt.Printf("Cleaning up existing containers for project: %s\n", projectName)
+
+	// First try compose down with force removal
 	downCmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
 		"-f", composeFileName,
 		"-p", projectName,
-		"down")
+		"down", "--remove-orphans", "--volumes")
 
 	downCmd.Dir = projectDir
 	downCmd.Env = prepareDockerEnv(c.params, envVars)
@@ -107,15 +170,36 @@ func (c *DockerComposeCliClient) DeployCompose(ctx context.Context, projectName 
 	downOutput, err := downCmd.CombinedOutput()
 	fmt.Printf("Down command output: %s\n", string(downOutput))
 	if err != nil {
-		fmt.Printf("Down command failed (continuing anyway): %v\n", err)
+		fmt.Printf("Compose down failed: %v\n", err)
+
+		// If compose down fails, try to remove containers manually
+		if err := c.forceRemoveProjectContainers(ctx, projectName); err != nil {
+			fmt.Printf("Manual container removal failed: %v\n", err)
+		}
 	}
 
-	// Step 5: Start containers
+	// Step 2: Pull latest images
+	fmt.Printf("Pulling latest images for project: %s\n", projectName)
+	pullCmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
+		"-f", composeFileName,
+		"-p", projectName,
+		"pull")
+
+	pullCmd.Dir = projectDir
+	pullCmd.Env = prepareDockerEnv(c.params, envVars)
+
+	pullOutput, err := pullCmd.CombinedOutput()
+	fmt.Printf("Pull command output: %s\n", string(pullOutput))
+	if err != nil {
+		fmt.Printf("Pull command failed (continuing anyway): %v\n", err)
+	}
+
+	// Step 3: Start containers
 	fmt.Printf("Starting containers for project: %s\n", projectName)
 	upCmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
 		"-f", composeFileName,
 		"-p", projectName,
-		"up", "-d")
+		"up", "-d", "--force-recreate")
 
 	upCmd.Dir = projectDir
 	upCmd.Env = prepareDockerEnv(c.params, envVars)
@@ -132,6 +216,41 @@ func (c *DockerComposeCliClient) DeployCompose(ctx context.Context, projectName 
 	}
 
 	fmt.Printf("Deployment successful. Status: %s, Services: %d\n", status.Status, len(status.Services))
+	return nil
+}
+
+func (c *DockerComposeCliClient) forceRemoveProjectContainers(ctx context.Context, projectName string) error {
+	fmt.Printf("Force removing containers for project: %s\n", projectName)
+
+	// List containers with the project label
+	listCmd := exec.CommandContext(ctx, c.dockerBinary, "ps", "-a",
+		"--filter", fmt.Sprintf("label=com.docker.compose.project=%s", projectName),
+		"--format", "{{.ID}}")
+
+	listCmd.Env = prepareDockerEnv(c.params, nil)
+
+	output, err := listCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	containerIDs := strings.Fields(strings.TrimSpace(string(output)))
+	if len(containerIDs) == 0 {
+		fmt.Printf("No containers found for project: %s\n", projectName)
+		return nil
+	}
+
+	// Force remove each container
+	for _, containerID := range containerIDs {
+		fmt.Printf("Force removing container: %s\n", containerID)
+		removeCmd := exec.CommandContext(ctx, c.dockerBinary, "rm", "-f", containerID)
+		removeCmd.Env = prepareDockerEnv(c.params, nil)
+
+		if removeOutput, err := removeCmd.CombinedOutput(); err != nil {
+			fmt.Printf("Failed to remove container %s: %v, output: %s\n", containerID, err, string(removeOutput))
+		}
+	}
+
 	return nil
 }
 
@@ -190,45 +309,94 @@ func (c *DockerComposeCliClient) GetComposeStatus(ctx context.Context, composeFi
 		return nil, fmt.Errorf("project name cannot be empty")
 	}
 
-    // Verify compose file exists
-    if _, err := os.Stat(composeFile); os.IsNotExist(err) {
-        return nil, fmt.Errorf("compose file does not exist: %s", composeFile)
-    }
+	// Verify compose file exists
+	if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf("compose file does not exist: %s", composeFile)
+	}
 
 	fmt.Printf("[DEBUG] composeFile: %s\n", composeFile)
 	fmt.Printf("[DEBUG] projectName: %s\n", projectName)
 	fmt.Printf("[DEBUG] dockerBinary: %s\n", c.dockerBinary)
 
 	// Use absolute path for compose file
-    absComposeFile, err := filepath.Abs(composeFile)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get absolute path: %w", err)
-    }
+	absComposeFile, err := filepath.Abs(composeFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
 	cmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
-	"-f", filepath.Base(absComposeFile), // Use just filename
-	"-p", projectName,
-	"ps", "--format", "json", "--all")
+		"-f", filepath.Base(absComposeFile), // Use just filename
+		"-p", projectName,
+		"ps", "--format", "json", "--all")
 
 	cmd.Dir = filepath.Dir(absComposeFile) // Set working directory
-    cmd.Env = prepareDockerEnv(c.params, nil)
+	cmd.Env = prepareDockerEnv(c.params, nil)
 
 	// Capture both stdout and stderr
-    output, err := cmd.CombinedOutput()
-    if err != nil {
-        return nil, fmt.Errorf("failed to get compose status: %w, output: %s", err, string(output))
-    }
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get compose status: %w, output: %s", err, string(output))
+	}
 
+	fmt.Printf("[DEBUG] Raw docker compose ps output: %s\n", string(output))
+
+	// Handle empty output (no containers)
+	if len(strings.TrimSpace(string(output))) == 0 {
+		return &ComposeStatus{
+			Name:      projectName,
+			Status:    "stopped",
+			Services:  []ServiceStatus{},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	}
 	// Parse JSON output - it's a single JSON array, not line-by-line objects
 	var containers []ComposeContainer
-	if len(output) > 0 {
-		// Parse the entire output as a JSON array
-		if err := json.Unmarshal(output, &containers); err != nil {
-			return nil, fmt.Errorf("failed to parse container JSON: %w", err)
+	// if len(output) > 0 {
+	// 	// Parse the entire output as a JSON array
+	// 	if err := json.Unmarshal(output, &containers); err != nil {
+	// 		return nil, fmt.Errorf("failed to parse container JSON: %w", err)
+	// 	}
+	// }
+
+	// if len(containers) == 0 {
+	// 	return nil, fmt.Errorf("compose project %s not found", projectName)
+	// }
+
+	// Try parsing as JSON array first
+	if err := json.Unmarshal(output, &containers); err != nil {
+		// If array parsing fails, try parsing line-by-line JSON objects
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		containers = make([]ComposeContainer, 0, len(lines))
+
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			var container ComposeContainer
+			if err := json.Unmarshal([]byte(line), &container); err != nil {
+				fmt.Printf("[DEBUG] Failed to parse line as JSON: %s, error: %v\n", line, err)
+				continue
+			}
+			containers = append(containers, container)
+		}
+
+		// If still no containers parsed, return error
+		if len(containers) == 0 {
+			return nil, fmt.Errorf("failed to parse any container JSON from output: %s", string(output))
 		}
 	}
 
+	// If no containers found, return empty status
 	if len(containers) == 0 {
-		return nil, fmt.Errorf("compose project %s not found", projectName)
+		return &ComposeStatus{
+			Name:      projectName,
+			Status:    "stopped",
+			Services:  []ServiceStatus{},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
 	}
 
 	var services []ServiceStatus
@@ -305,11 +473,11 @@ func (c *DockerComposeCliClient) UpdateCompose(ctx context.Context, projectName 
 }
 
 func (c *DockerComposeCliClient) ComposeExists(ctx context.Context, composeFile string, projectName string) (bool, error) {
-	
+
 	// First check if compose file exists
-    if _, err := os.Stat(composeFile); os.IsNotExist(err) {
-        return false, nil
-    }
+	if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+		return false, nil
+	}
 	_, err := c.GetComposeStatus(ctx, composeFile, projectName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
