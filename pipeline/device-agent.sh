@@ -61,6 +61,28 @@ install_basic_utilities() {
   install_helm
 }
 
+install_docker_compose_v2() {
+  echo "Installing Docker Compose V2 plugin..."
+  
+  # Create the plugins directory
+  sudo mkdir -p /usr/local/lib/docker/cli-plugins
+  
+  # Download the latest Docker Compose V2
+  COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
+  echo "Downloading Docker Compose ${COMPOSE_VERSION}..."
+  
+  sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
+    -o /usr/local/lib/docker/cli-plugins/docker-compose
+  
+  # Make it executable
+  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  
+  # Verify installation
+  docker compose version
+  echo "✅ Docker Compose V2 installed successfully"
+}
+
+
 # Helm install/uninstall
 install_helm() {
   cd $HOME
@@ -194,6 +216,35 @@ setup_k3s() {
   verify_k3s_status
   setup_kubeconfig
 }
+#-----------------------------------------------------------------
+# Device Agent Runtime Configuration update based on Docker or K8s
+#-----------------------------------------------------------------
+
+enable_kubernetes_runtime() {
+  CONFIG_FILE="/root/dev-repo/poc/device/agent/config/config.yaml"
+  echo "Enabling Kubernetes section in config.yaml..."
+  sed -i \
+  -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
+  -e 's/^[[:space:]]*#\s*kubernetes:/  kubernetes:/' \
+  -e 's/^[[:space:]]*#\s*kubeconfigPath:/    kubeconfigPath:/' \
+  -e 's/^[[:space:]]*-\s*type:\s*DOCKER/  # - type: DOCKER/' \
+  -e 's/^[[:space:]]*docker:/  # docker:/' \
+  -e 's/^[[:space:]]*url:/  # url:/' \
+  "$CONFIG_FILE"
+}
+
+enable_docker_runtime() {
+  CONFIG_FILE="/root/dev-repo/poc/device/agent/config/config.yaml"
+ echo "Enabling docker section in config.yaml..."
+ sed -i \
+  -e 's/^[[:space:]]*#\s*- type: DOCKER/  - type: DOCKER/' \
+  -e 's/^[[:space:]]*#\s*docker:/    docker:/' \
+  -e 's/^[[:space:]]*#\s*url:/      url:/' \
+  -e 's/^[[:space:]]*- type: KUBERNETES/  # - type: KUBERNETES/' \
+  -e 's/^[[:space:]]*kubernetes:/    # kubernetes:/' \
+  -e 's/^[[:space:]]*kubeconfigPath:/      # kubeconfigPath:/' \
+  "$CONFIG_FILE"
+}
 
 # ----------------------------
 # Device Agent Build Functions
@@ -208,23 +259,51 @@ build_device_agent() {
   else
   echo 'Building device-agent...'
     # go build -o device-agent
-      docker-compose -f docker-compose.yml build
+      docker  compose -f docker-compose.yml build
    fi
   echo 'device-agent build complete.'
 }
 
+build_device_agent_binary() {
+  cd "$HOME/dev-repo/poc/device/agent/"
+  echo 'Building device-agent...'
+  go build -o device-agent
+  echo 'device-agent build complete.'
+}
 # ----------------------------
 # Device Agent Service Functions
 # ----------------------------
-start_device_agent_service() {
+
+start_device_agent_service_binary() {
   echo 'Starting device-agent...'
   cd "$HOME/dev-repo"
+  enable_docker_runtime
+  nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
+  echo $! > "$HOME/device-agent.pid"
+}
+
+start_device_agent_docker_service() {
+  echo 'Starting device-agent...'
+  cd "$HOME/dev-repo"
+  enable_docker_runtime
   if ! docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
     echo "device-agent image not found. Building it..."
-    docker-compose -f docker-compose.yml build
+    docker compose -f docker-compose.yml build
   fi
-  docker-compose -f docker-compose.yml up -d
-  docker-compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
+  docker compose -f docker-compose.yml up -d
+  docker compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
+}
+
+start_device_agent_k8s_service() {
+  echo 'Starting device-agent...'
+  cd "$HOME/dev-repo"
+  enable_kubernetes_runtime
+  if ! docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
+    echo "device-agent image not found. Building it..."
+    docker compose -f docker-compose.yml build
+  fi
+  docker compose -f docker-compose.yml up -d
+  docker compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
 }
 
 verify_device_agent_running() {
@@ -233,22 +312,33 @@ verify_device_agent_running() {
   tail -n 50 "$HOME/device-agent.log"
 }
 
-stop_device_agent_service() {
+stop_device_agent_service_docker() {
   echo "Stopping device-agent..."
   cd "$HOME/dev-repo"
-  docker-compose -f docker-compose.yml down
-  #if [ -f "$HOME/device-agent.pid" ]; then
-  #  local pid=$(cat "$HOME/device-agent.pid")
-  #  if kill "$pid" 2>/dev/null; then
-  #    echo "device-agent stopped (PID: $pid)"
-  #  else
-  #    echo "Failed to stop device-agent with PID: $pid"
-  #  fi
-  #  rm -f "$HOME/device-agent.pid"
-  #else
-  #  echo 'No PID file found. Attempting to find and kill device-agent processes...'
-  #  pkill -f "device-agent" && echo "device-agent processes killed" || echo "No device-agent processes found"
-  #fi
+  docker compose -f docker-compose.yml down
+}
+
+stop_device_agent_service_kubernetes() {
+  echo "Stopping device-agent..."
+  cd "$HOME/dev-repo"
+  kubectl delete deployment device-agent-deployment
+}
+
+stop_device_agent_service_binary() {
+  echo "Stopping device-agent..."
+  
+  if [ -f "$HOME/device-agent.pid" ]; then
+    local pid=$(cat "$HOME/device-agent.pid")
+    if kill "$pid" 2>/dev/null; then
+      echo "device-agent stopped (PID: $pid)"
+    else
+      echo "Failed to stop device-agent with PID: $pid"
+    fi
+    rm -f "$HOME/device-agent.pid"
+  else
+    echo 'No PID file found. Attempting to find and kill device-agent processes...'
+    pkill -f "device-agent" && echo "device-agent processes killed" || echo "No device-agent processes found"
+  fi
 }
 
 cleanup_device_agent() {
@@ -392,25 +482,61 @@ install_prerequisites() {
   echo "Installing prerequisites: k3s and others ..."
   validate_pre_required_vars
   install_go
+  install_basic_utilities
+  install_docker_compose_v2 
   clone_dev_repo
   setup_k3s
 }
 
-start_device_agent() {
+start_device_agent_binary() {
+  echo "Building and starting device-agent ..."
+  validate_start_required_vars
+  update_agent_config
+  build_device_agent_binary
+  start_device_agent_service_binary
+  verify_device_agent_running
+  echo 'device-agent started'
+}
+
+start_device_agent_docker() {
+  echo "Building and starting device-agent ..."
+  validate_start_required_vars
+  update_agent_config
+  build_device_agent
+  #start_device_agent_service
+  start_device_agent_docker_service
+  verify_device_agent_running
+  echo 'device-agent started'
+}
+
+start_device_agent_kubernetes() {
   echo "Building and starting device-agent ..."
   validate_start_required_vars
   update_agent_config
   
   build_device_agent
-  start_device_agent_service
+  #start_device_agent_service
+  start_device_agent_k8s_service
   verify_device_agent_running
   
   echo 'device-agent started'
 }
 
-stop_device_agent() {
+stop_device_agent_binary() {
   echo "Stopping device-agent on VM2 ($VM2_HOST)..."
-  stop_device_agent_service
+  stop_device_agent_service_binary
+  echo "Device Agent stopped"
+}
+
+stop_device_agent_docker() {
+  echo "Stopping device-agent on VM2 ($VM2_HOST)..."
+  stop_device_agent_service_docker
+  echo "Device Agent stopped"
+}
+
+stop_device_agent_kubernetes() {
+  echo "Stopping device-agent on VM2 ($VM2_HOST)..."
+  stop_device_agent_service_kubernetes
   echo "Device Agent stopped"
 }
 
@@ -637,29 +763,36 @@ cleanup_residual() {
 }
 
 
-
 show_menu() {
   echo "Choose an option:"
   echo "1) install-prerequisites"
   echo "2) uninstall-prerequisites"
-  echo "3) device-agent-start"
-  echo "4) device-agent-stop"
-  echo "5) device-agent-status"
-  echo "6) otel-collector-promtail-installation"
-  echo "7) otel-collector-promtail-uninstallation"
-  echo "8) add-container-registry-mirror-to-k3s"
-  echo "9) cleanup-residual"
+  echo "3) device-agent-start-docker"
+  echo "4) device-agent-start-kubernetes"
+  echo "5) device-agent-start-binary"
+  echo "6) device-agent-stop-binary"
+  echo "7) device-agent-stop-docker"
+  echo "8) device-agent-stop-kubernetes"
+  echo "9) device-agent-status"
+  echo "10) otel-collector-promtail-installation"
+  echo "11) otel-collector-promtail-uninstallation"
+  echo "12) add-container-registry-mirror-to-k3s"
+  echo "13) cleanup-residual"
   read -rp "Enter choice [1-9]: " choice
   case $choice in
     1) install_prerequisites;;
     2) uninstall_prerequisites;;
-    3) start_device_agent ;;
-    4) stop_device_agent ;;
-    5) show_status ;;
-    6) install_otel_collector_promtail ;;
-    7) uninstall_otel_collector_promtail ;;
-    8) add_container_registry_mirror_to_k3s;;
-    9) cleanup_residual;;
+    3) start_device_agent_docker ;;
+    4) start_device_agent_kubernetes ;;
+    5) start_device_agent_binary ;;
+    6) stop_device_agent_binary ;;
+    7) stop_device_agent_docker ;;
+    8) stop_device_agent_kubernetes ;;
+    9) show_status ;;
+    10) install_otel_collector_promtail ;;
+    11) uninstall_otel_collector_promtail ;;
+    12) add_container_registry_mirror_to_k3s;;
+    13) cleanup_residual;;
     *) echo "Invalid choice" ;;
   esac
 }
@@ -671,8 +804,12 @@ if [ -z "$1" ]; then
   show_menu
 else
   case $1 in
-    start) start_device_agent ;;
-    stop) stop_device_agent ;;
+    start-docker) start_device_agent_docker ;;
+    start-kubernetes) start_device_agent_kubernetes ;;
+    start-binary) start_device_agent_binary ;;
+    stop-binary) stop_device_agent_binary ;;
+    stop-docker) stop_device_agent_docker ;;
+    stop-kubernetes) stop_device_agent_kubernetes ;;
     install_prerequisites) install_prerequisites;;
     uninstall_prerequisites) uninstall_prerequisites;;
     status) show_status ;;
@@ -680,6 +817,6 @@ else
     uninstall_otel_collector_promtail) uninstall_otel_collector_promtail ;;
     add_container_registry_mirror_to_k3s) add_container_registry_mirror_to_k3s ;;
     cleanup_residual) cleanup_residual ;;
-    *) echo "Usage: $0 {start|stop|status|install_prerequisites|uninstall_prerequisites|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s|cleanup_residual}" ;;
+    *) echo "Usage: $0 {start-docker|start-kubernetes|start-binary|stop-docker|stop-kubernetes|stop-binary|status|install_prerequisites|uninstall_prerequisites|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s|cleanup_residual}" ;;
   esac
 fi
