@@ -190,21 +190,33 @@ func (c *DockerComposeCliClient) GetComposeStatus(ctx context.Context, composeFi
 		return nil, fmt.Errorf("project name cannot be empty")
 	}
 
+    // Verify compose file exists
+    if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+        return nil, fmt.Errorf("compose file does not exist: %s", composeFile)
+    }
+
 	fmt.Printf("[DEBUG] composeFile: %s\n", composeFile)
 	fmt.Printf("[DEBUG] projectName: %s\n", projectName)
 	fmt.Printf("[DEBUG] dockerBinary: %s\n", c.dockerBinary)
+
+	// Use absolute path for compose file
+    absComposeFile, err := filepath.Abs(composeFile)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get absolute path: %w", err)
+    }
 	cmd := exec.CommandContext(ctx, c.dockerBinary, "compose",
-		"-f", composeFile,
-		"-p", projectName,
-		"ps", "--format", "json", "--all")
+	"-f", filepath.Base(absComposeFile), // Use just filename
+	"-p", projectName,
+	"ps", "--format", "json", "--all")
 
-	cmd.Dir = filepath.Dir(composeFile)
-	cmd.Env = prepareDockerEnv(c.params, nil)
+	cmd.Dir = filepath.Dir(absComposeFile) // Set working directory
+    cmd.Env = prepareDockerEnv(c.params, nil)
 
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get compose status: %w", err)
-	}
+	// Capture both stdout and stderr
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get compose status: %w, output: %s", err, string(output))
+    }
 
 	// Parse JSON output - it's a single JSON array, not line-by-line objects
 	var containers []ComposeContainer
@@ -293,6 +305,11 @@ func (c *DockerComposeCliClient) UpdateCompose(ctx context.Context, projectName 
 }
 
 func (c *DockerComposeCliClient) ComposeExists(ctx context.Context, composeFile string, projectName string) (bool, error) {
+	
+	// First check if compose file exists
+    if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+        return false, nil
+    }
 	_, err := c.GetComposeStatus(ctx, composeFile, projectName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
