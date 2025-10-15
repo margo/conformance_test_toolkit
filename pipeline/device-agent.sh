@@ -277,7 +277,7 @@ build_device_agent_binary() {
 start_device_agent_service_binary() {
   echo 'Starting device-agent...'
   cd "$HOME/dev-repo"
-  enable_docker_runtime
+  enable_kubernetes_runtime
   nohup sudo ./poc/device/agent/device-agent --config poc/device/agent/config/config.yaml > "$HOME/device-agent.log" 2>&1 &
   echo $! > "$HOME/device-agent.pid"
 }
