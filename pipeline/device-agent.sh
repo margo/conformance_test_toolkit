@@ -521,7 +521,8 @@ start_device_agent_binary() {
 start_device_agent_docker() {
   echo "Building and starting device-agent ..."
   validate_start_required_vars
-  update_agent_config
+  #update_agent_config ( not needed as config is copied in start service function)
+  update_agent_sbi_url
   build_device_agent_docker
   start_device_agent_docker_service
    echo 'device-agent-docker-container started'
@@ -800,9 +801,9 @@ show_menu() {
     3) start_device_agent_docker ;;
     4) start_device_agent_kubernetes ;;
     5) start_device_agent_binary ;;
-    6) stop_device_agent_binary ;;
-    7) stop_device_agent_docker ;;
-    8) stop_device_agent_kubernetes ;;
+    6) stop_device_agent_docker ;;
+    7) stop_device_agent_kubernetes ;;
+    8) stop_device_agent_binary ;;
     9) show_status ;;
     10) install_otel_collector_promtail ;;
     11) uninstall_otel_collector_promtail ;;

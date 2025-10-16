@@ -27,11 +27,14 @@ COPY --from=builder /app/device-agent .
 COPY --from=builder /app/poc/device/agent/config ./config
 COPY --from=docker-source /usr/local/bin/docker /usr/bin/docker
 
-# Copy Docker Compose plugin
+# Create the cli-plugins directory FIRST
+RUN mkdir -p /usr/local/libexec/docker/cli-plugins
+
+# Copy Docker Compose plugin (check if it exists in the source)
 COPY --from=docker-source /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
 
-# Create the cli-plugins directory if it doesn't exist
-RUN mkdir -p /usr/local/libexec/docker/cli-plugins
+# Make the plugin executable
+RUN chmod +x /usr/local/libexec/docker/cli-plugins/docker-compose
 
 # Create volume for config override
 VOLUME ["/config"]
