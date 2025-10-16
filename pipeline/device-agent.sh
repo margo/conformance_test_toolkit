@@ -221,7 +221,7 @@ setup_k3s() {
 #-----------------------------------------------------------------
 
 enable_kubernetes_runtime() {
-  CONFIG_FILE="/root/dev-repo/poc/device/agent/config/config.yaml"
+  CONFIG_FILE="$HOME/dev-repo/poc/device/agent/config/config.yaml"
   echo "Enabling Kubernetes section in config.yaml..."
   sed -i \
   -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
@@ -234,7 +234,7 @@ enable_kubernetes_runtime() {
 }
 
 enable_docker_runtime() {
-  CONFIG_FILE="/root/dev-repo/poc/device/agent/config/config.yaml"
+  CONFIG_FILE="$HOME/dev-repo/docker-compose/config/config.yaml"
  echo "Enabling docker section in config.yaml..."
  sed -i \
   -e 's/^[[:space:]]*#\s*- type: DOCKER/  - type: DOCKER/' \
@@ -249,19 +249,18 @@ enable_docker_runtime() {
 # ----------------------------
 # Device Agent Build Functions
 # ----------------------------
-build_device_agent() {
+build_device_agent_docker() {
   cd "$HOME/dev-repo"
   echo 'Checking if device-agent image already exists...'
 
-  # Check if the image exists
-  if docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
+# Check if the image exists
+  if docker images -q margo.org/device-agent:latest | grep -q .; then
     echo "device-agent image already exists. Skipping build."
   else
-  echo 'Building device-agent...'
-    # go build -o device-agent
-      docker  compose -f docker-compose.yml build
-   fi
-  echo 'device-agent build complete.'
+    echo 'Building device-agent...'
+    docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
+  fi
+  echo 'device-agent image build complete.'     
 }
 
 build_device_agent_binary() {
@@ -284,14 +283,14 @@ start_device_agent_service_binary() {
 
 start_device_agent_docker_service() {
   echo 'Starting device-agent...'
-  cd "$HOME/dev-repo"
+  cd "$HOME/dev-repo/docker-compose"
+  
+  mkdir -p config
+  cp -r ../poc/device/agent/config/* ./config/
+  mkdir -p data
   enable_docker_runtime
-  if ! docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
-    echo "device-agent image not found. Building it..."
-    docker compose -f docker-compose.yml build
-  fi
-  docker compose -f docker-compose.yml up -d
-  docker compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
+  docker compose up -d
+   
 }
 
 start_device_agent_k8s_service() {
@@ -314,8 +313,8 @@ verify_device_agent_running() {
 
 stop_device_agent_service_docker() {
   echo "Stopping device-agent..."
-  cd "$HOME/dev-repo"
-  docker compose -f docker-compose.yml down
+  cd "$HOME/dev-repo/docker-compose"
+  docker compose down
 }
 
 stop_device_agent_service_kubernetes() {
@@ -349,6 +348,27 @@ cleanup_device_agent() {
     echo "Removed old data directory."
   fi
   #[ -f "$HOME/dev-repo/poc/device/agent/device-agent" ] && rm -f "$HOME/dev-repo/poc/device/agent/device-agent" && echo "Removed device-agent binary"
+
+  # Check if device-agent container exists and remove it
+  if docker ps -a --format "{{.Names}}" | grep -q "^device-agent$"; then
+    echo "Stopping and removing device-agent container..."
+    docker stop device-agent 2>/dev/null || true
+    docker rm device-agent 2>/dev/null || true
+    echo "Removed device-agent container"
+  else
+    echo "No device-agent container found"
+  fi
+ 
+  #If using Helm deployment, uninstall the release
+  if helm list --short 2>/dev/null | grep -q "^device-agent$"; then
+    echo "Uninstalling device-agent Helm release..."
+    helm uninstall device-agent 2>/dev/null || true
+    echo "Removed device-agent Helm release"
+  else
+    echo "No device-agent Helm release found"
+  fi
+
+
 }
 
 add_container_registry_mirror_to_k3s() {
@@ -502,24 +522,19 @@ start_device_agent_docker() {
   echo "Building and starting device-agent ..."
   validate_start_required_vars
   update_agent_config
-  build_device_agent
-  #start_device_agent_service
+  build_device_agent_docker
   start_device_agent_docker_service
-  verify_device_agent_running
-  echo 'device-agent started'
+   echo 'device-agent-docker-container started'
 }
 
 start_device_agent_kubernetes() {
   echo "Building and starting device-agent ..."
   validate_start_required_vars
   update_agent_config
-  
-  build_device_agent
-  #start_device_agent_service
+  build_device_agent_k3s
   start_device_agent_k8s_service
-  verify_device_agent_running
-  
-  echo 'device-agent started'
+
+  echo 'device-agent-pod started'
 }
 
 stop_device_agent_binary() {

@@ -3,7 +3,7 @@ image:
   # and we expected that you have run that build command, else
   # you can change this as per your need
   repository: margo.org/device-agent
-  tag: dev-sprint-6
+  tag: latest
   pullPolicy: IfNotPresent
 
 kubeconfig:

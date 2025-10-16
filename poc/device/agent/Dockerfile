@@ -12,7 +12,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=tobedone" -o device-agent ./poc/device/agent
 
-# Stage 2: Get Docker binary from official image
+# Stage 2: Get Docker binary and compose plugin from official image
 FROM docker:28.3.3-cli AS docker-source
 
 # Stage 3: Runtime
@@ -26,6 +26,12 @@ WORKDIR /
 COPY --from=builder /app/device-agent .
 COPY --from=builder /app/poc/device/agent/config ./config
 COPY --from=docker-source /usr/local/bin/docker /usr/bin/docker
+
+# Copy Docker Compose plugin
+COPY --from=docker-source /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+
+# Create the cli-plugins directory if it doesn't exist
+RUN mkdir -p /usr/local/libexec/docker/cli-plugins
 
 # Create volume for config override
 VOLUME ["/config"]

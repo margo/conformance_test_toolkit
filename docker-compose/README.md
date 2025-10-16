@@ -2,8 +2,8 @@
 - Docker and Docker Compose installed
 - Ensure that you have the container image for the device agent with you, if not you can build it using the following command (assuming that you cloned the entire dev-repo at one place). To build, please run the following command:
 ```bash
-cd ..
-docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
+cd dev-repo
+docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
 cd docker-compose
 ```
 
@@ -22,21 +22,21 @@ mkdir -p data
 
 3. (Optional) If you need Kubernetes runtime management, uncomment the kubeconfig volume mount in docker-compose.yaml and ensure your kubeconfig is available at `/root/.kube/config`
 
-4. Change the parameters as per your needs in `config/config.yaml` and `config/capabilities.yaml`
+4. Change the parameters as per your needs in `config/config.yaml` and `config/capabilities.json`
 
 5. Start the device agent using Docker Compose:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 6. To view logs:
 ```bash
-docker-compose logs -f device-agent
+docker compose logs -f device-agent
 ```
 
 7. To stop the service:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 # Notes:

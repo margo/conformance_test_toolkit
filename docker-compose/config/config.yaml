@@ -26,12 +26,12 @@ stateSeeking:
 # but keep this in mind that it adds more cognitive complexity for somebody to understand when
 # multiple such kind of agents will be running in an environment
 runtimes:
-  - type: KUBERNETES
-    kubernetes:
-      kubeconfigPath: /root/.kube/config
-  # - type: DOCKER
-  #   docker:
-  #     url: unix:///var/run/docker.sock #http://localhost:8080 #unix://var/unix/socket
+  #- type: KUBERNETES
+  #  kubernetes:
+  #   kubeconfigPath: /root/.kube/config
+  - type: DOCKER
+    docker:
+      url: unix:///var/run/docker.sock #http://localhost:8080 #unix://var/unix/socket
   #     tlsSkipVerification: true
       # tls:
       #   cacertPath: null

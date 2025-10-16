@@ -3,13 +3,13 @@ version: '3.8'
 services:
   device-agent:
     container_name: device-agent
-    image: margo.org/device-agent:dev-sprint-6
+    image: margo.org/device-agent:latest
     pull_policy: never  # Options: always, never, missing, build
     volumes:
       # - /root/.kube/config:/root/.kube/config:ro # to manage kubernetes runtimes
       - /var/run/docker.sock:/var/run/docker.sock # to manage docker runtimes
       - ./config/config.yaml:/config/config.yaml
-      - ./config/capabilities.yaml:/config/capabilities.yaml
+      - ./config/capabilities.json:/config/capabilities.json
       - ./data:/data
     restart: unless-stopped
     entrypoint: ["./device-agent"]
