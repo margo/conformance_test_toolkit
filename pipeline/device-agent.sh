@@ -552,14 +552,14 @@ build_start_device_agent_k3s_service() {
     
     # Step 5: Create kubeconfig secret
     echo "Creating kubeconfig secret..."
-    if [ -f "/root/.kube/config" ]; then
+    if [ -f "$HOME/.kube/config" ]; then
       kubectl create secret generic agent-kubeconfig \
-        --from-file=kubeconfig=/root/.kube/config \
+        --from-file=kubeconfig="$HOME/.kube/config" \
         --namespace=device-agent \
         --dry-run=client -o yaml | kubectl apply -f -
       echo "✅ Kubeconfig secret created/updated"
     else
-      echo "❌ Kubeconfig file not found at /root/.kube/config"
+      echo "❌ Kubeconfig file not found at $HOME/.kube/config"
       return 1
     fi
     
