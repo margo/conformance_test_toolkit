@@ -6,9 +6,9 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
-kubeconfig:
-  # the name of the k8s secret that contains the kubeconfig
-  secretName: agent-kubeconfig
+# RBAC configuration
+rbac:
+  create: true
 
 # if persistence.enabled=true then you need to give a volume claim name
 # the agent will use this volume claim to store its data, make sure that the volume claim is in the same namespace

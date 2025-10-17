@@ -151,22 +151,6 @@ update_agent_sbi_url() {
   sed -i "s|sbiUrl:.*|sbiUrl: http://$WFM_IP:$WFM_PORT/v1alpha2/margo/sbi/v1|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
 }
 
-update_agent_kubepath() {
-  echo 'Updating kubeconfigPath in agent config...'
-  sed -i "s|kubeconfigPath:.*|kubeconfigPath: $HOME/.kube/config|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
-}
-
-# update_agent_capabilities_path() {
-#   echo 'Updating capabilities.readFromFile in agent config...'
-#   sed -i "s|readFromFile:.*|readFromFile: $HOME/dev-repo/poc/device/agent/config/capabilities.json|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
-# }
-
-# update_agent_config() {
-#   update_agent_sbi_url
-#   update_agent_capabilities_path
-#   update_agent_kubepath
-#   echo 'Config updates completed.'
-# }
 
 # ----------------------------
 # K3s Installation Functions
@@ -222,16 +206,21 @@ setup_k3s() {
 
 enable_kubernetes_runtime() {
   CONFIG_FILE="$HOME/dev-repo/poc/device/agent/config/config.yaml"
-  echo "Enabling Kubernetes section in config.yaml..."
+  echo "Enabling Kubernetes section in config.yaml for ServiceAccount authentication..."
   sed -i \
   -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
   -e 's/^[[:space:]]*#\s*kubernetes:/  kubernetes:/' \
-  -e 's/^[[:space:]]*#\s*kubeconfigPath:/    kubeconfigPath:/' \
+  -e 's/^[[:space:]]*#\s*kubeconfigPath:/    # kubeconfigPath:/' \
   -e 's/^[[:space:]]*-\s*type:\s*DOCKER/  # - type: DOCKER/' \
   -e 's/^[[:space:]]*docker:/  # docker:/' \
   -e 's/^[[:space:]]*url:/  # url:/' \
   "$CONFIG_FILE"
+  
+  # Comment out kubeconfigPath since we're using ServiceAccount
+  sed -i 's/^[[:space:]]*kubeconfigPath:/    # kubeconfigPath:/' "$CONFIG_FILE"
+  echo "✅ Kubernetes runtime enabled with ServiceAccount authentication"
 }
+
 
 enable_docker_runtime() {
   CONFIG_FILE="$HOME/dev-repo/docker-compose/config/config.yaml"
@@ -305,14 +294,22 @@ stop_device_agent_kubernetes() {
     fi
   else
     echo "No device-agent Helm release found, trying direct kubectl deletion..."
-    kubectl delete deployment device-agent-device-agent--deploy 2>/dev/null || echo "No deployment found"
+    kubectl delete deployment device-agent-device-agent-deploy -n device-agent 2>/dev/null || echo "No deployment found"
   fi
   
+  # Clean up ServiceAccount and RBAC resources
+  echo "Cleaning up ServiceAccount and RBAC resources..."
+  kubectl delete serviceaccount device-agent-device-agent-sa -n device-agent 2>/dev/null || echo "No serviceaccount found"
+  kubectl delete clusterrole device-agent-device-agent-role 2>/dev/null || echo "No clusterrole found"
+  kubectl delete clusterrolebinding device-agent-device-agent-binding 2>/dev/null || echo "No clusterrolebinding found"
   
+  # Clean up ConfigMaps
+  echo "Cleaning up configmaps..."
+  kubectl delete configmap device-agent-device-agent-cm -n device-agent 2>/dev/null || echo "No configmap found"
   
-  # Alternative: Remove all secrets and configmaps in the namespace
-   kubectl delete secrets --all -n device-agent 2>/dev/null || echo "No secrets to delete"
-   kubectl delete configmaps --all -n device-agent 2>/dev/null || echo "No configmaps to delete"
+  # Remove all remaining resources in namespace
+  kubectl delete secrets --all -n device-agent 2>/dev/null || echo "No secrets to delete"
+  kubectl delete configmaps --all -n device-agent 2>/dev/null || echo "No additional configmaps to delete"
   
   # Verify cleanup
   echo "Verifying cleanup..."
@@ -325,7 +322,12 @@ stop_device_agent_kubernetes() {
   
   # Show remaining resources in namespace
   echo "Checking for remaining resources..."
-  kubectl get all,secrets,configmaps -n device-agent 2>/dev/null || echo "Namespace may not exist or is empty"
+  kubectl get all,secrets,configmaps,serviceaccounts -n device-agent 2>/dev/null || echo "Namespace may not exist or is empty"
+  
+  # Check for remaining RBAC resources
+  echo "Checking for remaining RBAC resources..."
+  kubectl get clusterroles | grep device-agent || echo "No device-agent clusterroles found"
+  kubectl get clusterrolebindings | grep device-agent || echo "No device-agent clusterrolebindings found"
 }
 
 
@@ -504,13 +506,14 @@ start_device_agent_docker() {
 }
 
 start_device_agent_kubernetes() {
-  echo "Building and starting device-agent ..."
+  echo "Building and starting device-agent with ServiceAccount authentication..."
   validate_start_required_vars
   update_agent_sbi_url
-  update_agent_kubepath
+  # Remove update_agent_kubepath since we're using ServiceAccount
   build_start_device_agent_k3s_service
-  echo 'device-agent-pod started'
+  echo '✅ device-agent-pod started with ServiceAccount authentication'
 }
+
 
 build_start_device_agent_k3s_service() {
     cd "$HOME/dev-repo"
@@ -560,20 +563,7 @@ build_start_device_agent_k3s_service() {
     echo "Creating device-agent namespace..."
     kubectl create namespace device-agent 2>/dev/null || echo "Namespace device-agent already exists"
     
-    # Step 5: Create kubeconfig secret
-    echo "Creating kubeconfig secret..."
-    if [ -f "$HOME/.kube/config" ]; then
-      kubectl create secret generic agent-kubeconfig \
-        --from-file=kubeconfig="$HOME/.kube/config" \
-        --namespace=device-agent \
-        --dry-run=client -o yaml | kubectl apply -f -
-      echo "✅ Kubeconfig secret created/updated"
-    else
-      echo "❌ Kubeconfig file not found at $HOME/.kube/config"
-      return 1
-    fi
-    
-    # Step 6: Copy config files
+    # Step 5: Copy config files (ServiceAccount approach - no kubeconfig secret needed)
     echo "Copying configuration files..."
     cp -r ../poc/device/agent/config/* .
     if [ $? -eq 0 ]; then
@@ -583,11 +573,11 @@ build_start_device_agent_k3s_service() {
       return 1
     fi
     
-    # Step 7: Update config.yaml with environment variables (if needed)
+    # Step 6: Update config.yaml with environment variables
     update_agent_sbi_url
     
-    # Step 8: Install/upgrade Helm chart
-    echo "Installing device-agent Helm chart..."
+    # Step 7: Install/upgrade Helm chart (ServiceAccount approach)
+    echo "Installing device-agent Helm chart with ServiceAccount authentication..."
     if helm list -n device-agent | grep -q "device-agent"; then
       echo "Upgrading existing device-agent deployment..."
       helm upgrade device-agent . --namespace device-agent
@@ -597,15 +587,19 @@ build_start_device_agent_k3s_service() {
     fi
     
     if [ $? -eq 0 ]; then
-      echo "✅ Device-agent deployed successfully on Kubernetes"
+      echo "✅ Device-agent deployed successfully on Kubernetes with ServiceAccount"
+      
+      # Verify deployment
+      echo "Verifying deployment..."
+      kubectl get pods -n device-agent
+      kubectl get serviceaccount -n device-agent
       
     else
       echo "❌ Failed to deploy device-agent"
       return 1
     fi
-    
-    
 }
+
 
 
 stop_device_agent_docker() {
@@ -636,13 +630,17 @@ show_status() {
   
   # Check Kubernetes if Docker is not running (check device-agent namespace)
   if kubectl get pods -n device-agent --no-headers 2>/dev/null | grep -q "device-agent"; then
-    echo "✅ Device Agent Kubernetes Pod is running."
-    
-    # Show pod details
-    echo "Pod Details:"
-    kubectl get pods -n device-agent -o wide | grep -E "(NAME|device-agent)"
-    
-    return 0
+  echo "✅ Device Agent Kubernetes Pod is running."
+  
+  # Show pod details
+  echo "Pod Details:"
+  kubectl get pods -n device-agent -o wide | grep -E "(NAME|device-agent)"
+  
+  # Add ServiceAccount verification
+  echo "ServiceAccount Details:"
+  kubectl get serviceaccount -n device-agent | grep device-agent || echo "No ServiceAccount found"
+  
+  return 0
   fi
   
   # If neither is running

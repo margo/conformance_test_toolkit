@@ -13,17 +13,19 @@ spec:
       labels:
         app: {{ include "agentchart.podname" . }}
     spec:
+      serviceAccountName: {{ include "agentchart.fullname" . }}-sa
       containers:
         - name: {{ include "agentchart.podname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["./device-agent"]
           args: ["-config", "config/config.yaml"]
+          env:
+            - name: KUBERNETES_SERVICE_HOST
+              value: "kubernetes.default.svc"
+            - name: KUBERNETES_SERVICE_PORT
+              value: "443"
           volumeMounts:
-            - name: kubeconfig-volume
-              subPath: kubeconfig
-              mountPath: /root/.kube/config 
-              readOnly: true
             - name: agent-config-volume
               mountPath: /config
               readOnly: true
@@ -31,9 +33,6 @@ spec:
               mountPath: /data
               
       volumes:
-        - name: kubeconfig-volume
-          secret:
-            secretName: {{ include "agentchart.k8ssecret" . }}
         - name: agent-config-volume
           configMap:
             name: {{ include "agentchart.configmapname" . }}

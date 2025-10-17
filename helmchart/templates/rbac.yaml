@@ -1,0 +1,44 @@
+{{- if .Values.rbac.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "agentchart.fullname" . }}-sa
+  namespace: {{ include "agentchart.namespace" . }}
+  labels:
+    app: {{ include "agentchart.fullname" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "agentchart.fullname" . }}-role
+  labels:
+    app: {{ include "agentchart.fullname" . }}
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "nodes", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "agentchart.fullname" . }}-binding
+  labels:
+    app: {{ include "agentchart.fullname" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "agentchart.fullname" . }}-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "agentchart.fullname" . }}-sa
+  namespace: {{ include "agentchart.namespace" . }}
+{{- end }}
