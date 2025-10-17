@@ -576,6 +576,7 @@ build_start_device_agent_k3s_service() {
     
     # Step 6: Update config.yaml with environment variables
     update_agent_sbi_url
+    enable_kubernetes_runtime
     
     # Step 7: Install/upgrade Helm chart (ServiceAccount approach)
     echo "Installing device-agent Helm chart with ServiceAccount authentication..."
