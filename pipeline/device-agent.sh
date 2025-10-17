@@ -210,16 +210,17 @@ enable_kubernetes_runtime() {
   sed -i \
   -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
   -e 's/^[[:space:]]*#\s*kubernetes:/  kubernetes:/' \
-  -e 's/^[[:space:]]*#\s*kubeconfigPath:/    # kubeconfigPath:/' \
   -e 's/^[[:space:]]*-\s*type:\s*DOCKER/  # - type: DOCKER/' \
   -e 's/^[[:space:]]*docker:/  # docker:/' \
   -e 's/^[[:space:]]*url:/  # url:/' \
   "$CONFIG_FILE"
   
-  # Comment out kubeconfigPath since we're using ServiceAccount
-  sed -i 's/^[[:space:]]*kubeconfigPath:/    # kubeconfigPath:/' "$CONFIG_FILE"
+  # Completely remove kubeconfigPath line or set to empty string
+  sed -i '/kubeconfigPath:/d' "$CONFIG_FILE"
+  
   echo "✅ Kubernetes runtime enabled with ServiceAccount authentication"
 }
+
 
 
 enable_docker_runtime() {
