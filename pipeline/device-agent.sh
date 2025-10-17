@@ -156,17 +156,17 @@ update_agent_kubepath() {
   sed -i "s|kubeconfigPath:.*|kubeconfigPath: $HOME/.kube/config|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
 }
 
-update_agent_capabilities_path() {
-  echo 'Updating capabilities.readFromFile in agent config...'
-  sed -i "s|readFromFile:.*|readFromFile: $HOME/dev-repo/poc/device/agent/config/capabilities.json|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
-}
+# update_agent_capabilities_path() {
+#   echo 'Updating capabilities.readFromFile in agent config...'
+#   sed -i "s|readFromFile:.*|readFromFile: $HOME/dev-repo/poc/device/agent/config/capabilities.json|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
+# }
 
-update_agent_config() {
-  update_agent_sbi_url
-  update_agent_capabilities_path
-  update_agent_kubepath
-  echo 'Config updates completed.'
-}
+# update_agent_config() {
+#   update_agent_sbi_url
+#   update_agent_capabilities_path
+#   update_agent_kubepath
+#   echo 'Config updates completed.'
+# }
 
 # ----------------------------
 # K3s Installation Functions
@@ -281,23 +281,6 @@ start_device_agent_docker_service() {
    
 }
 
-start_device_agent_k8s_service() {
-  echo 'Starting device-agent...'
-  cd "$HOME/dev-repo"
-  enable_kubernetes_runtime
-  if ! docker images dev-repo-device-agent:latest | awk 'NR>1 {print $1}' | grep -q "dev-repo-device-agent"; then
-    echo "device-agent image not found. Building it..."
-    docker compose -f docker-compose.yml build
-  fi
-  docker compose -f docker-compose.yml up -d
-  docker compose -f docker-compose.yml logs -f > "$HOME/device-agent.log" 2>&1 &
-}
-
-verify_device_agent_running() {
-  ps -eo user,pid,ppid,tty,time,cmd | grep '[d]evice-agent'
-  sleep 10
-  tail -n 50 "$HOME/device-agent.log"
-}
 
 stop_device_agent_service_docker() {
   echo "Stopping device-agent..."
@@ -305,11 +288,37 @@ stop_device_agent_service_docker() {
   docker compose down
 }
 
-stop_device_agent_service_kubernetes() {
+stop_device_agent_kubernetes() {
   echo "Stopping device-agent..."
   cd "$HOME/dev-repo"
-  kubectl delete deployment device-agent-deployment
+  
+  # Check if Helm release exists
+  if helm list -n device-agent | grep -q "device-agent"; then
+    echo "Uninstalling device-agent Helm release..."
+    helm uninstall device-agent --namespace device-agent
+    
+    if [ $? -eq 0 ]; then
+      echo "✅ Device-agent Helm release uninstalled successfully"
+    else
+      echo "❌ Failed to uninstall Helm release"
+      return 1
+    fi
+  else
+    echo "No device-agent Helm release found, trying direct kubectl deletion..."
+    kubectl delete deployment device-agent-deployment 2>/dev/null || echo "No deployment found"
+  fi
+  
+   
+  # Verify cleanup
+  echo "Verifying cleanup..."
+  if kubectl get pods -n device-agent 2>/dev/null | grep -q "device-agent"; then
+    echo "⚠️ Some device-agent pods may still be terminating"
+    kubectl get pods -n device-agent
+  else
+    echo "✅ Device-agent stopped successfully"
+  fi
 }
+
 
 
 cleanup_device_agent() {
@@ -478,7 +487,6 @@ install_prerequisites() {
 start_device_agent_docker() {
   echo "Building and starting device-agent ..."
   validate_start_required_vars
-  #update_agent_config ( not needed as config is copied in start service function)
   update_agent_sbi_url
   build_device_agent_docker
   start_device_agent_docker_service
@@ -488,13 +496,106 @@ start_device_agent_docker() {
 start_device_agent_kubernetes() {
   echo "Building and starting device-agent ..."
   validate_start_required_vars
-  update_agent_config
-  build_device_agent_k3s
-  start_device_agent_k8s_service
-
+  update_agent_sbi_url
+  update_agent_kubepath
+  build_start_device_agent_k3s_service
   echo 'device-agent-pod started'
 }
 
+build_start_device_agent_k3s_service() {
+    cd "$HOME/dev-repo"
+    echo "Building and deploying device-agent on Kubernetes..."
+    
+    # Step 1: Build the Docker image if it doesn't exist
+    echo "Checking if device-agent image exists..."
+    if ! docker images | grep -q "margo.org/device-agent"; then
+      echo "Building device-agent Docker image..."
+      docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
+      if [ $? -ne 0 ]; then
+        echo "❌ Failed to build device-agent image"
+        return 1
+      fi
+      echo "✅ Device-agent image built successfully"
+    else
+      echo "✅ Device-agent image already exists"
+    fi
+    
+    # Step 2: Save and import image to k3s
+    echo "Importing image to k3s cluster..."
+    docker save -o device-agent.tar margo.org/device-agent:latest
+    
+    # Import to k3s cluster
+    if command -v k3s >/dev/null 2>&1; then
+      k3s ctr -n k8s.io image import device-agent.tar
+      echo "✅ Image imported to k3s cluster"
+    elif command -v ctr >/dev/null 2>&1; then
+      ctr -n k8s.io image import device-agent.tar
+      echo "✅ Image imported to k8s cluster"
+    else
+      echo "❌ Neither k3s nor ctr command found"
+      return 1
+    fi
+    
+    # Clean up tar file
+    rm -f device-agent.tar
+    
+    # Step 3: Navigate to helmchart directory
+    cd helmchart
+    if [ $? -ne 0 ]; then
+      echo "❌ Failed to navigate to helmchart directory"
+      return 1
+    fi
+    
+    # Step 4: Create namespace
+    echo "Creating device-agent namespace..."
+    kubectl create namespace device-agent 2>/dev/null || echo "Namespace device-agent already exists"
+    
+    # Step 5: Create kubeconfig secret
+    echo "Creating kubeconfig secret..."
+    if [ -f "/root/.kube/config" ]; then
+      kubectl create secret generic agent-kubeconfig \
+        --from-file=kubeconfig=/root/.kube/config \
+        --namespace=device-agent \
+        --dry-run=client -o yaml | kubectl apply -f -
+      echo "✅ Kubeconfig secret created/updated"
+    else
+      echo "❌ Kubeconfig file not found at /root/.kube/config"
+      return 1
+    fi
+    
+    # Step 6: Copy config files
+    echo "Copying configuration files..."
+    cp -r ../poc/device/agent/config/* .
+    if [ $? -eq 0 ]; then
+      echo "✅ Configuration files copied successfully"
+    else
+      echo "❌ Failed to copy configuration files"
+      return 1
+    fi
+    
+    # Step 7: Update config.yaml with environment variables (if needed)
+    update_agent_sbi_url
+    
+    # Step 8: Install/upgrade Helm chart
+    echo "Installing device-agent Helm chart..."
+    if helm list -n device-agent | grep -q "device-agent"; then
+      echo "Upgrading existing device-agent deployment..."
+      helm upgrade device-agent . --namespace device-agent
+    else
+      echo "Installing new device-agent deployment..."
+      helm install device-agent . --namespace device-agent
+    fi
+    
+    if [ $? -eq 0 ]; then
+      echo "✅ Device-agent deployed successfully on Kubernetes"
+      
+    else
+      echo "❌ Failed to deploy device-agent"
+      return 1
+    fi
+    
+    
+}
 
 
 stop_device_agent_docker() {
@@ -503,11 +604,6 @@ stop_device_agent_docker() {
   echo "Device Agent stopped"
 }
 
-stop_device_agent_kubernetes() {
-  echo "Stopping device-agent on VM2 ($VM2_HOST)..."
-  stop_device_agent_service_kubernetes
-  echo "Device Agent stopped"
-}
 
 uninstall_prerequisites() {
   cleanup_device_agent
@@ -517,32 +613,46 @@ show_status() {
   echo "Device Agent Status:"
   echo "==================="
   
-  if [ -f "$HOME/device-agent.pid" ]; then
-    local pid=$(cat "$HOME/device-agent.pid")
-    if ps -p "$pid" > /dev/null 2>&1; then
-      echo "✅ Device Agent is running (PID: $pid)"
-      ps -p "$pid" -o pid,ppid,cmd --no-headers
-    else
-      echo "❌ Device Agent PID file exists but process is not running"
-    fi
-  else
-    echo "❌ Device Agent PID file not found"
+  # Check Docker first
+  if docker ps --format "{{.Names}}" | grep -q "^device-agent$"; then
+    echo "✅ Device Agent Docker Container is running."
+    
+    # Show container details
+    echo "Container Details:"
+    docker ps --filter "name=device-agent" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"
+    
+    return 0
   fi
   
-  # Check for any device-agent processes
-  local processes=$(ps aux | grep '[d]evice-agent' | wc -l)
-  if [ "$processes" -gt 0 ]; then
-    echo "Found $processes device-agent process(es):"
-    ps aux | grep '[d]evice-agent'
+  # Check Kubernetes if Docker is not running (check device-agent namespace)
+  if kubectl get pods -n device-agent --no-headers 2>/dev/null | grep -q "device-agent"; then
+    echo "✅ Device Agent Kubernetes Pod is running."
+    
+    # Show pod details
+    echo "Pod Details:"
+    kubectl get pods -n device-agent -o wide | grep -E "(NAME|device-agent)"
+    
+    return 0
   fi
   
-  # Show recent logs if available
-  if [ -f "$HOME/device-agent.log" ]; then
+  # If neither is running
+  echo "❌ Device Agent is not running on Docker or Kubernetes."
+  echo ""
+  echo "Available containers:"
+  docker ps --format "table {{.Names}}\t{{.Status}}" | head -5
+  
+  if command -v kubectl >/dev/null 2>&1; then
     echo ""
-    echo "Recent logs (last 10 lines):"
-    tail -n 10 "$HOME/device-agent.log"
+    echo "Available pods in device-agent namespace:"
+    kubectl get pods -n device-agent --no-headers 2>/dev/null | head -5 || echo "No device-agent namespace or pods found"
+    
+    echo ""
+    echo "All pods across namespaces:"
+    kubectl get pods -A --no-headers 2>/dev/null | grep device-agent | head -3 || echo "No Kubernetes cluster available"
   fi
 }
+
+
 
 
 function install_promtail() {
@@ -734,13 +844,13 @@ cleanup_residual() {
 
 show_menu() {
   echo "Choose an option:"
-  echo "1) install-prerequisites"
-  echo "2) uninstall-prerequisites"
-  echo "3) device-agent-start(docker-compose-device)"
-  echo "4) device-agent-start(k3s-device)"
-  echo "5) device-agent-stop(docker-compose-device)"
-  echo "6) device-agent-stop(k3s-device)"
-  echo "7) device-agent-status"
+  echo "1) Install-prerequisites"
+  echo "2) Uninstall-prerequisites"
+  echo "3) Device-agent-Start(docker-compose-device)"
+  echo "4) Device-agent-Stop(docker-compose-device)"
+  echo "5) Device-agent-Start(k3s-device)"
+  echo "6) Device-agent-Stop(k3s-device)"
+  echo "7) Device-agent-Status"
   echo "8) otel-collector-promtail-installation"
   echo "9) otel-collector-promtail-uninstallation"
   echo "10) add-container-registry-mirror-to-k3s"
@@ -750,8 +860,8 @@ show_menu() {
     1) install_prerequisites;;
     2) uninstall_prerequisites;;
     3) start_device_agent_docker ;;
-    4) start_device_agent_kubernetes ;;
-    5) stop_device_agent_docker ;;
+    4) stop_device_agent_docker ;;
+    5) start_device_agent_kubernetes ;;
     6) stop_device_agent_kubernetes ;;
     7) show_status ;;
     8) install_otel_collector_promtail ;;
