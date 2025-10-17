@@ -305,10 +305,15 @@ stop_device_agent_kubernetes() {
     fi
   else
     echo "No device-agent Helm release found, trying direct kubectl deletion..."
-    kubectl delete deployment device-agent-deployment 2>/dev/null || echo "No deployment found"
+    kubectl delete deployment device-agent-device-agent--deploy 2>/dev/null || echo "No deployment found"
   fi
   
-   
+  
+  
+  # Alternative: Remove all secrets and configmaps in the namespace
+   kubectl delete secrets --all -n device-agent 2>/dev/null || echo "No secrets to delete"
+   kubectl delete configmaps --all -n device-agent 2>/dev/null || echo "No configmaps to delete"
+  
   # Verify cleanup
   echo "Verifying cleanup..."
   if kubectl get pods -n device-agent 2>/dev/null | grep -q "device-agent"; then
@@ -317,7 +322,12 @@ stop_device_agent_kubernetes() {
   else
     echo "✅ Device-agent stopped successfully"
   fi
+  
+  # Show remaining resources in namespace
+  echo "Checking for remaining resources..."
+  kubectl get all,secrets,configmaps -n device-agent 2>/dev/null || echo "Namespace may not exist or is empty"
 }
+
 
 
 

@@ -24,7 +24,7 @@ Note: There is no provisioning to provide service account, rbac etc at this poin
 
 ```bash
 kubectl create secret generic agent-kubeconfig \
-  --from-file=kubeconfig=/root/.kube/config \
+  --from-file=kubeconfig=$HOME/.kube/config \
   --namespace=device-agent
 ```
 
