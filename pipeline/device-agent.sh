@@ -583,7 +583,47 @@ build_start_device_agent_k3s_service() {
       helm install device-agent . --namespace device-agent
     
     
+    #STEP 8: Fix RBAC permissions
     if [ $? -eq 0 ]; then
+      echo "🔧 Applying RBAC permissions fix..."
+      
+      # Force update ClusterRole with secrets permissions
+      kubectl patch clusterrole device-agent-device-agent-role --type='json' -p='[
+        {
+          "op": "add",
+          "path": "/rules/-",
+          "value": {
+            "apiGroups": [""],
+            "resources": ["secrets", "configmaps"],
+            "verbs": ["create", "get", "list", "update", "patch", "delete"]
+          }
+        },
+        {
+          "op": "replace",
+          "path": "/rules/1/verbs",
+          "value": ["get", "list", "watch", "create", "update", "patch", "delete"]
+        },
+        {
+          "op": "replace",
+          "path": "/rules/0/verbs", 
+          "value": ["get", "list", "watch", "create", "update", "patch", "delete"]
+        }
+      ]' 2>/dev/null || echo "⚠️ ClusterRole patch failed, trying alternative method..."
+      
+      # Alternative: Create namespace-scoped RoleBinding for secrets
+      kubectl create rolebinding device-agent-secrets-access \
+        --clusterrole=admin \
+        --serviceaccount=device-agent:device-agent-device-agent-sa \
+        --namespace=device-agent 2>/dev/null || echo "RoleBinding already exists"
+      
+      # Verify permissions
+      echo "🔍 Verifying RBAC permissions..."
+      if kubectl auth can-i create secrets --as=system:serviceaccount:device-agent:device-agent-device-agent-sa -n device-agent | grep -q "yes"; then
+        echo "✅ RBAC permissions applied successfully"
+      else
+        echo "⚠️ RBAC permissions may need manual verification"
+      fi
+      
       echo "✅ Device-agent deployed successfully on Kubernetes with ServiceAccount"
       
       # Verify deployment
