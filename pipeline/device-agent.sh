@@ -148,7 +148,7 @@ clone_dev_repo() {
 # ----------------------------
 update_agent_sbi_url() {
   echo 'Updating wfm.sbiUrl in agent config...'
-  sed -i "s|sbiUrl:.*|sbiUrl: http://$WFM_IP:$WFM_PORT/v1alpha2/margo/sbi/v1|" "$HOME/dev-repo/helmchart/config/config.yaml"
+  sed -i "s|sbiUrl:.*|sbiUrl: http://$WFM_IP:$WFM_PORT/v1alpha2/margo/sbi/v1|" "$HOME/dev-repo/helmchart/config.yaml"
 }
 
 
@@ -205,7 +205,7 @@ setup_k3s() {
 #-----------------------------------------------------------------
 
 enable_kubernetes_runtime() {
-  CONFIG_FILE="$HOME/dev-repo/helmchart/config/config.yaml"
+  CONFIG_FILE="$HOME/dev-repo/helmchart/config.yaml"
   echo "Enabling Kubernetes section in config.yaml for ServiceAccount authentication..."
   sed -i \
   -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
