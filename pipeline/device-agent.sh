@@ -580,7 +580,7 @@ build_start_device_agent_k3s_service() {
     # Step 7: Install/upgrade Helm chart (ServiceAccount approach)
     
       echo "Installing new device-agent deployment..."
-      helm install device-agent . --namespace device-agent
+      helm install device-agent . 
     
     
     #STEP 8: Fix RBAC permissions
