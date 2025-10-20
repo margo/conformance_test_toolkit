@@ -148,7 +148,7 @@ clone_dev_repo() {
 # ----------------------------
 update_agent_sbi_url() {
   echo 'Updating wfm.sbiUrl in agent config...'
-  sed -i "s|sbiUrl:.*|sbiUrl: http://$WFM_IP:$WFM_PORT/v1alpha2/margo/sbi/v1|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
+  sed -i "s|sbiUrl:.*|sbiUrl: http://$WFM_IP:$WFM_PORT/v1alpha2/margo/sbi/v1|" "$HOME/dev-repo/helmchart/config/config.yaml"
 }
 
 
@@ -205,7 +205,7 @@ setup_k3s() {
 #-----------------------------------------------------------------
 
 enable_kubernetes_runtime() {
-  CONFIG_FILE="$HOME/dev-repo/poc/device/agent/config/config.yaml"
+  CONFIG_FILE="$HOME/dev-repo/helmchart/config/config.yaml"
   echo "Enabling Kubernetes section in config.yaml for ServiceAccount authentication..."
   sed -i \
   -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
@@ -510,8 +510,6 @@ start_device_agent_docker() {
 start_device_agent_kubernetes() {
   echo "Building and starting device-agent with ServiceAccount authentication..."
   validate_start_required_vars
-  update_agent_sbi_url
-  # Remove update_agent_kubepath since we're using ServiceAccount
   build_start_device_agent_k3s_service
   echo '✅ device-agent-pod started with ServiceAccount authentication'
 }
@@ -580,14 +578,10 @@ build_start_device_agent_k3s_service() {
     enable_kubernetes_runtime
     
     # Step 7: Install/upgrade Helm chart (ServiceAccount approach)
-    echo "Installing device-agent Helm chart with ServiceAccount authentication..."
-    if helm list -n device-agent | grep -q "device-agent"; then
-      echo "Upgrading existing device-agent deployment..."
-      helm upgrade device-agent . --namespace device-agent
-    else
+    
       echo "Installing new device-agent deployment..."
       helm install device-agent . --namespace device-agent
-    fi
+    
     
     if [ $? -eq 0 ]; then
       echo "✅ Device-agent deployed successfully on Kubernetes with ServiceAccount"
