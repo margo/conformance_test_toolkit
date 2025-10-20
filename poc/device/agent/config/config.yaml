@@ -28,7 +28,7 @@ stateSeeking:
 runtimes:
   - type: KUBERNETES
     kubernetes:
-      kubeconfigPath: $HOME/.kube/config
+      kubeconfigPath: /root/.kube/config
   # - type: DOCKER
   #   docker:
   #     url: unix:///var/run/docker.sock #http://localhost:8080 #unix://var/unix/socket

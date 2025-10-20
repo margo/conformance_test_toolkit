@@ -215,11 +215,12 @@ enable_kubernetes_runtime() {
   -e 's/^[[:space:]]*url:/  # url:/' \
   "$CONFIG_FILE"
   
-  # Completely remove kubeconfigPath line or set to empty string
-  sed -i '/kubeconfigPath:/d' "$CONFIG_FILE"
+  # Set kubeconfigPath to empty string for ServiceAccount authentication
+  sed -i 's|kubeconfigPath:.*|kubeconfigPath: ""|' "$CONFIG_FILE"
   
   echo "✅ Kubernetes runtime enabled with ServiceAccount authentication"
 }
+
 
 
 
@@ -647,18 +648,16 @@ show_status() {
   
   # If neither is running
   echo "❌ Device Agent is not running on Docker or Kubernetes."
-  echo ""
-  echo "Available containers:"
-  docker ps --format "table {{.Names}}\t{{.Status}}" | head -5
+  echo "Available device-agent containers:"
+  docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(NAMES|device-agent)" || echo "No device-agent containers found"
+
   
   if command -v kubectl >/dev/null 2>&1; then
     echo ""
     echo "Available pods in device-agent namespace:"
     kubectl get pods -n device-agent --no-headers 2>/dev/null | head -5 || echo "No device-agent namespace or pods found"
     
-    echo ""
-    echo "All pods across namespaces:"
-    kubectl get pods -A --no-headers 2>/dev/null | grep device-agent | head -3 || echo "No Kubernetes cluster available"
+    
   fi
 }
 

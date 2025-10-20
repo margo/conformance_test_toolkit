@@ -60,6 +60,10 @@ const (
 
 // NewHelmClient creates a new Helm client
 func NewHelmClient(kubeconfigPath string) (*HelmClient, error) {
+
+    fmt.Printf("DEBUG: kubeconfigPath value: '%s'\n", kubeconfigPath)
+    log.Printf("DEBUG: kubeconfigPath value: '%s'", kubeconfigPath)
+    
 	settings := cli.New()
 	if kubeconfigPath != "" {
 		settings.KubeConfig = kubeconfigPath
@@ -94,6 +98,11 @@ func NewHelmClient(kubeconfigPath string) (*HelmClient, error) {
 
 // createKubeClient creates a Kubernetes client
 func createKubeClient(kubeconfigPath string) (kubernetes.Interface, error) {
+
+	
+    fmt.Printf("DEBUG: inside createKubeClient kubeconfigPath value: '%s'\n", kubeconfigPath)
+    log.Printf("DEBUG: inside createKubeClient kubeconfigPath value: '%s'", kubeconfigPath)
+
 	var config *rest.Config
 	var err error
 
