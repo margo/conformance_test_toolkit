@@ -286,7 +286,7 @@ stop_device_agent_kubernetes() {
   # Check if Helm release exists
   if helm list -A| grep -q "device-agent"; then
     echo "Uninstalling device-agent Helm release..."
-    helm uninstall device-agent --namespace device-agent
+    helm uninstall device-agent --namespace default
     
     if [ $? -eq 0 ]; then
       echo "✅ Device-agent Helm release uninstalled successfully"
