@@ -284,7 +284,7 @@ stop_device_agent_kubernetes() {
   cd "$HOME/dev-repo"
   
   # Check if Helm release exists
-  if helm list -n device-agent | grep -q "device-agent"; then
+  if helm list -A| grep -q "device-agent"; then
     echo "Uninstalling device-agent Helm release..."
     helm uninstall device-agent --namespace device-agent
     
@@ -296,35 +296,35 @@ stop_device_agent_kubernetes() {
     fi
   else
     echo "No device-agent Helm release found, trying direct kubectl deletion..."
-    kubectl delete deployment device-agent-device-agent-deploy -n device-agent 2>/dev/null || echo "No deployment found"
+    kubectl delete deployment device-agent-device-agent-deploy -n default  2>/dev/null || echo "No deployment found"
   fi
   
   # Clean up ServiceAccount and RBAC resources
   echo "Cleaning up ServiceAccount and RBAC resources..."
-  kubectl delete serviceaccount device-agent-device-agent-sa -n device-agent 2>/dev/null || echo "No serviceaccount found"
+  kubectl delete serviceaccount device-agent-device-agent-sa -n default 2>/dev/null || echo "No serviceaccount found"
   kubectl delete clusterrole device-agent-device-agent-role 2>/dev/null || echo "No clusterrole found"
   kubectl delete clusterrolebinding device-agent-device-agent-binding 2>/dev/null || echo "No clusterrolebinding found"
   
   # Clean up ConfigMaps
   echo "Cleaning up configmaps..."
-  kubectl delete configmap device-agent-device-agent-cm -n device-agent 2>/dev/null || echo "No configmap found"
+  kubectl delete configmap device-agent-device-agent-cm -n default 2>/dev/null || echo "No configmap found"
   
   # Remove all remaining resources in namespace
-  kubectl delete secrets --all -n device-agent 2>/dev/null || echo "No secrets to delete"
-  kubectl delete configmaps --all -n device-agent 2>/dev/null || echo "No additional configmaps to delete"
+  kubectl delete secrets --all -n default 2>/dev/null || echo "No secrets to delete"
+  kubectl delete configmaps --all -n default 2>/dev/null || echo "No additional configmaps to delete"
   
   # Verify cleanup
   echo "Verifying cleanup..."
-  if kubectl get pods -n device-agent 2>/dev/null | grep -q "device-agent"; then
+  if kubectl get pods -n default 2>/dev/null | grep -q "device-agent"; then
     echo "⚠️ Some device-agent pods may still be terminating"
-    kubectl get pods -n device-agent
+    kubectl get pods -n default
   else
     echo "✅ Device-agent stopped successfully"
   fi
   
   # Show remaining resources in namespace
   echo "Checking for remaining resources..."
-  kubectl get all,secrets,configmaps,serviceaccounts -n device-agent 2>/dev/null || echo "Namespace may not exist or is empty"
+  kubectl get all,secrets,configmaps,serviceaccounts -n default 2>/dev/null || echo "Namespace may not exist or is empty"
   
   # Check for remaining RBAC resources
   echo "Checking for remaining RBAC resources..."
@@ -618,7 +618,7 @@ build_start_device_agent_k3s_service() {
       
       # Verify permissions
       echo "🔍 Verifying RBAC permissions..."
-      if kubectl auth can-i create secrets --as=system:serviceaccount:device-agent:device-agent-device-agent-sa -n device-agent | grep -q "yes"; then
+      if kubectl auth can-i create secrets --as=system:serviceaccount:device-agent:device-agent-device-agent-sa -n default | grep -q "yes"; then
         echo "✅ RBAC permissions applied successfully"
       else
         echo "⚠️ RBAC permissions may need manual verification"
@@ -628,8 +628,8 @@ build_start_device_agent_k3s_service() {
       
       # Verify deployment
       echo "Verifying deployment..."
-      kubectl get pods -n device-agent
-      kubectl get serviceaccount -n device-agent
+      kubectl get pods -n default
+      kubectl get serviceaccount -n default
       
     else
       echo "❌ Failed to deploy device-agent"
@@ -666,16 +666,16 @@ show_status() {
   fi
   
   # Check Kubernetes if Docker is not running (check device-agent namespace)
-  if kubectl get pods -n device-agent --no-headers 2>/dev/null | grep -q "device-agent"; then
+  if kubectl get pods -n default --no-headers 2>/dev/null | grep -q "device-agent"; then
   echo "✅ Device Agent Kubernetes Pod is running."
   
   # Show pod details
   echo "Pod Details:"
-  kubectl get pods -n device-agent -o wide | grep -E "(NAME|device-agent)"
+  kubectl get pods -n default -o wide | grep -E "(NAME|device-agent)"
   
   # Add ServiceAccount verification
   echo "ServiceAccount Details:"
-  kubectl get serviceaccount -n device-agent | grep device-agent || echo "No ServiceAccount found"
+  kubectl get serviceaccount -n default | grep device-agent || echo "No ServiceAccount found"
   
   return 0
   fi
@@ -689,7 +689,7 @@ show_status() {
   if command -v kubectl >/dev/null 2>&1; then
     echo ""
     echo "Available pods in device-agent namespace:"
-    kubectl get pods -n device-agent --no-headers 2>/dev/null | head -5 || echo "No device-agent namespace or pods found"
+    kubectl get pods -n default --no-headers 2>/dev/null | head -5 || echo "No device-agent namespace or pods found"
     
     
   fi
