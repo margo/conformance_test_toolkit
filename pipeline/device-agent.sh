@@ -818,9 +818,9 @@ EOF
         "path": "/spec/ports/-",
         "value": {
           "name": "prometheus-metrics",
-          "port": 8889,
+          "port": 8899,
           "protocol": "TCP",
-          "targetPort": 8889,
+          "targetPort": 8899,
           "nodePort": 30999
         }
       },
