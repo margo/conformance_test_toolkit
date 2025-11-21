@@ -32,6 +32,11 @@ EXPOSED_KEYCLOAK_PORT="${EXPOSED_KEYCLOAK_PORT:-8083}"
 EXPOSED_GOGS_IP="${EXPOSED_GOGS_IP:-127.0.0.1}"
 EXPOSED_GOGS_PORT="${EXPOSED_GOGS_PORT:-8084}"
 
+#--- Registry settings (can be overridden via env)
+REGISTRY_URL="${REGISTRY_URL:-http://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}}"
+REGISTRY_USER="${REGISTRY_USER:-admin}"
+REGISTRY_PASS="${REGISTRY_PASS:-Harbor12345}"							
+
 # variables for observability stack
 NAMESPACE_OBSERVABILITY="observability"
 JAEGER_RELEASE="jaeger"
@@ -39,10 +44,28 @@ PROM_RELEASE="prometheus"
 GRAFANA_RELEASE="grafana"
 LOKI_RELEASE="loki"
 
+# the directory to generate and store ssl certs in
+CERT_DIR="$HOME/symphony/api/certificates"
 
 # ----------------------------
 # Utility Functions
 # ----------------------------
+
+
+# Add these missing functions
+info() {
+    echo "ℹ️  $1"
+}
+
+success() {
+    echo "✅ $1"
+}
+
+error() {
+    echo "❌ Error: $1" >&2
+    exit 1
+}
+
 validate_passwordless_sudo() {
   local username="${1:-$(whoami)}"
   local exit_code=0
@@ -52,7 +75,7 @@ validate_passwordless_sudo() {
   
   # Test 1: Basic test
   echo -n "Test 1 - Basic access: "
-  if -n true 2>/dev/null; then
+  if sudo -n true 2>/dev/null; then
       echo "✓ PASS"
   else
       echo "✗ FAIL"
@@ -61,7 +84,7 @@ validate_passwordless_sudo() {
   
   # Test 2: Specific command test
   echo -n "Test 2 - Command execution: "
-  if -n whoami >/dev/null 2>&1; then
+  if sudo -n whoami >/dev/null 2>&1; then
       echo "✓ PASS"
   else
       echo "✗ FAIL"
@@ -70,7 +93,7 @@ validate_passwordless_sudo() {
   
   # Test 3: File access test
   echo -n "Test 3 - File access: "
-  if -n test -r /etc/shadow 2>/dev/null; then
+  if sudo -n test -r /etc/shadow 2>/dev/null; then
       echo "✓ PASS"
   else
       echo "✗ FAIL"
@@ -107,6 +130,28 @@ install_basic_utilities() {
 
   apt update && apt install -y curl dos2unix build-essential gcc libc6-dev
   install_helm
+}
+
+install_redis() {
+  echo "Installing Redis..."
+  
+  if command -v redis-server >/dev/null 2>&1; then
+    echo "✅ Redis is already installed."
+    redis-server --version
+  else
+    echo "🔄 Updating package list and installing Redis..."
+    sudo apt update
+    sudo apt install -y redis-server
+
+    echo "🔧 Configuring Redis to start on boot..."
+    sudo systemctl enable redis-server
+
+    echo "🚀 Starting Redis service..."
+    sudo systemctl start redis-server
+
+    echo "✅ Redis installation completed."
+    redis-server --version
+  fi
 }
 
 # Helm install/uninstall
@@ -148,7 +193,7 @@ install_go() {
   else
     echo 'Go not found, installing...';
     rm -rf /usr/local/go /usr/bin/go
-    wget "https://go.dev/dl/go1.23.2.linux-amd64.tar.gz" -O go.tar.gz;
+    wget "https://go.dev/dl/go1.24.4.linux-amd64.tar.gz" -O go.tar.gz;
     tar -C /usr/local -xzf go.tar.gz;
     rm go.tar.gz
     export PATH="$PATH:/usr/local/go/bin";
@@ -395,7 +440,7 @@ push_nextcloud_files() {
   cd "$HOME/dev-repo/poc/tests/artefacts/nextcloud-compose/margo-package" || { echo '❌ Nextcloud dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
-    git config user.email 'nitin.parihar@capgemini.com'
+    git config user.email 'admin.admin@gogs.com'
   git remote remove origin 2>/dev/null || true
   git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nextcloud.git"
   git add margo.yaml resources/ 2>/dev/null || true
@@ -410,7 +455,7 @@ push_nginx_files() {
   cd "$HOME/dev-repo/poc/tests/artefacts/nginx-helm/margo-package" || { echo '❌ nginx-helm dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
-    git config user.email 'nitin.parihar@capgemini.com'
+    git config user.email 'admin.admin@gogs.com'
   git remote remove origin 2>/dev/null || true
   git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nginx.git"
   git add margo.yaml resources/ 2>/dev/null || true
@@ -425,7 +470,7 @@ push_otel_files() {
   cd "$HOME/dev-repo/poc/tests/artefacts/open-telemetry-demo-helm/margo-package" || { echo '❌ OTEL dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
-    git config user.email 'nitin.parihar@capgemini.com'
+    git config user.email 'admin.admin@gogs.com'
   git remote remove origin 2>/dev/null || true
   git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/otel.git"
   git add margo.yaml resources/ 2>/dev/null || true
@@ -440,7 +485,7 @@ push_custom_otel_files() {
   cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package" || { echo '❌ Custom OTEL dir missing'; exit 1; }
   [ ! -d .git ] && git init && \
     git config user.name 'gogsadmin' && \
-    git config user.email 'nitin.parihar@capgemini.com'
+    git config user.email 'admin.admin@gogs.com'
   git remote remove origin 2>/dev/null || true
   git remote add origin "http://gogsadmin:${GOGS_TOKEN}@${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/custom-otel.git"
   git add margo.yaml resources/ 2>/dev/null || true
@@ -484,7 +529,7 @@ build_rust() {
 }
 
 build_symphony_api_server() {
-  git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/";
+ git config --global url."https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/";
   go env -w GOPRIVATE="github.com/margo/*";
   GO_DIR="$HOME/symphony/api";
   if [ -d "$GO_DIR" ]; then
@@ -517,7 +562,17 @@ start_symphony_api() {
   tail -n 50 $HOME/symphony-api.log
 }
 
-function install_jaeger() {
+enable_tls_in_symphony_api() {
+  cd $HOME
+  echo "Enabling tls in symphony API server (will generate certs and seed their settings in symphony-api-margo.json)..."
+  collect_certs_info 
+  generate_server_certs
+  # replace value of "tls": false, to "tls": true
+  sed -i "s|\"tls\": false|\"tls\": true|" "$HOME/symphony/api/symphony-api-margo.json"
+  echo "TLS Config is setup and seeded in symphony-api-margo.json"
+}
+
+install_jaeger() {
   echo "🔄 Refreshing Jaeger Helm repo..."
   helm repo remove jaegertracing || true
   helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
@@ -596,7 +651,7 @@ create_observability_namespace() {
     fi
 }
 
-function install_prometheus() {
+install_prometheus() {
   cd "$HOME/dev-repo/pipeline/observability"
   echo "📡 Setting up Prometheus to expose metrics for OTEL Collector..."
 
@@ -635,7 +690,7 @@ EOF
   patch_prometheus_configmap
 }
 
-function patch_prometheus_configmap() {
+patch_prometheus_configmap() {
   cd "$HOME/dev-repo/pipeline/observability"
   echo "🛠 Applying Prometheus ConfigMap with DEVICE_NODE_IP..."
 
@@ -674,7 +729,7 @@ function patch_prometheus_configmap() {
 }
 
 
-function install_loki() {
+install_loki() {
   echo "📦 Installing Loki for log aggregation..."
 
   cat <<EOF > loki-values.yaml
@@ -735,7 +790,7 @@ EOF
   echo "✅ Loki installed and exposed at NodePort 32100"
 }
 
-function install_grafana() {
+install_grafana() {
   echo "📊 Installing Grafana..."
   helm repo remove grafana || true
   helm repo add grafana https://grafana.github.io/helm-charts
@@ -804,125 +859,142 @@ observability_stack_uninstall(){
 
 add_container_registry_mirror_to_k3s() {
   echo "Configuring container registry mirror for k3s..."
-  
-  # Ask for container registry URL or default to https://registry-1.docker.io
-  read -p "Enter container registry URL [https://registry-1.docker.io]: " registry_url
-  registry_url=${registry_url:-"https://registry-1.docker.io"}
-  
-  # Ask for registry username, no default
-  read -p "Enter registry username: " registry_user
-  if [ -z "$registry_user" ]; then
-    echo "❌ Registry username is required"
-    return 1
-  fi
-  
-  # Ask for registry password, no default (hidden input)
-  read -s -p "Enter registry password: " registry_password
-  echo  # New line after hidden input
-  if [ -z "$registry_password" ]; then
-    echo "❌ Registry password is required"
-    return 1
-  fi
-  
-  # Create k3s directory if it doesn't exist
+
+  # ---------------------------------------------------
+  # Load registry settings from environment variables
+  # ---------------------------------------------------
+  registry_url="${REGISTRY_URL:-http://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}}"
+  registry_user="${REGISTRY_USER:-admin}"
+  registry_password="${REGISTRY_PASS:-Harbor12345}"
+
+										 
+												   
+								  
+											
+			
+	
+										 
+														
+  echo "Using registry mirror: $registry_url"
+  echo "Using registry credentials: $registry_user / ******"
+  # ---------------------------------------------------
+											
+			
+	
+
+  # Create k3s directory if needed
+  # ---------------------------------------------------
   sudo mkdir -p /var/lib/rancher/k3s
-  
-  # Backup existing registries.yml if it exists
+  sudo mkdir -p /etc/rancher/k3s
+
+  # Backup existing registries if present
   if [ -f /var/lib/rancher/k3s/registries.yml ]; then
     sudo cp /var/lib/rancher/k3s/registries.yml /var/lib/rancher/k3s/registries.yml.backup.$(date +%s)
-    echo "✅ Backed up existing registries.yml"
+    echo "✅ Backed up /var/lib/rancher/k3s/registries.yml"
   fi
-  
-  # Add docker registry mirror and credentials in /var/lib/rancher/k3s
-  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml
+
+																	  
+														  
+		
+											
+			 
+					   
+
+		
+											
+		 
+								
+									
+		
+							  
+   
+
+  # ---------------------------------------------------
+  # Write the registry config
+  # ---------------------------------------------------
+  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml >/dev/null
 mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+  "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}":
     endpoint:
-      - "$registry_url"
+      - "${registry_url}"
 
 configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+  "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}":
     auth:
-      username: "$registry_user"
-      password: "$registry_password"
+      username: "${registry_user}"
+      password: "${registry_password}"
     tls:
-    insecure_skip_verify: true
+      insecure_skip_verify: true
 EOF
 
-  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yaml
-mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    endpoint:
-      - "$registry_url"
+																
+													 
+		
+											
+			 
+					   
 
-configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    auth:
-      username: "$registry_user"
-      password: "$registry_password"
-    tls:
-    insecure_skip_verify: true
-EOF
+		
+											
+		 
+								
+									
+   
 
-# Add docker registry mirror and credentials in /etc/rancher/k3s
-cat <<EOF | sudo tee /etc/rancher/k3s/registries.yaml
-mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    endpoint:
-      - "$registry_url"
+  sudo cp /var/lib/rancher/k3s/registries.yml /var/lib/rancher/k3s/registries.yaml
+  sudo cp /var/lib/rancher/k3s/registries.yml /etc/rancher/k3s/registries.yml
+  sudo cp /var/lib/rancher/k3s/registries.yml /etc/rancher/k3s/registries.yaml
+											
+			 
+					   
 
-configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    auth:
-      username: "$registry_user"
-      password: "$registry_password"
-EOF
+  echo "✅ Created k3s registry mirror configuration"
+ # ---------------------------------------------------
+		 
+								
+									
+   
 
-cat <<EOF | sudo tee /etc/rancher/k3s/registries.yml
-mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    endpoint:
-      - "$registry_url"
-
-configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    auth:
-      username: "$registry_user"
-      password: "$registry_password"
-EOF
-
-  echo "✅ Created k3s registries configuration"
-  
-  # Restart k3s to apply changes
-  echo "Restarting k3s to apply registry changes..."
+  # ---------------------------------------------------
+						
+								
+  echo "Restarting k3s..."
   if sudo systemctl restart k3s; then
     echo "✅ k3s restarted successfully"
-    
-    # Wait for k3s to be ready
-    echo "Waiting for k3s to be ready..."
-    for i in {1..30}; do
-      if sudo systemctl is-active --quiet k3s; then
-        echo "✅ k3s is active and running"
-        break
-      else
-        echo "Waiting for k3s... ($i/30)"
-        sleep 2
-      fi
-    done
-    
-    # Verify k3s is working
-    if sudo k3s kubectl get nodes >/dev/null 2>&1; then
-      echo "✅ k3s cluster is responding"
-    else
-      echo "⚠️ k3s cluster may not be fully ready yet"
-    fi
   else
     echo "❌ Failed to restart k3s"
     return 1
   fi
-  
-  echo "✅ Container registry mirror configuration completed"
+
+  # Wait for k3s active
+  echo "Waiting for k3s to come up..."
+  for i in {1..30}; do
+    if sudo systemctl is-active --quiet k3s; then
+      echo "✅ k3s is running"
+      break
+		  
+										 
+			   
+    fi
+										 
+    sleep 2
+		
+  done
+
+  echo "Checking cluster..."
+  if sudo k3s kubectl get nodes >/dev/null 2>&1; then
+    echo "✅ k3s cluster is responding"
+  else
+    echo "⚠️ k3s cluster not ready yet"
+	  
+	  
+									
+			
+  fi
+
+  echo "✅ Registry mirror configuration completed."
 }
+
 
 # ----------------------------
 # Uninstall Functions (Reverse Chronological Order)
@@ -1004,6 +1076,9 @@ cleanup_symphony_builds() {
   if [ -d "$RUST_DIR/target" ]; then
     rm -rf "$RUST_DIR/target" && echo "✅ Removed Rust build artifacts"
   fi
+
+  # remove the generated server cerificates as well
+  rm -rf $CERT_DIR
   
   # Clean Go build cache
   if command -v go >/dev/null 2>&1; then
@@ -1311,35 +1386,88 @@ build_custom_otel_container_images() {
   docker build . -t "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
   echo "Ensuring Harbor registry login..."
   docker login "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}" -u admin -p Harbor12345
+  
   # Docker push them to the harbor registry
   echo "Pushing otel images to Harbor..."
   docker push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
+  
   OTEL_APP_CONTAINER_URL="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app"
   deploy_file="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
   tag="latest"
-  echo "pushing the custom-otel-app-chart"
+  
+  echo "Preparing Helm chart..."
   cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code"
-  #sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
-  #sed -i "s|repository: *.*|repository: \"oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
+  
+  # Increment chart version
+  CHART_FILE="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/Chart.yaml"
+  CURRENT_VERSION=$(grep "^version:" "$CHART_FILE" | awk '{print $2}')
+  
+  # Increment patch version (e.g., 0.1.0 -> 0.1.1)
+  IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+  NEW_VERSION="${major}.${minor}.$((patch + 1))"
+  
+  echo "Incrementing chart version: $CURRENT_VERSION -> $NEW_VERSION"
+  sed -i "s/^version:.*/version: $NEW_VERSION/" "$CHART_FILE"
+  
+  # Replace placeholders in values.yaml
+  echo "Replacing placeholders in values.yaml..."
   sed -i "s|{{REPOSITORY}}|$OTEL_APP_CONTAINER_URL|g" "$deploy_file" 2>/dev/null || true
   sed -i "s|{{TAG}}|$tag|g" "$deploy_file" 2>/dev/null || true
   
-    
+	
+  # Package and push chart
+  echo "Packaging Helm chart version $NEW_VERSION..."
   helm package helm/
-  helm push custom-otel-helm-0.1.0.tgz "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
-  HELM_REPOSITORY="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library"
-  HELM_REVISION="0.1.0"
+  
+  echo "Pushing chart to Harbor..."
+  helm push "custom-otel-helm-${NEW_VERSION}.tgz" "oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library" --plain-http
+  
+  # Update margo.yaml in package directory
+  HELM_REPOSITORY="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-helm"
+  HELM_REVISION="$NEW_VERSION"
   helm_deploy_file="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
 
-  #sed -i "s|\"repository\": *\"oci://[^\"]*\"|\"repository\": \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
-  #sed -i "s|repository: *oci://[^[:space:]]*|repository: \"oci://$OTEL_APP_CONTAINER_URL\"|" "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
-  #sed -i 's|revision: *latest|revision: 0.1.0|' "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
+  echo "Updating margo.yaml with chart version $NEW_VERSION..."
+											
+								   
   sed -i "s|{{HELM_REPOSITORY}}|$HELM_REPOSITORY|g" "$helm_deploy_file" 2>/dev/null || true
   sed -i "s|{{HELM_REVISION}}|$HELM_REVISION|g" "$helm_deploy_file" 2>/dev/null || true
   
+  # Also update any existing hardcoded versions in margo.yaml
+  sed -i "s|revision: [0-9]\+\.[0-9]\+\.[0-9]\+|revision: $NEW_VERSION|g" "$helm_deploy_file" 2>/dev/null || true
+  sed -i "s|revision: \"[0-9]\+\.[0-9]\+\.[0-9]\+\"|revision: \"$NEW_VERSION\"|g" "$helm_deploy_file" 2>/dev/null || true
   
-  echo "✅ custom otel images successfully pushed to Harbor"
+  echo "✅ Custom otel chart version $NEW_VERSION successfully pushed to Harbor"
+  echo "📦 Chart: oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-helm:$NEW_VERSION"
+  echo "🔄 Updated margo.yaml to reference version $NEW_VERSION"
+  
+  #  Update instance.yaml template in Symphony CLI
+  instance_template="$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml"
+  if [ -f "$instance_template" ]; then
+    echo "📝 Updating instance.yaml template with version $NEW_VERSION..."
+    
+    # Update revision field (handles both quoted and unquoted versions)
+    sed -i "s|revision: [0-9]\+\.[0-9]\+\.[0-9]\+|revision: $NEW_VERSION|g" "$instance_template"
+    sed -i "s|revision: \"[0-9]\+\.[0-9]\+\.[0-9]\+\"|revision: \"$NEW_VERSION\"|g" "$instance_template"
+    
+    # Also update repository if it exists
+    sed -i "s|repository: oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library$|repository: oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-helm|g" "$instance_template"
+    
+    echo "✅ Updated instance.yaml template to version $NEW_VERSION"
+  else
+    echo "⚠️ Warning: instance.yaml template not found at $instance_template"
+    echo "   You may need to manually update the template or create deployments using packages"
+  fi
+
+  # Push updated margo.yaml to Gogs
+  echo "📤 Pushing updated margo.yaml to Gogs..."
+  push_custom_otel_files
+  
+  echo "✅ Build and push complete! "
+  
 }
+
+
 
 
 # Optional: Cleanup function to remove local images after pushing
@@ -1466,17 +1594,14 @@ install_prerequisites() {
   install_docker_compose
   add_insecure_registry_to_daemon
   setup_k3s
-  install_rust
+  install_redis
   
   clone_symphony_repo
   clone_dev_repo
+  add_container_registry_mirror_to_k3s
+  #setup_keycloak            
+  #update_keycloak_config      
   
-  
-  setup_keycloak
-  update_keycloak_config
-  
-  setup_harbor
-  build_custom_otel_container_images
  
   setup_gogs_directories
   start_gogs
@@ -1484,9 +1609,11 @@ install_prerequisites() {
   create_gogs_admin
   create_gogs_token
   create_gogs_repositories
+  setup_harbor
+  build_custom_otel_container_images			  
   push_nextcloud_files
   push_nginx_files
-  push_custom_otel_files  
+ 
   echo "setup completed"
 }
 
@@ -1494,26 +1621,279 @@ start_symphony() {
   echo "Starting Symphony API server on..."
   export PATH="$PATH:/usr/local/go/bin";
   # Build phase
-  build_rust
-  build_symphony_api_server
-  build_maestro_cli
-  verify_symphony_api
-  start_symphony_api
-  echo "symphony API server started"
+
+ 
+ 
+ 
+ 
+  build_maestro_cli   # this is required for WFM CLI operations
+  # verify_symphony_api
+  enable_tls_in_symphony_api
+  # uncomment to run the symphony api as a binary
+  # start_symphony_api
+  start_symphony_api_container
 }
 
+start_symphony_api_container(){
+
+    cd "$HOME/symphony/api"
+	echo "Building Symphony API container..."																			   
+    
+    # Check for required environment variables
+    if [ -z "$GITHUB_USER" ] || [ -z "$GITHUB_TOKEN" ]; then
+        echo "Error: GITHUB_USER and GITHUB_TOKEN environment variables must be set"
+        echo "Current values:"
+        echo "  GITHUB_USER: ${GITHUB_USER:-'(not set)'}"
+        echo "  GITHUB_TOKEN: ${GITHUB_TOKEN:-'(not set)'}"
+        return 1
+    fi
+    
+    echo "Using GitHub credentials for user: $GITHUB_USER"
+
+    # Stop and remove existing container if present
+    echo "Stopping and removing existing symphony-api-container if present..."
+    docker stop symphony-api-container 2>/dev/null || true
+    docker rm symphony-api-container 2>/dev/null || true
+	pkill -f "symphony-api" 2>/dev/null || true										   
+    
+    # Check if image already exists
+    if docker image inspect margo-symphony-api:latest >/dev/null 2>&1; then
+        echo "✅ Image margo-symphony-api:latest already exists, skipping build"
+    else
+        echo "🔨 Building Symphony API container..."
+        
+        # Create credential files
+        echo "$GITHUB_USER" > github_username.txt
+        echo "$GITHUB_TOKEN" > github_token.txt
+
+        # Build with secrets
+        docker build \
+          --secret id=github_username,src=github_username.txt \
+          --secret id=github_token,src=github_token.txt \
+          -t margo-symphony-api:latest \
+          .. -f Dockerfile
+
+        # Clean up credential files
+        rm github_username.txt github_token.txt
+        
+        if [ $? -ne 0 ]; then
+            echo "❌ Failed to build Symphony API container"
+            return 1
+        fi
+        
+	   
+        echo "✅ Symphony API container built successfully with tag: margo-symphony-api:latest"
+    fi
+    
+    # Run the container
+    echo "🚀 Starting Symphony API container..."
+
+    docker run -dit --name symphony-api-container \
+        --network host \
+        -p 8082:8082 \
+        -e LOG_LEVEL=Debug \
+        -v "$HOME/symphony/api/certificates:/certificates" \
+        -v "$HOME/symphony/api":/configs \
+        -e CONFIG=symphony-api-margo.json \
+        margo-symphony-api:latest
+        
+    if [ $? -eq 0 ]; then
+        echo "✅ Symphony API container started successfully"
+        echo "📡 Container is running on port 8082"
+        echo "🏷️  Container name: symphony-api-container"
+    else
+        echo "❌ Failed to start Symphony API container"
+        return 1
+    fi
+ 
+}
+
+
 stop_symphony() {
-  echo "Stopping Symphony API on..."
-  PID=$(ps -ef | grep '[s]ymphony-api-margo.json' | awk '{print $2}'); 
-  if [ -z "$PID" ]; then 
-    echo '❌ Symphony API is not running'; 
-  else 
-    kill -9 $PID && echo '✅ Symphony API stopped'; 
+  echo "Stopping and removing Symphony API container..."
+  
+  # Stop the container if running
+  if docker ps --format '{{.Names}}' | grep -q "symphony-api-container"; then
+    docker stop symphony-api-container && echo '✅ Symphony API container stopped'
+  fi
+  
+  # Remove the container if it exists
+  if docker ps -a --format '{{.Names}}' | grep -q "symphony-api-container"; then
+    docker rm symphony-api-container && echo '✅ Symphony API container removed'
+  else
+    echo 'ℹ️ Symphony API container not found'
+  fi
+  
+  # Prompt user to delete Redis data
+  echo ""
+  echo "⚠️  Warning: Deleting Redis data will require device re-onboarding"
+  read -p "Do you want to delete Redis data? (y/n): " delete_redis
+  
+  if [[ "$delete_redis" =~ ^[Yy]$ ]]; then
+    echo "Flushing Redis data..."
+    if redis-cli flushall; then
+      echo '✅ Redis data deleted successfully'
+      echo 'ℹ️ Device re-onboarding will be required'
+    else
+      echo '❌ Failed to delete Redis data'
+    fi
+  else
+    echo 'ℹ️ Redis data preserved'
   fi
 }
 
 
-# Update the show_menu function to include uninstall option
+
+# Collect certificate information
+collect_certs_info() {
+    # read -p "Common Name (FQDN): " CN
+    # read -p "Country (2 letters, default: US): " C
+    # read -p "State (default: CA): " ST
+    # read -p "City (default: San Francisco): " L
+    # read -p "Organization (default: MyCompany): " O
+    # read -p "Email (default: admin@example.com): " EMAIL
+    # read -p "Validity days (default: 365): " DAYS
+    # read -p "Additional domains (comma-separated, optional): " SAN_DOMAINS
+    # read -p "Additional IPs (comma-separated, optional): " SAN_IPS
+
+    CN="${EXPOSED_SYMPHONY_IP:-localhost}"
+    C="IN"
+    ST="GGN"
+    L="Some ABC Location"
+    O="Margo"
+    EMAIL="admin@example.com"
+    DAYS="365"
+    SAN_DOMAINS="${EXPOSED_SYMPHONY_IP:-localhost}"
+    SAN_IPS="${EXPOSED_SYMPHONY_IP:-localhost}"
+    
+    # # Set defaults
+    # C=${C:-IN}
+    # ST=${ST:-GGN}
+    # L=${L:-"Some ABC Location"}
+    # O=${O:-Margo}
+    # EMAIL=${EMAIL:-admin@example.com}
+    # DAYS=${DAYS:-365}
+    
+    echo "Using certificate defaults with CN: $CN"
+}
+
+
+# Generate OpenSSL config
+generate_config_for_certs() {
+    local config_file="$1"
+    local cert_type="$2"
+    
+    # Create base config
+    cat > "$config_file" << EOF
+[req]
+default_bits = 2048
+prompt = no
+distinguished_name = dn
+$([ "$cert_type" = "server" ] && echo "req_extensions = v3_req")
+
+[dn]
+C=$C
+ST=$ST
+L=$L
+O=$O
+CN=$CN
+emailAddress=$EMAIL
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = $CN
+EOF
+
+    # Initialize counters
+    local dns_count=2
+    local ip_count=1
+
+    # Add SAN domains if provided
+    if [ -n "$SAN_DOMAINS" ]; then
+        echo "Adding SAN domains..."
+        IFS=',' read -ra DOMAINS <<< "$SAN_DOMAINS"
+        for domain in "${DOMAINS[@]}"; do
+            echo "DNS.$dns_count = ${domain// /}" >> "$config_file"
+            ((dns_count++))
+        done
+    fi
+
+    # Add SAN IPs if provided
+  if [ -n "$SAN_IPS" ]; then
+    echo "Adding SAN IPs..."
+    IFS=',' read -ra IPS <<< "$SAN_IPS"
+    for ip in "${IPS[@]}"; do
+        echo "IP.$ip_count = ${ip// /}" >> "$config_file"
+        ((ip_count++))
+    done
+  fi
+
+    # Debug output
+    echo "Generated OpenSSL config at $config_file:"
+    cat "$config_file"
+}
+
+
+# Generate CA certificate
+generate_ca() {
+    info "Generating CA certificate..."
+    local ca_key="$CERT_DIR/ca-key.pem"
+    local ca_cert="$CERT_DIR/ca-cert.pem"
+    local ca_config="$CERT_DIR/ca.conf"
+    
+    generate_config_for_certs "$ca_config" "ca"
+    
+    openssl genrsa -out "$ca_key" 2048
+    openssl req -new -x509 -key "$ca_key" -out "$ca_cert" -days "$DAYS" -config "$ca_config"
+    chmod 600 "$ca_key"
+    
+    success "CA generated: $ca_cert"
+}
+
+# Generate server certificate
+generate_server_certs() {
+    echo "Generating server certificate..."
+    if ! mkdir -p "$CERT_DIR"; then
+        echo "Error: Failed to create directory $CERT_DIR"
+        return 1
+    fi
+    
+    if [[ ! -w "$CERT_DIR" ]]; then
+        echo "Error: Cannot write to $CERT_DIR"
+        return 1
+    fi
+    local server_key="$CERT_DIR/server-key.pem"
+    local server_csr="$CERT_DIR/server.csr"
+    local server_cert="$CERT_DIR/server-cert.pem"
+    local server_config="$CERT_DIR/server.conf"
+    generate_ca
+    generate_config_for_certs "$server_config" "server"
+    
+    openssl genrsa -out "$server_key" 2048
+    openssl req -new -key "$server_key" -out "$server_csr" -config "$server_config"
+    
+    if [[ -f "$CERT_DIR/ca-cert.pem" ]]; then
+        openssl x509 -req -in "$server_csr" -CA "$CERT_DIR/ca-cert.pem" -CAkey "$CERT_DIR/ca-key.pem" \
+            -CAcreateserial -out "$server_cert" -days "$DAYS" -extensions v3_req -extfile "$server_config"
+        success "Server certificate signed by CA: $server_cert"
+    else
+        openssl x509 -req -in "$server_csr" -signkey "$server_key" -out "$server_cert" -days "$DAYS" \
+            -extensions v3_req -extfile "$server_config"
+        success "Self-signed server certificate: $server_cert"
+    fi
+    
+    rm -f "$server_csr"
+    chmod 600 "$server_key"
+}
+
+
+
+# Update the show_menu function to include uninstall option														   
 show_menu() {
   echo "Choose an option:"
   echo "1) PreRequisites: Setup"
@@ -1522,10 +1902,7 @@ show_menu() {
   echo "4) Symphony: Stop"
   echo "5) ObeservabiliyStack: Start"
   echo "6) ObeservabiliyStack: Stop"
-  echo "7) Registry-K3s: Add-Pull-Secrets"
-  # echo "8) Advanced: Setup"
-  # echo "9) Advanced: Cleanup"
-  read -p "Enter choice [1-7]: " choice
+  read -p "Enter choice [1-6]: " choice
   case $choice in
     1) install_prerequisites ;;
     2) uninstall_prerequisites ;;
@@ -1533,9 +1910,6 @@ show_menu() {
     4) stop_symphony ;;
     5) observability_stack_install ;;
     6) observability_stack_uninstall ;;
-    7) add_container_registry_mirror_to_k3s;;
-    # 8) show_advance_setup_menu;;
-    # 9) show_advance_teardown_menu;;
     *) echo "⚠️ Invalid choice"; exit 1 ;;
   esac
 }
@@ -1546,110 +1920,4 @@ show_menu() {
 # Update the main script execution section
 if [[ -z "$1" ]]; then
   show_menu
-else
-  case "$1" in
-    Prepare-Environment) install_prerequisites ;;
-    Symphony-Start) start_symphony ;;
-    Symphony-Stop) stop_symphony ;;
-    Jaeger_Prometheus_Grafana_Loki-Installation) observability_stack_install ;;
-    Jaeger_Prometheus_Grafana_Loki-Uninstallation) observability_stack_uninstall ;;
-    Teardown-Environment) uninstall_prerequisites ;;
-    Add-Container-Registry-Mirror-To-K3s) add_container_registry_mirror_to_k3s;;
-    # Advanced-Options) advanced_options;;
-    *) echo "Usage: $0 {prepare-environment|symphony-start|symphony-stop|uninstall-prerequisites|observability_stack_install|observability_stack_uninstall|add_container_registry_mirror_to_k3s|advanced-options}"; exit 1 ;;
-  esac
 fi
-
-
-
-show_advance_setup_menu() {
-  echo "Choose an option:"
-  echo "1) Install Basic Utilities"
-  echo "2) Install Golang"
-  echo "3) Install K3s"
-  echo "4) Bring up Gogs"
-  echo "5) Bring up Harbor"
-  echo "6) Bring up Keycloak"
-  echo "7) Clone Symphony"
-  echo "8) Build Symphony"
-  echo "9) Clone Dev-Repo"
-  echo "10) Build Custom OTEL Images"
-  echo "11) Install Observability"
-  echo "12) Push Nginx Package"
-  echo "13) Push Custom OTEL Package"
-  echo "14) Push Nextcloud Package"
-  echo "15) Go Back"
-  read -p "Enter choice [1-15]: " choice
-  case $choice in
-    1) install_basic_utilities ;;
-    2) install_go ;;
-    3) setup_k3s ;;
-    4) 
-      setup_gogs_directories
-      start_gogs
-      wait_for_gogs
-      create_gogs_admin
-      create_gogs_token
-      create_gogs_repositories ;;
-    5) setup_harbor ;;
-    6) 
-      setup_keycloak
-      update_keycloak_config ;;
-    7) clone_symphony_repo ;;
-    8) 
-      build_rust
-      build_symphony_api_server
-      build_maestro_cli
-      verify_symphony_api ;;
-    9) clone_dev_repo ;;
-    10) build_custom_otel_container_images ;;
-    11) observability_stack_install ;;
-    12) push_nginx_files ;;
-    13) push_custom_otel_files ;;
-    14) push_nextcloud_files ;;
-    15) show_menu ;;
-    *) echo "⚠️ Invalid choice"; show_advance_setup_menu ;;
-  esac
-}
-
-show_advance_tearup_menu() {
-  echo "Choose a teardown option:"
-  echo "1) Stop Symphony API Server"
-  echo "2) Remove Symphony Builds/Binaries" 
-  echo "3) Reset App Supplier Repositories Changes"
-  echo "4) Remove Gogs Repositories"
-  echo "5) Cleanup Gogs Admin & Token"
-  echo "6) Stop Gogs Service"
-  echo "7) Cleanup Gogs Data Directories"
-  echo "8) Revert Keycloak Config"
-  echo "9) Stop Keycloak Service"
-  echo "10) Stop Harbor Service"
-  echo "11) Remove Cloned Repositories"
-  echo "12) Uninstall Rust"
-  echo "13) Uninstall Docker Compose"
-  echo "14) Uninstall Go"
-  echo "15) Cleanup Basic Utilities"
-  echo "16) Uninstall Observability Stack"
-  echo "17) Go Back"
-  read -p "Enter choice [1-17]: " choice
-  case $choice in
-    1) stop_symphony_api_process ;;
-    2) cleanup_symphony_builds ;;
-    3) cleanup_app_supplier_git_repositories ;;
-    4) remove_gogs_repositories ;;
-    5) cleanup_gogs_admin ;;
-    6) stop_gogs_service ;;
-    7) cleanup_gogs_directories ;;
-    8) revert_keycloak_config ;;
-    9) stop_keycloak_service ;;
-    10) stop_harbor_service ;;
-    11) remove_cloned_repositories ;;
-    12) uninstall_rust ;;
-    13) uninstall_docker_compose ;;
-    14) uninstall_go ;;
-    15) cleanup_basic_utilities ;;
-    16) observability_stack_uninstall ;;
-    17) show_menu ;;
-    *) echo "⚠️ Invalid choice"; show_advance_tearup_menu ;;
-  esac
-}

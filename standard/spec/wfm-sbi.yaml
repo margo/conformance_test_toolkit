@@ -1,673 +1,531 @@
-openapi: 3.0.4
+openapi: 3.0.3
 info:
-  title: MARGO Workload Fleet Management (WFM) API
+  title: Margo Workload Management API
   version: 1.0.0
-  description: |
-    Unified API specification for the MARGO Workload Fleet Management (WFM) service.
-    Includes APIs for device onboarding, reporting device capabilities, reporting deployment status,
-    and managing application desired state.
+  description: >
+    API for managing workloads on Margo-compliant edge devices.
+    Includes the APIs for exchanging desired state and current state.
+    Communication is secured using server-side TLS (TLS 1.3 preferred),
+    and payloads are signed using X.509 certificates.
 
 servers:
-  - url: https://margo.swagger.io/api/v0  # Update with your actual server URL
+  - url: https://wfm.margo.org/
+    description: Workload Fleet Manager API
 
-tags:
-  - name: onboarding
-    description: APIs for device onboarding.
-  - name: device
-    description: APIs for managing device information and capabilities.
-  - name: deployment
-    description: APIs for managing deployment status.
-  - name: wfm
-    description: APIs for workload fleet management.
+security:
+  - PayloadSignature: []
 
 paths:
-  /onboarding/rootCA:
+  /api/v1/onboarding/certificate:
     get:
-      summary: Download the workload orchestration solution vendor's public root CA certificate.
-      description: |
-        Devices call this API to download the root CA certificate, establishing trust with the WFM web service.
-      tags:
-        - onboarding
+      summary: Download Root CA certificate
       responses:
         '200':
-          description: Successful operation. Returns the root CA certificate.
-          content:
-            application/x-pem-file:  # Or application/x-x509-ca-cert, depending on the format
-              schema:
-                type: string
-                description: The root CA certificate in PEM format.
-        '500':
-          description: Internal server error.
+          description: Root CA certificate
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
-  /onboarding/device:
+                type: object
+                properties:
+                  certificate:
+                    type: string
+                    description: Base64-encoded certificate text
+  /api/v1/onboarding:
     post:
-      summary: Onboard the device with the workload orchestration service.
-      description: |
-        Devices call this API to onboard with the WFM service and receive necessary credentials.
-      tags:
-        - onboarding
       requestBody:
-        description: Device onboarding request.  (Details TBD)
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OnboardingRequest'  # Define this schema later
-      responses:
-        '200':
-          description: Successful onboarding. Returns client credentials and Git repository information.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingResponse' # Define this schema later
-        '400':
-          description: Bad request (e.g., invalid input).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - api_key: []  # Replace with your actual security scheme
-
-  /device/{deviceId}/capabilities:
-    post:
-      summary: Report device capabilities (Create)
-      description: |
-        Devices call this API to report their capabilities.  This is typically done during onboarding or when capabilities change significantly.
-      tags:
-        - device
-      parameters:
-        - in: path
-          name: deviceId
-          schema:
-            type: string
-          required: true
-          description: The device's ID registered with the workload orchestration web service.
-      requestBody:
-        description: Device capabilities information
+              properties:
+                public_certificate:
+                  description: Base64-encoded client certificate
+                  type: string
+              type: object
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeviceCapabilities'
-      responses:
-        '200':
-          description: The device capabilities document was added successfully.
-        '400':
-          description: Bad request (e.g., invalid input).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Device not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - api_key: []  # Replace with your actual security scheme
-    put:
-      summary: Update device capabilities (Update)
-      description: |
-        Devices call this API to update their capabilities.  This is typically done when capabilities change.
-      tags:
-        - device
-      parameters:
-        - in: path
-          name: deviceId
-          schema:
-            type: string
-          required: true
-          description: The device's ID registered with the workload orchestration web service.
-      requestBody:
-        description: Device capabilities information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeviceCapabilities'
-      responses:
-        '200':
-          description: The device capabilities document was updated successfully.
-        '400':
-          description: Bad request (e.g., invalid input).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Device not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - api_key: []  # Replace with your actual security scheme
-
-  /device/{deviceId}/deployment/{deploymentId}/status:
-    post:
-      summary: Report deployment status
-      description: |
-        Devices call this API to report the current status of a deployment.
-        The WOS uses this information to track deployment progress and identify issues.
-      tags:
-        - deployment
-      parameters:
-        - in: path
-          name: deviceId
-          schema:
-            type: string
-          required: true
-          description: The device's ID registered with the workload orchestration web service.
-        - in: path
-          name: deploymentId
-          schema:
-            type: string
-            format: uuid
-          required: true
-          description: The deployment ID the status is being reported for (UUID).
-      requestBody:
-        description: Deployment status information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeploymentStatus'
       responses:
         '201':
-          description: The deployment status was added or updated successfully.
+          content:
+            application/json:
+              schema:
+                properties:
+                  client_id:
+                    type: string
+                type: object
+          description: New client onboarded successfully.
         '400':
-          description: Bad request (e.g., invalid input).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Device or deployment not found.
+                properties:
+                  error:
+                    example: Invalid certificate
+                    type: string
+                type: object
+          description: Invalid certificate format or structure.
+        '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                properties:
+                  error:
+                    example: Client rejected
+                    type: string
+                type: object
+          description: Client certificate not trusted or client rejected.
       security:
-        - api_key: []  # Replace with your actual security scheme
+      - PayloadSignature: []
+      summary: Complete onboarding with client certificate
 
-  /wfm/state:
+  /api/v1/clients/{clientId}/capabilities:
     post:
-      tags:
-        - wfm
-      summary: Device sends this API to the WFM to update the current-state of the device and applications.
-      description: Device sends this API to the WFM to update the current-state of the device and applications.
-      operationId: state
-      requestBody:
-        description: The current-state of the device as well as the state of each deployed app
-        content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/currentAppStates'
-      responses:
-        '200':
-          description: Successful operation, WFM returns desired state of Applications
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/desiredAppStates'
-        '422':
-          description: Validation exception
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+      summary: Report device capabilities
       security:
-        - margo_auth:
-            - write:state
-            - read:state
-
-  /wfm/process:
-    post:
-      tags:
-        - wfm
-      summary: Device sends this API to the WFM after it's poked with a private RPC Id.
-      description: Device sends this API to the WFM after it's poked with a private RPC Id.
-      operationId: process
-      requestBody:
-        description: Send a private payload, not defined by MARGO
-        content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/privatePayload'
+        - PayloadSignature: []
       parameters:
-        - name: rpcId
-          in: query
-          description: An RPC call to the WFM, initiated by the Device
-          required: false
-          explode: true
+        - name: clientId
+          in: path
+          required: true
           schema:
-            type: integer
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCapabilitiesManifest'
+      responses:
+        '201':
+          description: Capabilities reported successfully
+        '400':
+          description: Missing or invalid content-digest header. Ensure the SHA256 hash of the payload is included.
+        '401':
+          description: Signature verification failed. Ensure you are signing with the correct X.509 private key.
+        '403':
+          description: Client certificate is not trusted or has been revoked.
+        '422':
+          description: Request body includes a semantic error.
+    put:
+      summary: Update device capabilities (Update)
+      security:
+        - PayloadSignature: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCapabilitiesManifest'
+      responses:
+        '201':
+          description: Capabilities reported successfully
+        '400':
+          description: Missing or invalid content-digest header. Ensure the SHA256 hash of the payload is included.
+        '401':
+          description: Signature verification failed. Ensure you are signing with the correct X.509 private key.
+        '403':
+          description: Client certificate is not trusted or has been revoked.
+        '422':
+          description: Request body includes a semantic error.
+
+  /api/v1/clients/{clientId}/bundles/{digest}:
+    get:
+      summary: Retrieve bundle information for a specific device and digest
+      security:
+        - PayloadSignature: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the device-client
+        - name: digest
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Content-addressable digest of the bundle archive. MUST conform to the 'digest' attribute in the Digest Specification and MUST equal the digest computed over the exact sequence of bytes (per Exact Bytes Rule) in the HTTP 200 OK response body. If the server cannot produce content whose digest matches this value it MUST return 404 Not Found.
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+          description: Quoted ETag (same as digest) previously returned for this bundle.
       responses:
         '200':
-          description: Successful operation, WFM returns a private payload not defined by MARGO
-          content:
-            application/json:
+          description: Bundle archive (immutable)
+          headers:
+            ETag:
               schema:
-                $ref: '#/components/schemas/privatePayload'
-        '422':
-          description: Validation exception
-        default:
-          description: Unexpected error
-          content:
-            application/json:
+                type: string
+              description: New ETag for the returned manifest
+            Cache-Control:
               schema:
-                $ref: "#/components/schemas/Error"
+                type: string
+              description: public, max-age=31536000, immutable
+          content:
+            application/vnd.margo.bundle.v1+tar+gzip:
+              schema:
+                type: string
+                format: binary
+                description: Gzip-compressed tar containing one YAML file per deployment.
+        '304':
+          description: Representation not modified
+        '404':
+          description: Bundle not found for the given digest
+        '400':
+           description: Invalid request.
+        # TBD
+        # '500':
+        #   $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/clients/{clientId}/deployments:
+    get:
+      summary: Retrieve the complete desired state for all workloads assigned to a device
       security:
-        - margo_auth:
-            - write:state
-            - read:state
+        - PayloadSignature: []      
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the Edge Compute Device making the request
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+          description: >
+            ETag value of the last successfully synced manifest. The ETag is returned to the client from the /deployments endpoint, it is the digest of the state manifest.
+        - name: Accept
+          in: header
+          required: false
+          schema:
+            type: string
+          description: >
+            Indicates which manifest formats the client supports.
+            Supported values: application/vnd.margo.manifest.v1+json.
+      responses:
+        '200':
+          description: Manifest returned in the negotiated format
+          headers:
+            Content-Type:
+              schema:
+                type: string
+              description: Format of the returned manifest
+            ETag:
+              schema:
+                type: string
+              description: New ETag for the returned manifest
+          content:
+            application/vnd.margo.manifest.v1+json:
+              schema:
+                $ref: '#/components/schemas/UnsignedAppStateManifest'
+        '304':
+          description: Not Modified - Manifest has not changed
+        '406':
+          description: Not Acceptable - Server cannot generate a response matching the Accept header
+
+
+  /api/v1/clients/{clientId}/deployments/{deploymentId}/{digest}:
+    get:
+      summary: Retrieve an individual ApplicationDeployment YAML file
+      security:
+        - PayloadSignature: []        
+      description: >
+        This endpoint is used by the client to fetch the YAML for a single ApplicationDeployment after it has processed a new State Manifest and identified a small number of new or updated deployments. This allows for highly efficient, incremental updates without needing to download the full bundle.
+        To make individual workload retrievals race-free and cache-friendly, this endpoint is content-addressable: the digest of the expected YAML is part of the URL. This guarantees immutability of the fetched resource and prevents a time-of-check / time-of-use race where a deployment changes between manifest retrieval and content fetch.
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the Edge Compute Device
+        - name: deploymentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: UUID of the ApplicationDeployment (metadata.annotations.id)
+        - name: digest
+          in: path
+          required: true
+          schema:
+            type: string
+          description: >
+            Content-addressable digest of the ApplicationDeployment YAML file. MUST conform to the Digest Specification and MUST equal the digest computed over the exact sequence of bytes (per Exact Bytes Rule) in the HTTP 200 OK response body. If the server cannot produce content whose digest matches this value it MUST return 404 Not Found.
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+          description: >
+            Optional ETag for caching. The ETag is returned to the client from the /deployments endpoint, it is the digest of the state manifest.
+        - name: Accept-Encoding
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Indicates supported compression formats (e.g., gzip, br)
+      responses:
+        '200':
+          description: >
+            The response body is the raw ApplicationDeployment YAML file (Content-Type: application/yaml). The content MUST match the {digest} path segment; the server MUST return 404 if it does not have the exact digest referenced.
+          headers:
+            Content-Type:
+              schema:
+                type: string
+              description: application/yaml
+            ETag:
+              schema:
+                type: string
+              description: > 
+                The ETag is returned to the client from the /deployments endpoint, it is the digest of the state manifest.
+            Cache-Control:
+              schema:
+                type: string
+              description: public, max-age=31536000, immutable
+            Vary:
+              schema:
+                type: string
+              description: Accept-Encoding
+          content:
+            application/yaml:
+              schema:
+                type: string
+                description: Raw YAML content of the ApplicationDeployment
+        '404':
+          description: Deployment not found for the given digest
+
+  /api/v1/clients/{clientId}/deployment/{deploymentId}/status:
+    post:
+      summary: Report deployment status
+      security:
+        - PayloadSignature: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: deploymentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeploymentStatusManifest'
+      responses:
+        '200':
+          description: The deployment status was added, or updated, successfully.
+        '400':
+          description: Missing or invalid content-digest header. Ensure the SHA256 hash of the base64-encoded payload is included.
+        '401':
+          description: Signature verification failed. Ensure you are signing with the correct X.509 private key.
+        '403':
+          description: Client certificate is not trusted or has been revoked.
+        '422':
+          description: Request body includes a semantic error.
 
 components:
+  securitySchemes:
+    # TODO: fix this as we are following RFC 9421, instead of a custom signature header field
+    PayloadSignature:
+      type: apiKey
+      in: header
+      name: X-Payload-Signature
+      description: >
+        Base64-encoded payload signature using SHA-256 and device certificate.
+        Format: public_key;digital_signature
   schemas:
-    # Re-use common schemas from the individual specifications
-    Error:
+    ManifestVersion:
+      type: number
+      description: >
+        Monotonically increasing unsigned 64-bit integer in the inclusive range [1, 2^64-1].
+        Prevents rollback attacks. The first manifest MUST use 1.
+    DeploymentBundleRef:
       type: object
-      description: Defines an error that occurred.
+      nullable: true
+      description: >
+        Describes a single archive containing all ApplicationDeployment documents. If there are zero deployments (deployments array is empty) the property MUST be present with the value null (it MUST NOT be omitted).
       properties:
-        code:
+        mediaType:
           type: string
-          description: Associated error code.
-          example: "INTERNAL_ERROR"
-        message:
+          description: >
+            MUST be application/vnd.margo.bundle.v1+tar+gzip; a gzip-compressed tar whose root contains one or more ApplicationDeployment YAML files. If there are zero deployments then bundle MUST be null (an empty archive MUST NOT be served). The archive MUST contain exactly the set of YAML files referenced by deployments.
+        digest:
           type: string
-          description: Associated error message.
-          example: "An unexpected error occurred."
-
-    # Onboarding Schemas
-    OnboardingRequest:
-      type: object
-      description: Request body for the /onboarding/device endpoint.
-      # properties:
-        # TBD - Define the properties of the onboarding request
-        # This will depend on the chosen onboarding method (e.g., FIDO Device Onboarding)
-        # Example:
-        # deviceCertificate:
-        #   type: string
-        #   description: The device's X.509 certificate (PEM encoded).
-      #required:  # Define required fields based on the chosen onboarding method
-
-    OnboardingResponse:
-      type: object
-      description: Response body for the /onboarding/device endpoint.
-      properties:
-        clientId:
-          type: string
-          description: The client ID for OAuth 2.0 authentication.
-          example: "your_client_id"
-        clientSecret:
-          type: string
-          description: The client secret for OAuth 2.0 authentication.
-          example: "your_client_secret"
-        tokenEndpointUrl:
-          type: string
-          format: uri
-          description: The URL for the OAuth 2.0 token endpoint.
-          example: "https://wfm.example.com/oauth/token"
-        gitRepositoryUrl:
-          type: string
-          format: uri
-          description: The URL for the Git repository containing the desired state.
-          example: "https://git.example.com/your-repo.git"
-        gitAccessToken:
-          type: string
-          description: An access token for authenticating with the Git repository.
-          example: "your_git_access_token"
-      required:
-        - clientId
-        - clientSecret
-        - tokenEndpointUrl
-        - gitRepositoryUrl
-        - gitAccessToken
-
-    # Device Capabilities Schemas
-    DeviceCapabilities:
-      type: object
-      description: Reports the capabilities of a device.
-      required:
-        - apiVersion
-        - kind
-        - properties
-      properties:
-        apiVersion:
-          type: string
-          description: Identifier of the version of the API the object definition follows.
-          example: device.margo/v1
-        kind:
-          type: string
-          description: Must be DeviceCapabilities.
-          example: DeviceCapabilities
-        properties:
-          $ref: '#/components/schemas/Properties'
-
-    Properties:
-      type: object
-      description: Defines characteristics about the device.
-      required:
-        - id
-        - vendor
-        - modelNumber
-        - serialNumber
-        - roles
-        - resources
-        - peripherals
-        - interfaces
-      properties:
-        id:
-          type: string
-          description: Unique deviceID assigned to the device via the Device Owner.
-          example: northstarida.xtapro.k8s.edge
-        vendor:
-          type: string
-          description: Defines the device vendor.
-          example: Northstar Industrial Applications
-        modelNumber:
-          type: string
-          description: Defines the model number of the device.
-          example: 332ANZE1-N1
-        serialNumber:
-          type: string
-          description: Defines the serial number of the device.
-          example: PF45343-AA
-        roles:
-          type: array
-          description: Defines the device role it can provide to the Margo environment.
-          items:
-            type: string
-            enum:
-              - standalone cluster
-              - cluster lead
-              - standalone device
-          example: ["standalone cluster", "cluster lead"]
-        resources:
-          $ref: '#/components/schemas/Resources'
-        peripherals:
-          type: array
-          description: Defines the device's peripherals available to the application deployed on the device.
-          items:
-            $ref: '#/components/schemas/Peripheral'
-        interfaces:
-          type: array
-          description: Defines the device's interfaces that are available to the application deployed on the device.
-          items:
-            $ref: '#/components/schemas/Interface'
-
-    Resources:
-      type: object
-      description: Defines the device's resources available to the application deployed on the device.
-      required:
-        - cpus
-        - memory
-        - storage
-      properties:
-        cpus:
-          type: array
-          description: Defines the device's CPUs that are available to the application deployed on the device.
-          items:
-            $ref: '#/components/schemas/CPU'
-        memory:
-          type: integer
-          description: Defines the memory capacity available for applications on the device in GBs.
-          format: int32
-          example: 64
-        storage:
-          type: integer
-          description: Defines the storage capacity available for applications to utilize in GBs.
-          format: int32
-          example: 2000
-
-    CPU:
-      type: object
-      description: Defines the CPU characteristics.
-      required:
-        - cpuArchitecture
-        - cores
-        - frequency
-      properties:
-        cpuArchitecture:
-          type: string
-          description: Defines the CPUs architecture. i.e. ARM/Intel x86.
-          example: Intel x64
-        cores:
-          type: integer
-          description: Defines the cores available within the hosts CPU.
-          format: int32
-          example: 24
-        frequency:
+          description: >
+            The digest of the bundle archive. MUST equal the digest computed over the exact sequence of bytes (per Exact Bytes Rule) in the bundle endpoint's HTTP 200 OK response body.
+        sizeBytes:
           type: number
-          description: Defines the frequency of the CPU in GHz.
-          format: float
-          example: 6.2
-
-    Peripheral:
+          description: >
+            Unsigned 64-bit advisory estimate of the decoded payload length in bytes for the bundle archive. Provided for bandwidth estimation and update planning. MUST NOT be used for integrity; digest verification remains mandatory.
+        url:
+          type: string
+          description: >
+            Content-addressable retrieval endpoint of the form /api/v1/devices/{deviceId}/bundles/{digest} where {digest} equals bundle.digest.
+    DeploymentManifestRef:
       type: object
-      description: Defines a device peripheral.
+      description: >
+        Reference to a deployment manifest with content addressing and integrity verification.
       required:
-        - name
-        - type
-        - modelNumber
-        - properties
-      properties:
-        name:
-          type: string
-          description: Name of the peripheral.
-          example: NVIDIA GeForce RTX 4070 Ti SUPER OC Edition Graphics Card
-        type:
-          type: string
-          description: Type of the peripheral. i.e. GPU
-          example: GPU
-        modelNumber:
-          type: string
-          description: Model number of the peripheral.
-          example: TUF-RTX4070TIS-O16G
-        properties:
-          type: object
-          description: Properties of the peripheral.
-          additionalProperties: true
-          # x-go-type: interface{}
-            # type: string
-          example:
-            manufacturer: NVIDIA
-            series: NVIDIA GeForce RTX 40 Series
-            gpu: GeForce RTX 4070 Ti SUPER
-            ram: 16 GB
-            clockSpeed: 2640 MHz
-
-    Interface:
-      type: object
-      description: Defines a device interface.
-      required:
-        - name
-        - type
-        - modelNumber
-        - properties
-      properties:
-        name:
-          type: string
-          description: Name of the interface.
-          example: RTL8125 NIC 2.5G Gigabit LAN Network Card
-        type:
-          type: string
-          description: Type of the interface. i.e. Ethernet NIC
-          example: Ethernet
-        modelNumber:
-          type: string
-          description: Model number of the interface.
-          example: RTL8125
-        properties:
-          type: object
-          description: Properties of the interface to inform the WOS with additional information.
-          additionalProperties: true
-          #   type: string
-          example:
-            maxSpeed: 2.5 Gbps
-
-    # Deployment Status Schemas
-    DeploymentStatus:
-      type: object
-      description: Reports the status of a deployment.
-      required:
-        - apiVersion
-        - kind
         - deploymentId
-        - status
-        - components
+        - digest
+        - url
       properties:
-        apiVersion:
-          type: string
-          description: Identifier of the version of the API the object definition follows.
-          example: deployment.margo/v1
-        kind:
-          type: string
-          description: Must be DeploymentStatus.
-          example: DeploymentStatus
         deploymentId:
           type: string
-          format: uuid
-          description: The unique identifier UUID of the deployment specification.
-          example: a3e2f5dc-912e-494f-8395-52cf3769bc06
-        status:
-          $ref: '#/components/schemas/OverallStatus'
-        components:
-          type: array
-          description: Individual component deployment statuses.
-          items:
-            $ref: '#/components/schemas/ComponentStatus'
-
-    OverallStatus:
-      type: object
-      description: Defines the overall deployment status.
-      required:
-        - state
-      properties:
-        state:
+          description: >
+            The unique UUID from the ApplicationDeployment's metadata.annotations.id.
+        digest:
           type: string
-          description: Current state of the overall deployment.
-          enum:
-            - Pending
-            - Installing
-            - Installed
-            - Failed
-          example: Pending
-        error:
-          $ref: '#/components/schemas/Error'
+          description: >
+            The digest of the individual ApplicationDeployment YAML file. MUST equal the digest computed over the exact sequence of bytes (per Exact Bytes Rule) in that deployment endpoint's HTTP 200 OK response body.
+        sizeBytes:
+          type: number
+          description: >
+            Unsigned 64-bit advisory estimate of the decoded payload length in bytes for the deployment YAML. Provided for planning or progress display. MUST NOT be used for integrity; digest verification remains mandatory.
+        url:
+          type: string
+          description: >
+            Content-addressable endpoint of the form /api/v1/devices/{deviceId}/deployments/{deploymentId}/{digest}. The {digest} MUST equal deployments[].digest; the referenced resource is immutable
+    UnsignedAppStateManifest:
+      type: object
+      required:
+        - manifestVersion
+        - bundle
+        - bundle.mediaType
+        - bundle.digest
+        - bundle.url
+        - deployments
+      properties:
+        manifestVersion:
+          $ref: '#/components/schemas/ManifestVersion' 
+        bundle:
+          $ref: '#/components/schemas/DeploymentBundleRef'
+        deployments:
+          type: array
+          description: A list of deployment object references for the device. The reference contains some meta info and reference to the url where the deployment is available.
+          items:
+            $ref: '#/components/schemas/DeploymentManifestRef'
+    DeviceCapabilitiesManifest:
+      type: object
+      required: [apiVersion, kind, properties]
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+          enum: [DeviceCapabilities]
+        properties:
+          type: object
+          required: [id, vendor, modelNumber, serialNumber, roles, resources]
+          properties:
+            id:
+              type: string
+            vendor:
+              type: string
+            modelNumber:
+              type: string
+            serialNumber:
+              type: string
+            roles:
+              type: array
+              items:
+                type: string
+                enum: [Standalone Cluster, Cluster Leader, Standalone Device]
+            resources:
+              type: object
+              required: [cpu, memory, storage]
+              properties:
+                cpu:
+                  type: object
+                  properties:
+                    cores:
+                      type: number
+                memory:
+                  type: string
+                storage:
+                  type: string
 
     ComponentStatus:
       type: object
-      description: Defines the status of a single deployment component.
-      required:
-        - name
-        - state
+      required: [name, state]
       properties:
         name:
           type: string
-          description: Name of the deployment component (inherited from the deployment specification).
-          example: digitron-orchestrator
         state:
           type: string
-          description: The component's current deployment state.
-          enum:
-            - Pending
-            - Installing
-            - Installed
-            - Failed
-          example: Pending
+          enum: [Pending, Installing, Installed, Failed, Removing, Removed, Updating, Updated]
         error:
-          $ref: '#/components/schemas/Error'
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
 
-    # Seek State Schemas
-    currentAppStates:
-      type: array
-      items:
-        $ref: '#/components/schemas/appState'
-      xml:
-        name: currentAppStates
-
-    desiredAppStates:
-      type: array
-      items:
-        $ref: '#/components/schemas/appState'
-      xml:
-        name: desiredAppStates
-
-    appState:
+    DeploymentStatusManifest:
       type: object
+      required: [apiVersion, kind, deploymentId, status, components]
       properties:
-        appId:
+        apiVersion:
           type: string
-          example: a12nub7ub
-        appVersion:
+        kind:
           type: string
-          description: Version String
-          example: v1.2.0
-        appDeploymentYAML:
+          enum: [DeploymentStatus]
+        deploymentId:
           type: string
-          description: Base64 encoded MARGO ApplicationDescription YAML content
-          example: a2V5MTogdmFsdWUxCmtleTI6IHZhbHVlMgo=
-        appDeploymentYAMLHash:
-          type: string
-          description: App Hash encoding used for versioning the MARGO ApplicationDescription
-          example: c6779ec2960296ed9a04f08d67f64422
-        appState:
-          type: string
-          default: STOPPED
-          enum:
-            - RUNNING
-            - UPDATING
-            - CRASHLOOP
-            - STOPPED
-            - REMOVING
-            - PENDING
-      required:
-        - appId
-        - appVersion
-        - appDeploymentYAMLHash
-        - appState
-      xml:
-        name: appCurrentState
+        status:
+          type: object
+          required: [state]
+          properties:
+            state:
+              type: string
+              enum: [Pending, Installing, Installed, Failed, Removing, Removed, Updating, Updated]
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentStatus'
 
-    privatePayload:
+    # app deployment struct added here for ease of programming, the code generators will generate the structs
+    # for the actual app deployment yaml and parsing would be easy to do
+    appDeploymentManifest:
       type: object
+      description: Application Deployment manifest
+      required: [apiVersion, kind, metadata, spec]
       properties:
-        code:
+        apiVersion:
           type: string
-
+          default: margo.org
+          description: API version
+        kind:
+          type: string
+          default: ApplicationDeployment
+          description: Resource kind
+        metadata:
+          $ref: '#/components/schemas/appDeploymentMetadata'
+        spec:
+          $ref: '#/components/schemas/appDeploymentSpec'
     appDeploymentMetadata:
       type: object
       required: [name]
@@ -797,44 +655,3 @@ components:
         parameters:
           $ref: '#/components/schemas/appDeploymentParams'
           description: Parameters for the deployment
-    appDeployment:
-      type: object
-      description: Application Deployment manifest
-      required: [apiVersion, kind, metadata, spec]
-      properties:
-        apiVersion:
-          type: string
-          default: margo.org
-          description: API version
-        kind:
-          type: string
-          default: ApplicationDeployment
-          description: Resource kind
-        metadata:
-          $ref: '#/components/schemas/appDeploymentMetadata'
-        spec:
-          $ref: '#/components/schemas/appDeploymentSpec'
-
-  requestBodies:
-    UserArray:
-      description: List of user object
-      content:
-        application/json:
-          schema:
-            type: array
-            items:
-              type: string
-
-  securitySchemes:
-    margo_auth:
-      type: oauth2
-      flows:
-        clientCredentials:
-          tokenUrl: 'https://margo.swagger.io/oauth/authorize'
-          scopes:
-            "write:state": modify app state in your device
-            "read:state": read your app states
-    api_key:
-      type: apiKey
-      name: X-API-Key  # Or whatever your API key header is
-      in: header

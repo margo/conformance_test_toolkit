@@ -15,3 +15,7 @@ service:
 
 collector:
   name: collector
+
+# Support for fullnameOverride (used by agent)
+fullnameOverride: ""
+nameOverride: ""

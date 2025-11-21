@@ -18,6 +18,11 @@ DEV_REPO_BRANCH="${DEV_REPO_BRANCH:-dev-sprint-6}"
 WFM_IP="${WFM_IP:-127.0.0.1}"
 WFM_PORT="${WFM_PORT:-8082}"
 
+#--- Registry settings (can be overridden via env)
+REGISTRY_URL="${REGISTRY_URL:-http://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}}"
+REGISTRY_USER="${REGISTRY_USER:-admin}"
+REGISTRY_PASS="${REGISTRY_PASS:-Harbor12345}"
+
 # variables for observability stack
 NAMESPACE_OBSERVABILITY="observability"
 PROMTAIL_RELEASE="promtail"
@@ -62,25 +67,37 @@ install_basic_utilities() {
 }
 
 install_docker_compose_v2() {
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo 'Docker not found. Installing Docker...'
+    apt-get remove -y docker docker-engine docker.io containerd runc || true
+    curl -fsSL "https://get.docker.com" -o get-docker.sh; sh get-docker.sh
+    usermod -aG docker $USER
+  else
+    echo 'Docker already installed.'
+  fi
+
   echo "Installing Docker Compose V2 plugin..."
-  
-  # Create the plugins directory
-  sudo mkdir -p /usr/local/lib/docker/cli-plugins
-  
-  # Download the latest Docker Compose V2
-  COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
-  echo "Downloading Docker Compose ${COMPOSE_VERSION}..."
-  
-  sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
-    -o /usr/local/lib/docker/cli-plugins/docker-compose
-  
-  # Make it executable
-  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-  
-  # Verify installation
+
+  # Correct path for get.docker.com installation
+  sudo mkdir -p /usr/libexec/docker/cli-plugins
+
+# Get latest Tag
+COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d'"' -f4)
+echo "Using Docker Compose version: $COMPOSE_VERSION"
+
+sudo curl -L \
+  "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-Linux-x86_64" \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+
+					  
+sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+					   
   docker compose version
   echo "✅ Docker Compose V2 installed successfully"
 }
+
 
 
 # Helm install/uninstall
@@ -147,10 +164,9 @@ clone_dev_repo() {
 # Configuration Functions
 # ----------------------------
 update_agent_sbi_url() {
-  echo 'Updating wfm.sbiUrl in agent config...'
-  sed -i "s|sbiUrl:.*|sbiUrl: http://$WFM_IP:$WFM_PORT/v1alpha2/margo/sbi/v1|" "$HOME/dev-repo/helmchart/config.yaml"
+  echo 'Updating wfm.sbiUrl in agent config ...'
+  sed -i "s|sbiUrl:.*|sbiUrl: https://$WFM_IP:$WFM_PORT/v1alpha2/margo|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
 }
-
 
 # ----------------------------
 # K3s Installation Functions
@@ -205,7 +221,7 @@ setup_k3s() {
 #-----------------------------------------------------------------
 
 enable_kubernetes_runtime() {
-  CONFIG_FILE="$HOME/dev-repo/helmchart/config.yaml"
+  CONFIG_FILE="$HOME/dev-repo/helmchart/config/config.yaml"
   echo "Enabling Kubernetes section in config.yaml for ServiceAccount authentication..."
   sed -i \
   -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
@@ -215,14 +231,18 @@ enable_kubernetes_runtime() {
   -e 's/^[[:space:]]*url:/  # url:/' \
   "$CONFIG_FILE"
   
+ # Fix certificate paths
+  sed -i \
+    -e 's|pubCertPath:.*|pubCertPath: /certs/device-public.crt|' \
+    -e 's|path: "./config/device-private.key"|path: "/certs/device-private.key"|' \
+    -e 's|path: "./config/ca-cert.pem"|path: "/certs/ca-cert.pem"|' \
+    "$CONFIG_FILE"				 
+  
   # Set kubeconfigPath to empty string for ServiceAccount authentication
   sed -i 's|kubeconfigPath:.*|kubeconfigPath: ""|' "$CONFIG_FILE"
   
   echo "✅ Kubernetes runtime enabled with ServiceAccount authentication"
 }
-
-
-
 
 enable_docker_runtime() {
   CONFIG_FILE="$HOME/dev-repo/docker-compose/config/config.yaml"
@@ -259,17 +279,31 @@ build_device_agent_docker() {
 # Device Agent Service Functions
 # ----------------------------
 
-
 start_device_agent_docker_service() {
   echo 'Starting device-agent...'
   cd "$HOME/dev-repo/docker-compose"
-  
   mkdir -p config
-  cp -r ../poc/device/agent/config/* ./config/
+  
+  if [ -d "$HOME/certs" ] && [ "$(ls -A "$HOME/certs")" ]; then
+    cp "$HOME"/certs/* ../poc/device/agent/config/
+    echo "Copied certs from \$HOME/certs to ../poc/device/agent/config/"
+      else
+    echo "No certs found or directory missing: \$HOME/certs"
+  fi
+
+
+  cp ../poc/device/agent/config/device-private.key ./config/
+  cp ../poc/device/agent/config/device-public.crt ./config/
+  cp ../poc/device/agent/config/device-ecdsa.key ./config/
+  cp ../poc/device/agent/config/device-ecdsa.crt ./config/
+   
+  cp ../poc/device/agent/config/capabilities.json ./config/
+  cp ../poc/device/agent/config/config.yaml ./config/
+
+
   mkdir -p data
   enable_docker_runtime
   docker compose up -d
-   
 }
 
 
@@ -277,14 +311,198 @@ stop_device_agent_service_docker() {
   echo "Stopping device-agent..."
   cd "$HOME/dev-repo/docker-compose"
   docker compose down
+  
+  # Prompt user to delete /data folder
+  echo ""
+  echo "⚠️  Warning: Deleting /data folder will require device re-onboarding"
+  read -p "Do you want to delete data folder at $HOME/dev-repo/docker-compose/data? (y/n): " delete_data
+  
+  if [[ "$delete_data" =~ ^[Yy]$ ]]; then
+    echo "Deleting data folder..."
+    if rm -rf "$HOME/dev-repo/docker-compose/data"; then
+      echo '✅ Data folder deleted successfully'
+      echo 'ℹ️ Device re-onboarding will be required'
+    else
+      echo '❌ Failed to delete data folder'
+    fi
+  else
+    echo 'ℹ️ Data folder preserved'
+  fi
+}
+
+
+build_start_device_agent_k3s_service() {
+    cd "$HOME/dev-repo"
+    echo "Building and deploying device-agent on Kubernetes..."
+    
+    # Step 1: Build the Docker image if it doesn't exist
+    echo "Checking if device-agent image exists..."
+    if ! docker images | grep -q "margo.org/device-agent"; then
+      echo "Building device-agent Docker image..."
+      docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
+      if [ $? -ne 0 ]; then
+        echo "❌ Failed to build device-agent image"
+        return 1
+      fi
+      echo "✅ Device-agent image built successfully"
+    else
+      echo "✅ Device-agent image already exists"
+    fi
+    
+    # Step 2: Save and import image to k3s
+    echo "Importing image to k3s cluster..."
+    docker save -o device-agent.tar margo.org/device-agent:latest
+    
+						   
+    if command -v k3s >/dev/null 2>&1; then
+      k3s ctr -n k8s.io image import device-agent.tar
+      echo "✅ Image imported to k3s cluster"
+    elif command -v ctr >/dev/null 2>&1; then
+      ctr -n k8s.io image import device-agent.tar
+      echo "✅ Image imported to k3s cluster"
+    else
+      echo "❌ Neither k3s nor ctr command found"
+      return 1
+    fi
+    
+					   
+    rm -f device-agent.tar
+    
+    # Step 3: Navigate to helmchart directory
+    cd helmchart
+    if [ $? -ne 0 ]; then
+      echo "❌ Failed to navigate to helmchart directory"
+      return 1
+    fi
+    
+    # Step 4: Copy config files
+    update_agent_sbi_url
+    
+    echo "Copying configuration files..."
+    mkdir -p config
+    cp -r ../poc/device/agent/config/* ./config
+    
+    if [ $? -eq 0 ]; then
+      echo "✅ Configuration files copied successfully"
+    else
+      echo "❌ Failed to copy configuration files"
+      return 1
+    fi
+    
+    enable_kubernetes_runtime
+    
+    # Step 5: Create secrets 
+    if [ -d "$HOME/certs" ] && [ -f "$HOME/certs/device-private.key" ] && [ -f "$HOME/certs/device-public.crt" ] && [ -f "$HOME/certs/device-ecdsa.crt" ] && [ -f "$HOME/certs/device-ecdsa.key" ]; then
+        echo "Creating TLS secrets..."
+   							 
+        kubectl delete secret device-agent-certs --namespace=default 2>/dev/null || true
+        
+        kubectl create secret generic device-agent-certs \
+            --from-file=device-private.key="$HOME/certs/device-private.key" \
+            --from-file=device-public.crt="$HOME/certs/device-public.crt" \
+            --from-file=device-ecdsa.key="$HOME/certs/device-ecdsa.key" \
+            --from-file=device-ecdsa.crt="$HOME/certs/device-ecdsa.crt" \
+            --from-file=ca-cert.pem="$HOME/certs/ca-cert.pem" \
+            --namespace=default
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ TLS secrets created successfully"
+        else
+            echo "❌ Failed to create TLS secrets"
+            return 1
+        fi
+    else
+        echo "⚠️ Certificates not found in $HOME/certs, skipping TLS secret creation"
+    fi
+    
+														
+    # Step 6: Clean up old resources 
+    echo "Cleaning up any existing resources..."
+    kubectl delete clusterrole device-agent-role 2>/dev/null || true
+    kubectl delete clusterrolebinding device-agent-binding 2>/dev/null || true
+    
+    helm uninstall device-agent -n default 2>/dev/null || true
+    
+											
+    sleep 5
+
+    # Step 7: Install with Helm 
+    echo "Installing device-agent with persistent storage..."
+    helm install device-agent . \
+        --set serviceAccount.create=true \
+        --set secrets.create=false \
+        --set secrets.existingSecret=device-agent-certs \
+        --set persistence.enabled=true \
+        --set persistence.size=1Gi \
+        --debug \
+        --wait
+
+    if [ $? -ne 0 ]; then
+																	   
+		
+        echo "❌ Helm installation failed"
+        return 1
+    fi
+    
+    echo "✅ Helm installation successful with persistent storage"
+    
+    # Step 8: Verify deployment (NO PATCHING NEEDED!)
+    echo "🔍 Verifying deployment..."
+    
+    # Verify RBAC permissions 
+    if kubectl auth can-i create secrets --as=system:serviceaccount:default:device-agent-sa -n default | grep -q "yes"; then
+      echo "✅ RBAC permissions verified"
+    else
+      echo "⚠️ RBAC permissions may need manual verification"
+    fi
+    
+    # Verify PVC (FIXED NAME)
+												 
+    if kubectl get pvc -n default | grep -q "device-agent-data"; then
+      echo "✅ Persistent volume claim created successfully"
+      kubectl get pvc -n default | grep device-agent
+    else
+      echo "⚠️ PVC not found, checking for errors..."
+      kubectl get events -n default --sort-by='.lastTimestamp' | tail -10
+    fi
+    
+    echo "✅ Device-agent deployed successfully"
+    
+    # Show deployment status
+    echo ""
+    echo "Deployment Summary:"
+    kubectl get pods -n default | grep device-agent
+    kubectl get serviceaccount -n default | grep device-agent
+    kubectl get pvc -n default | grep device-agent
+	
 }
 
 stop_device_agent_kubernetes() {
   echo "Stopping device-agent..."
   cd "$HOME/dev-repo"
+
+  # Ask user about PVC deletion FIRST (before Helm uninstall)
+  DELETE_PVC=false
+  read -p "Delete persistent data (PVC)? This will require re-onboarding. [y/N]: " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    DELETE_PVC=true
+    echo "⚠️ PVC will be deleted after uninstalling Helm release"
+  else
+    echo "ℹ️ Attempting to preserve PVC..."
+    
+    # Add Helm annotation to prevent PVC deletion during uninstall
+    if kubectl get pvc device-agent-data -n default >/dev/null 2>&1; then
+      kubectl annotate pvc device-agent-data -n default \
+        "helm.sh/resource-policy=keep" \
+        --overwrite 2>/dev/null && echo "✅ PVC annotated for preservation" || echo "⚠️ Could not annotate PVC"
+    else
+      echo "⚠️ PVC not found, nothing to preserve"
+    fi
+  fi
   
-  # Check if Helm release exists
-  if helm list -A| grep -q "device-agent"; then
+  # Check if Helm release exists and uninstall
+  if helm list -A | grep -q "device-agent"; then
     echo "Uninstalling device-agent Helm release..."
     helm uninstall device-agent --namespace default
     
@@ -296,42 +514,64 @@ stop_device_agent_kubernetes() {
     fi
   else
     echo "No device-agent Helm release found, trying direct kubectl deletion..."
-    kubectl delete deployment device-agent-device-agent-deploy -n default  2>/dev/null || echo "No deployment found"
+    kubectl delete deployment device-agent-deploy -n default 2>/dev/null || echo "No deployment found"
   fi
   
   # Clean up ServiceAccount and RBAC resources
   echo "Cleaning up ServiceAccount and RBAC resources..."
-  kubectl delete serviceaccount device-agent-device-agent-sa -n default 2>/dev/null || echo "No serviceaccount found"
-  kubectl delete clusterrole device-agent-device-agent-role 2>/dev/null || echo "No clusterrole found"
-  kubectl delete clusterrolebinding device-agent-device-agent-binding 2>/dev/null || echo "No clusterrolebinding found"
+  kubectl delete serviceaccount device-agent-sa -n default 2>/dev/null || echo "No serviceaccount found"
+  kubectl delete clusterrole device-agent-role 2>/dev/null || echo "No clusterrole found"
+  kubectl delete clusterrolebinding device-agent-binding 2>/dev/null || echo "No clusterrolebinding found"
   
-  # Clean up ConfigMaps
-  echo "Cleaning up configmaps..."
-  kubectl delete configmap device-agent-device-agent-cm -n default 2>/dev/null || echo "No configmap found"
+  # Clean up ConfigMaps and Secrets
+  echo "Cleaning up configmaps and secrets..."
+  kubectl delete configmap device-agent-cm -n default 2>/dev/null || echo "No configmap found"
+  kubectl delete secret device-agent-certs -n default 2>/dev/null || echo "No secret found"
   
-  # Remove all remaining resources in namespace
-  kubectl delete secrets --all -n default 2>/dev/null || echo "No secrets to delete"
-  kubectl delete configmaps --all -n default 2>/dev/null || echo "No additional configmaps to delete"
+  # NOW handle PVC based on user choice
+  if [ "$DELETE_PVC" = true ]; then
+    echo "Deleting PVC as requested..."
+    kubectl delete pvc device-agent-data -n default 2>/dev/null || echo "No PVC found"
+    echo "✅ PVC deleted - device will re-onboard on next start"
+  else
+    # Verify PVC was preserved
+    if kubectl get pvc device-agent-data -n default >/dev/null 2>&1; then
+      echo "✅ PVC preserved successfully - device will resume with existing ID on next start"
+      kubectl get pvc device-agent-data -n default
+      
+      # Remove the keep annotation for next deployment
+      kubectl annotate pvc device-agent-data -n default \
+        "helm.sh/resource-policy-" \
+        2>/dev/null || true
+    else
+      echo "⚠️ PVC was not preserved (may have been deleted by Helm)"
+      echo "   Ensure PVC template has 'helm.sh/resource-policy: keep' annotation"
+    fi
+  fi
   
   # Verify cleanup
+  echo ""
   echo "Verifying cleanup..."
   if kubectl get pods -n default 2>/dev/null | grep -q "device-agent"; then
     echo "⚠️ Some device-agent pods may still be terminating"
-    kubectl get pods -n default
+    kubectl get pods -n default | grep device-agent
   else
-    echo "✅ Device-agent stopped successfully"
+    echo "✅ All device-agent pods stopped"
   fi
   
-  # Show remaining resources in namespace
-  echo "Checking for remaining resources..."
-  kubectl get all,secrets,configmaps,serviceaccounts -n default 2>/dev/null || echo "Namespace may not exist or is empty"
+  # Show remaining resources
+  echo ""
+  echo "Remaining device-agent resources:"
+  kubectl get all,pvc,sa,cm,secrets -n default 2>/dev/null | grep device-agent || echo "✅ No device-agent resources found (except possibly PVC if preserved)"
   
   # Check for remaining RBAC resources
-  echo "Checking for remaining RBAC resources..."
-  kubectl get clusterroles | grep device-agent || echo "No device-agent clusterroles found"
-  kubectl get clusterrolebindings | grep device-agent || echo "No device-agent clusterrolebindings found"
+  echo ""
+  echo "Remaining RBAC resources:"
+  kubectl get clusterroles,clusterrolebindings 2>/dev/null | grep device-agent || echo "✅ No device-agent RBAC resources found"
+  
+  echo ""
+  echo "✅ Device-agent cleanup complete"
 }
-
 
 
 
@@ -362,127 +602,86 @@ cleanup_device_agent() {
 
 add_container_registry_mirror_to_k3s() {
   echo "Configuring container registry mirror for k3s..."
-  
-  # Ask for container registry URL or default to https://registry-1.docker.io
-  read -p "Enter container registry URL [https://registry-1.docker.io]: " registry_url
-  registry_url=${registry_url:-"https://registry-1.docker.io"}
-  
-  # Ask for registry username, no default
-  read -p "Enter registry username: " registry_user
-  if [ -z "$registry_user" ]; then
-    echo "❌ Registry username is required"
-    return 1
-  fi
-  
-  # Ask for registry password, no default (hidden input)
-  read -s -p "Enter registry password: " registry_password
-  echo  # New line after hidden input
-  if [ -z "$registry_password" ]; then
-    echo "❌ Registry password is required"
-    return 1
-  fi
-  
-  # Create k3s directory if it doesn't exist
+
+  # ---------------------------------------------------
+  # Load registry settings from environment variables
+  # ---------------------------------------------------
+  registry_url="${REGISTRY_URL:-http://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}}"
+  registry_user="${REGISTRY_USER:-admin}"
+  registry_password="${REGISTRY_PASS:-Harbor12345}"
+
+  echo "Using registry mirror: $registry_url"
+  echo "Using registry credentials: $registry_user / ******"
+  # ---------------------------------------------------
+  # Create k3s directory if needed
+  # ---------------------------------------------------
   sudo mkdir -p /var/lib/rancher/k3s
-  
-  # Backup existing registries.yml if it exists
+  sudo mkdir -p /etc/rancher/k3s
+
+  # Backup existing registries if present
   if [ -f /var/lib/rancher/k3s/registries.yml ]; then
     sudo cp /var/lib/rancher/k3s/registries.yml /var/lib/rancher/k3s/registries.yml.backup.$(date +%s)
-    echo "✅ Backed up existing registries.yml"
+    echo "✅ Backed up /var/lib/rancher/k3s/registries.yml"
   fi
-  
-  # Add docker registry mirror and credentials in /var/lib/rancher/k3s
-  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml
+
+  # ---------------------------------------------------
+  # Write the registry config
+  # ---------------------------------------------------
+  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yml >/dev/null
 mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+  "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}":
     endpoint:
-      - "$registry_url"
+      - "${registry_url}"
 
 configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
+  "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}":
     auth:
-      username: "$registry_user"
-      password: "$registry_password"
+      username: "${registry_user}"
+      password: "${registry_password}"
     tls:
-    insecure_skip_verify: true
+      insecure_skip_verify: true
 EOF
 
-  cat <<EOF | sudo tee /var/lib/rancher/k3s/registries.yaml
-mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    endpoint:
-      - "$registry_url"
+  sudo cp /var/lib/rancher/k3s/registries.yml /var/lib/rancher/k3s/registries.yaml
+  sudo cp /var/lib/rancher/k3s/registries.yml /etc/rancher/k3s/registries.yml
+  sudo cp /var/lib/rancher/k3s/registries.yml /etc/rancher/k3s/registries.yaml
 
-configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    auth:
-      username: "$registry_user"
-      password: "$registry_password"
-    tls:
-    insecure_skip_verify: true
-EOF
-
-# Add docker registry mirror and credentials in /etc/rancher/k3s
-cat <<EOF | sudo tee /etc/rancher/k3s/registries.yaml
-mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    endpoint:
-      - "$registry_url"
-
-configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    auth:
-      username: "$registry_user"
-      password: "$registry_password"
-EOF
-
-cat <<EOF | sudo tee /etc/rancher/k3s/registries.yml
-mirrors:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    endpoint:
-      - "$registry_url"
-
-configs:
-  "$EXPOSED_HARBOR_IP:$EXPOSED_HARBOR_PORT":
-    auth:
-      username: "$registry_user"
-      password: "$registry_password"
-EOF
-
-  echo "✅ Created k3s registries configuration"
-  
-  # Restart k3s to apply changes
-  echo "Restarting k3s to apply registry changes..."
+  echo "✅ Created k3s registry mirror configuration"
+  # ---------------------------------------------------
+	
+  # Restart k3s
+  # ---------------------------------------------------
+  echo "Restarting k3s..."
   if sudo systemctl restart k3s; then
     echo "✅ k3s restarted successfully"
-    
-    # Wait for k3s to be ready
-    echo "Waiting for k3s to be ready..."
-    for i in {1..30}; do
-      if sudo systemctl is-active --quiet k3s; then
-        echo "✅ k3s is active and running"
-        break
-      else
-        echo "Waiting for k3s... ($i/30)"
-        sleep 2
-      fi
-    done
-    
-    # Verify k3s is working
-    if sudo k3s kubectl get nodes >/dev/null 2>&1; then
-      echo "✅ k3s cluster is responding"
-    else
-      echo "⚠️ k3s cluster may not be fully ready yet"
-    fi
   else
     echo "❌ Failed to restart k3s"
     return 1
   fi
-  
-  echo "✅ Container registry mirror configuration completed"
+
+  # Wait for k3s active
+  echo "Waiting for k3s to come up..."
+  for i in {1..30}; do
+    if sudo systemctl is-active --quiet k3s; then
+      echo "✅ k3s is running"
+      break
+    fi
+										 
+    sleep 2
+		
+  done
+
+  echo "Checking cluster..."
+  if sudo k3s kubectl get nodes >/dev/null 2>&1; then
+    echo "✅ k3s cluster is responding"
+  else
+    echo "⚠️ k3s cluster not ready yet"
+								
+			
+  fi
+
+  echo "✅ Registry mirror configuration completed."
 }
-
-
 
 # ----------------------------
 # Main Orchestration Functions
@@ -495,6 +694,8 @@ install_prerequisites() {
   install_docker_compose_v2 
   clone_dev_repo
   setup_k3s
+  add_container_registry_mirror_to_k3s
+  echo 'prerequisites installation completed.'
 }
 
 
@@ -513,131 +714,6 @@ start_device_agent_kubernetes() {
   build_start_device_agent_k3s_service
   echo '✅ device-agent-pod started with ServiceAccount authentication'
 }
-
-
-build_start_device_agent_k3s_service() {
-    cd "$HOME/dev-repo"
-    echo "Building and deploying device-agent on Kubernetes..."
-    
-    # Step 1: Build the Docker image if it doesn't exist
-    echo "Checking if device-agent image exists..."
-    if ! docker images | grep -q "margo.org/device-agent"; then
-      echo "Building device-agent Docker image..."
-      docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
-      if [ $? -ne 0 ]; then
-        echo "❌ Failed to build device-agent image"
-        return 1
-      fi
-      echo "✅ Device-agent image built successfully"
-    else
-      echo "✅ Device-agent image already exists"
-    fi
-    
-    # Step 2: Save and import image to k3s
-    echo "Importing image to k3s cluster..."
-    docker save -o device-agent.tar margo.org/device-agent:latest
-    
-    # Import to k3s cluster
-    if command -v k3s >/dev/null 2>&1; then
-      k3s ctr -n k8s.io image import device-agent.tar
-      echo "✅ Image imported to k3s cluster"
-    elif command -v ctr >/dev/null 2>&1; then
-      ctr -n k8s.io image import device-agent.tar
-      echo "✅ Image imported to k8s cluster"
-    else
-      echo "❌ Neither k3s nor ctr command found"
-      return 1
-    fi
-    
-    # Clean up tar file
-    rm -f device-agent.tar
-    
-    # Step 3: Navigate to helmchart directory
-    cd helmchart
-    if [ $? -ne 0 ]; then
-      echo "❌ Failed to navigate to helmchart directory"
-      return 1
-    fi
-    
-    # Step 4: Create namespace
-    echo "Creating device-agent namespace..."
-    kubectl create namespace device-agent 2>/dev/null || echo "Namespace device-agent already exists"
-    
-    # Step 5: Copy config files (ServiceAccount approach - no kubeconfig secret needed)
-    echo "Copying configuration files..."
-    cp -r ../poc/device/agent/config/* .
-    if [ $? -eq 0 ]; then
-      echo "✅ Configuration files copied successfully"
-    else
-      echo "❌ Failed to copy configuration files"
-      return 1
-    fi
-    
-    # Step 6: Update config.yaml with environment variables
-    update_agent_sbi_url
-    enable_kubernetes_runtime
-    
-    # Step 7: Install/upgrade Helm chart (ServiceAccount approach)
-    
-      echo "Installing new device-agent deployment..."
-      helm install device-agent . 
-    
-    
-    #STEP 8: Fix RBAC permissions
-    if [ $? -eq 0 ]; then
-      echo "🔧 Applying RBAC permissions fix..."
-      
-      # Force update ClusterRole with secrets permissions
-      kubectl patch clusterrole device-agent-device-agent-role --type='json' -p='[
-        {
-          "op": "add",
-          "path": "/rules/-",
-          "value": {
-            "apiGroups": [""],
-            "resources": ["secrets", "configmaps"],
-            "verbs": ["create", "get", "list", "update", "patch", "delete"]
-          }
-        },
-        {
-          "op": "replace",
-          "path": "/rules/1/verbs",
-          "value": ["get", "list", "watch", "create", "update", "patch", "delete"]
-        },
-        {
-          "op": "replace",
-          "path": "/rules/0/verbs", 
-          "value": ["get", "list", "watch", "create", "update", "patch", "delete"]
-        }
-      ]' 2>/dev/null || echo "⚠️ ClusterRole patch failed, trying alternative method..."
-      
-      # Alternative: Create namespace-scoped RoleBinding for secrets
-      kubectl create rolebinding device-agent-secrets-access \
-        --clusterrole=admin \
-        --serviceaccount=device-agent:device-agent-device-agent-sa \
-        --namespace=device-agent 2>/dev/null || echo "RoleBinding already exists"
-      
-      # Verify permissions
-      echo "🔍 Verifying RBAC permissions..."
-      if kubectl auth can-i create secrets --as=system:serviceaccount:device-agent:device-agent-device-agent-sa -n default | grep -q "yes"; then
-        echo "✅ RBAC permissions applied successfully"
-      else
-        echo "⚠️ RBAC permissions may need manual verification"
-      fi
-      
-      echo "✅ Device-agent deployed successfully on Kubernetes with ServiceAccount"
-      
-      # Verify deployment
-      echo "Verifying deployment..."
-      kubectl get pods -n default
-      kubectl get serviceaccount -n default
-      
-    else
-      echo "❌ Failed to deploy device-agent"
-      return 1
-    fi
-}
-
-
 
 stop_device_agent_docker() {
   echo "Stopping device-agent on VM2 ($VM2_HOST)..."
@@ -880,8 +956,48 @@ uninstall_otel_collector_promtail() {
 cleanup_residual() {
   rm -rf "$HOME/dev-repo"
   rm -rf "$HOME/symphony"
-  rm -rf "$HOME/device-agent.log"
-  rm -rf "$HOME/device-agent.pid"
+ }
+
+create_device_rsa_certs() {
+  CERT_DIR="$HOME/certs"
+  mkdir -p "$CERT_DIR"
+  cd "$CERT_DIR" || exit 1
+
+  echo "Generating RSA device certs..."
+  # Generate RSA private key (2048-bit)
+  openssl genrsa -out device-private.key 2048
+
+  # Generate self-signed certificate
+  openssl req -new -x509 -key device-private.key -out device-public.crt -days 365 \
+    -subj "/C=IN/ST=GGN/L=Sector 48/O=Margo/CN=margo-device"
+  echo "✅ RSA Cert generation has been completed."
+
+									   
+																				  
+}
+
+create_device_ecdsa_certs() {
+  CERT_DIR="$HOME/certs"
+
+  if [ ! -d "$CERT_DIR" ]; then
+    echo "Cert directory not found. Creating $CERT_DIR ..."
+    mkdir -p "$CERT_DIR"
+  else
+    echo "Using existing cert directory: $CERT_DIR"
+  fi
+
+  cd "$CERT_DIR" || exit 1
+  echo "Generating ECDSA device certs..."
+  # Generate ECDSA private key (P-256 curve)
+  openssl ecparam -genkey -name prime256v1 -out device-ecdsa.key
+
+  # Generate self-signed certificate
+  openssl req -new -x509 -key device-ecdsa.key -out device-ecdsa.crt -days 365 \
+    -subj "/C=IN/ST=GGN/L=Sector 48/O=Margo/CN=margo-device"
+  echo "✅ ECDSA Cert generation has been completed."
+
+										 
+																			   
 }
 
 
@@ -894,11 +1010,12 @@ show_menu() {
   echo "5) Device-agent-Start(k3s-device)"
   echo "6) Device-agent-Stop(k3s-device)"
   echo "7) Device-agent-Status"
-  echo "8) otel-collector-promtail-installation"
-  echo "9) otel-collector-promtail-uninstallation"
-  echo "10) add-container-registry-mirror-to-k3s"
-  echo "11) cleanup-residual"
-  read -rp "Enter choice [1-9]: " choice
+  echo "8) OTEL-collector-promtail-installation"
+  echo "9) OTEL-collector-promtail-uninstallation"
+  echo "10) cleanup-residual"
+  echo "11) create_device_rsa_certs"
+  echo "12) create_device_ecdsa_certs"
+  read -rp "Enter choice [1-12]: " choice
   case $choice in
     1) install_prerequisites;;
     2) uninstall_prerequisites;;
@@ -909,8 +1026,9 @@ show_menu() {
     7) show_status ;;
     8) install_otel_collector_promtail ;;
     9) uninstall_otel_collector_promtail ;;
-    10) add_container_registry_mirror_to_k3s;;
-    11) cleanup_residual;;
+    10) cleanup_residual;;
+    11) create_device_rsa_certs ;;
+    12) create_device_ecdsa_certs ;;
     *) echo "Invalid choice" ;;
   esac
 }
@@ -920,19 +1038,4 @@ show_menu() {
 # ----------------------------
 if [ -z "$1" ]; then
   show_menu
-else
-  case $1 in
-    start-docker) start_device_agent_docker ;;
-    start-kubernetes) start_device_agent_kubernetes ;;
-    stop-docker) stop_device_agent_docker ;;
-    stop-kubernetes) stop_device_agent_kubernetes ;;
-    install_prerequisites) install_prerequisites;;
-    uninstall_prerequisites) uninstall_prerequisites;;
-    status) show_status ;;
-    install_otel_collector_promtail) install_otel_collector_promtail ;;
-    uninstall_otel_collector_promtail) uninstall_otel_collector_promtail ;;
-    add_container_registry_mirror_to_k3s) add_container_registry_mirror_to_k3s ;;
-    cleanup_residual) cleanup_residual ;;
-    *) echo "Usage: $0 {start-docker|start-kubernetes|stop-docker|stop-kubernetes|status|install_prerequisites|uninstall_prerequisites|install_otel_collector_promtail|uninstall_otel_collector_promtail|add_container_registry_mirror_to_k3s|cleanup_residual}" ;;
-  esac
 fi

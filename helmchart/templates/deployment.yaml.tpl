@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: {{ include "agentchart.deploymentname" . }}
   namespace: {{ include "agentchart.namespace" . }}
+  labels:
+    {{- include "agentchart.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
@@ -13,13 +15,13 @@ spec:
       labels:
         app: {{ include "agentchart.podname" . }}
     spec:
-      serviceAccountName: {{ include "agentchart.fullname" . }}-sa
+      serviceAccountName: {{ include "agentchart.serviceaccountname" . }}
       containers:
         - name: {{ include "agentchart.podname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["./device-agent"]
-          args: ["-config", "config/config.yaml"]
+          args: ["-config", "/config/config.yaml"]
           env:
             - name: KUBERNETES_SERVICE_HOST
               value: "kubernetes.default.svc"
@@ -31,16 +33,21 @@ spec:
               readOnly: true
             - name: data-volume
               mountPath: /data
+            - name: certs
+              mountPath: /certs
+              readOnly: true
               
       volumes:
         - name: agent-config-volume
           configMap:
             name: {{ include "agentchart.configmapname" . }}
-        {{- if eq .Values.persistence.enabled true}}
         - name: data-volume
+          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
-            claimName: {{.Values.persistence.claimName}}
-        {{- else }}
-        - name: data-volume
+            claimName: {{ .Values.persistence.existingClaim | default (include "agentchart.pvcname" .) }}
+          {{- else }}
           emptyDir: {}
-        {{- end }}
+          {{- end }}
+        - name: certs
+          secret:
+            secretName: {{ include "agentchart.certsecretname" . }}

@@ -9,43 +9,58 @@ import (
 	"sync"
 	"time"
 
+	"github.com/margo/dev-repo/poc/device/agent/types"
 	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 )
 
-type DeploymentRecord struct {
-	AppID           string
-	DeploymentID    string
-	DesiredState    *sbi.AppState
-	CurrentState    *sbi.AppState
-	ComponentStatus map[string]sbi.ComponentStatus
-	Phase           string // "deploying", "running", "failed", "removing", "removed"
-	Message         string
-	LastUpdated     time.Time
+type AppDeploymentState struct {
+	sbi.AppDeploymentManifest
+	Status sbi.DeploymentStatusManifest
+
+	// Added these fields for sync state management
+    AppId       string    `json:"appId"`
+    State       string    `json:"state"`
+    LastUpdated time.Time `json:"lastUpdated"`
+    Digest      *string   `json:"digest,omitempty"`
+    URL         *string   `json:"url,omitempty"`
 }
 
-type DeploymentChangeType string
+type DeploymentRecord struct {
+	AppID               string
+	DeploymentID        string
+	Digest              string
+	Path                string
+	URL                 string
+	DesiredState        *AppDeploymentState
+	CurrentState        *AppDeploymentState
+	ComponentViseStatus map[string]sbi.ComponentStatus
+	Phase               string // "deploying", "running", "failed", "removing", "removed"
+	Message             string
+	LastUpdated         time.Time
+}
+
+type DeploymentBundleRecord struct {
+	DeviceClientId string
+	Manifest       sbi.UnsignedAppStateManifest
+	ArchivePath    string
+	UpdatedAt      time.Time
+}
+
+type DeploymentRecordChangeType string
 
 const (
-	DeploymentChangeTypeRecordAdded           DeploymentChangeType = "RECORD-ADDED"
-	DeploymentChangeTypeRecordDeleted         DeploymentChangeType = "RECORD-DELETED"
-	DeploymentChangeTypeComponentPhaseChanged DeploymentChangeType = "COMPONENT-PHASE-CHANGED"
-	DeploymentChangeTypeDesiredStateAdded     DeploymentChangeType = "DESIRED-STATE-ADDED"
-	DeploymentChangeTypeCurrentStateAdded     DeploymentChangeType = "CURRENT-STATE-ADDED"
-)
-
-type DeviceOnboardState string
-
-const (
-	DeviceOnboardStateOnboardInProgress DeviceOnboardState = "IN-PROGRESS"
-	DeviceOnboardStateOnboarded         DeviceOnboardState = "ONBOARDED"
-	DeviceOnboardStateOnboardFailed     DeviceOnboardState = "FAILED"
+	DeploymentChangeTypeRecordAdded           DeploymentRecordChangeType = "RECORD-ADDED"
+	DeploymentChangeTypeRecordDeleted         DeploymentRecordChangeType = "RECORD-DELETED"
+	DeploymentChangeTypeComponentPhaseChanged DeploymentRecordChangeType = "COMPONENT-PHASE-CHANGED"
+	DeploymentChangeTypeDesiredStateAdded     DeploymentRecordChangeType = "DESIRED-STATE-ADDED"
+	DeploymentChangeTypeCurrentStateAdded     DeploymentRecordChangeType = "CURRENT-STATE-ADDED"
 )
 
 type DeviceSettingsRecord struct {
-	DeviceID        string             `json:"deviceId"`
-	DeviceSignature []byte             `json:"deviceSignature"`
-	State           DeviceOnboardState `json:"state"`
-	AuthEnabled     bool               `json:"authEnabled"`
+	DeviceClientId     string                   `json:"deviceClientId"`
+	DeviceRootIdentity types.DeviceRootIdentity `json:"deviceRootIdentity"`
+	State              types.DeviceOnboardState `json:"state"`
+	AuthEnabled        bool                     `json:"authEnabled"`
 	// OAuthClientId The client ID for OAuth 2.0 authentication.
 	OAuthClientId string `json:"clientId"`
 	// OAuthClientSecret The client secret for OAuth 2.0 authentication.
@@ -55,15 +70,20 @@ type DeviceSettingsRecord struct {
 	// the applications that the device can deploy
 	CanDeployHelm    bool
 	CanDeployCompose bool
+
+	// Added these new fields for sync state management
+    LastSyncedETag            string `json:"lastSyncedETag"`
+    LastSyncedManifestVersion uint64 `json:"lastSyncedManifestVersion"`
+    LastSyncedBundleDigest    string `json:"lastSyncedBundleDigest"`
 }
 
 type DatabaseIfc interface {
 	// if your database engine already has persistence, then just keep the implementation empty
 	// we added an in-memory database implementation for this margo poc, hence needed this one
 	TriggerDataPersist()
-	Subscribe(callback func(string, *DeploymentRecord, DeploymentChangeType))
-	SetDesiredState(deploymentId string, state sbi.AppState)
-	SetCurrentState(deploymentId string, state sbi.AppState)
+	Subscribe(callback func(string, *DeploymentRecord, DeploymentRecordChangeType))
+	SetDesiredState(deploymentId string, state AppDeploymentState) error
+	SetCurrentState(deploymentId string, state AppDeploymentState)
 	SetPhase(deploymentId, phase, message string)
 	SetComponentStatus(deploymentId, componentName string, status sbi.ComponentStatus)
 	GetDeployment(deploymentId string) (*DeploymentRecord, error)
@@ -73,12 +93,19 @@ type DatabaseIfc interface {
 	GetDeviceSettings() (*DeviceSettingsRecord, error)
 	SetDeviceSettings(settings DeviceSettingsRecord) error
 	IsDeviceOnboarded() (*DeviceSettingsRecord, bool, error)
+
+	GetLastSyncedETag() (string, error)
+    SetLastSyncedETag(etag string) error
+    GetLastSyncedManifestVersion() (uint64, error)
+    SetLastSyncedManifestVersion(version uint64) error
+    GetLastSyncedBundleDigest() (string, error)
+    SetLastSyncedBundleDigest(digest string) error
 }
 
 type Database struct {
 	deviceSettings *DeviceSettingsRecord
 	deployments    map[string]*DeploymentRecord
-	subscribers    []func(string, *DeploymentRecord, DeploymentChangeType) // appID, record
+	subscribers    []func(string, *DeploymentRecord, DeploymentRecordChangeType) // appID, record
 	mu             sync.RWMutex
 	subscriberMu   sync.RWMutex
 
@@ -88,11 +115,72 @@ type Database struct {
 	stopPersist chan struct{}
 }
 
+// ETag management for efficient polling
+func (db *Database) GetLastSyncedETag() (string, error) {
+    db.mu.RLock()
+    defer db.mu.RUnlock()
+    
+    if db.deviceSettings.LastSyncedETag == "" {
+        return "", fmt.Errorf("No previous ETag found")
+    }
+    return db.deviceSettings.LastSyncedETag, nil
+}
+
+func (db *Database) SetLastSyncedETag(etag string) error {
+    db.mu.Lock()
+    defer db.mu.Unlock()
+    
+    db.deviceSettings.LastSyncedETag = etag
+    db.TriggerDataPersist()
+    return nil
+}
+
+// Manifest version management for rollback protection
+func (db *Database) GetLastSyncedManifestVersion() (uint64, error) {
+    db.mu.RLock()
+    defer db.mu.RUnlock()
+    
+    if db.deviceSettings.LastSyncedManifestVersion == 0 {
+        return 0, fmt.Errorf("no previous manifest version found")
+    }
+    return db.deviceSettings.LastSyncedManifestVersion, nil
+}
+
+func (db *Database) SetLastSyncedManifestVersion(version uint64) error {
+    db.mu.Lock()
+    defer db.mu.Unlock()
+    
+    db.deviceSettings.LastSyncedManifestVersion = version
+    db.TriggerDataPersist()
+    return nil
+}
+
+// Bundle digest management
+func (db *Database) GetLastSyncedBundleDigest() (string, error) {
+    db.mu.RLock()
+    defer db.mu.RUnlock()
+    
+    if db.deviceSettings.LastSyncedBundleDigest == "" {
+        return "", fmt.Errorf("no previous bundle digest found")
+    }
+    return db.deviceSettings.LastSyncedBundleDigest, nil
+}
+
+func (db *Database) SetLastSyncedBundleDigest(digest string) error {
+    db.mu.Lock()
+    defer db.mu.Unlock()
+    
+    db.deviceSettings.LastSyncedBundleDigest = digest
+    db.TriggerDataPersist()
+    return nil
+}
+
+
 func NewDatabase(dataDir string) *Database {
 	db := &Database{
 		deployments:    make(map[string]*DeploymentRecord),
 		deviceSettings: &DeviceSettingsRecord{},
-		subscribers:    make([]func(string, *DeploymentRecord, DeploymentChangeType), 0),
+		subscribers:    make([]func(string, *DeploymentRecord, DeploymentRecordChangeType), 0),
 		dataDir:        dataDir,
 		persistChan:    make(chan struct{}, 1),
 		stopPersist:    make(chan struct{}),
@@ -177,16 +265,16 @@ func (db *Database) load() {
 	db.deviceSettings = dump.DeviceSettings
 }
 
-func (db *Database) Subscribe(callback func(string, *DeploymentRecord, DeploymentChangeType)) {
+func (db *Database) Subscribe(callback func(string, *DeploymentRecord, DeploymentRecordChangeType)) {
 	db.subscriberMu.Lock()
 	defer db.subscriberMu.Unlock()
 	db.subscribers = append(db.subscribers, callback)
 }
 
-func (db *Database) notify(appID string, record *DeploymentRecord, changeType DeploymentChangeType) {
+func (db *Database) notify(appID string, record *DeploymentRecord, changeType DeploymentRecordChangeType) {
 	db.subscriberMu.RLock()
 	defer db.subscriberMu.RUnlock()
-	subscribers := make([]func(string, *DeploymentRecord, DeploymentChangeType), len(db.subscribers))
+	subscribers := make([]func(string, *DeploymentRecord, DeploymentRecordChangeType), len(db.subscribers))
 	copy(subscribers, db.subscribers)
 
 	for _, callback := range subscribers {
@@ -194,30 +282,43 @@ func (db *Database) notify(appID string, record *DeploymentRecord, changeType De
 	}
 }
 
-func (db *Database) SetDesiredState(deploymentId string, state sbi.AppState) {
+func (db *Database) SetDesiredState(deploymentId string, state AppDeploymentState) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	record, exists := db.deployments[deploymentId]
 	if !exists {
 		record = &DeploymentRecord{
-			AppID:           deploymentId,
-			ComponentStatus: make(map[string]sbi.ComponentStatus),
-			Phase:           "pending",
-			LastUpdated:     time.Now(),
+			AppID:               deploymentId,
+			DeploymentID:        deploymentId,
+			ComponentViseStatus: make(map[string]sbi.ComponentStatus),
+			Phase:               "pending",
+			LastUpdated:         time.Now(),
 		}
 		db.deployments[deploymentId] = record
+		db.notify(deploymentId, record, DeploymentChangeTypeDesiredStateAdded)
 	}
 
 	// Only update if actually different
 	// if record.DesiredState == nil || record.DesiredState.AppDeploymentYAMLHash != state.AppDeploymentYAMLHash {
 	record.DesiredState = &state
 	record.LastUpdated = time.Now()
-	db.notify(deploymentId, record, DeploymentChangeTypeDesiredStateAdded)
-	// }
+     // Store the digest and URL from the state
+	 if state.Digest != nil {
+        record.Digest = *state.Digest
+    }
+    if state.URL != nil {
+        record.URL = *state.URL
+    }
+    
+    db.notify(deploymentId, record, DeploymentChangeTypeDesiredStateAdded)
+ 
+    db.TriggerDataPersist()
+    
+    return nil
 }
 
-func (db *Database) SetCurrentState(deploymentId string, state sbi.AppState) {
+func (db *Database) SetCurrentState(deploymentId string, state AppDeploymentState) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -254,7 +355,7 @@ func (db *Database) SetComponentStatus(deploymentId, componentName string, statu
 		return
 	}
 
-	record.ComponentStatus[componentName] = status
+	record.ComponentViseStatus[componentName] = status
 	record.LastUpdated = time.Now()
 
 	// Update overall phase based on component status
@@ -292,37 +393,52 @@ func (db *Database) ListDeployments() []*DeploymentRecord {
 }
 
 func (db *Database) RemoveDeployment(deploymentId string) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	delete(db.deployments, deploymentId)
+    db.mu.Lock()
+    defer db.mu.Unlock()
+    
+    if record, exists := db.deployments[deploymentId]; exists {
+        delete(db.deployments, deploymentId)
+        db.notify(deploymentId, record, DeploymentChangeTypeRecordDeleted)
+        db.TriggerDataPersist()  
+    }
 }
 
 func (db *Database) NeedsReconciliation(deploymentId string) bool {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
+    db.mu.RLock()
+    defer db.mu.RUnlock()
 
-	record, exists := db.deployments[deploymentId]
-	if !exists || record.DesiredState == nil {
-		return false
-	}
+    record, exists := db.deployments[deploymentId]
+    if !exists || record.DesiredState == nil {
+        return false
+    }
 
-	if record.DesiredState.AppState == "REMOVED" {
-		// temporarily added
-		return false
-	}
+    if record.DesiredState.Status.Status.State == "REMOVED" {
+        return false
+    }
 
-	// Check if desired and current states differ
-	if record.CurrentState == nil {
-		return true
-	}
+    // Check if desired and current states differ
+    if record.CurrentState == nil {
+        return true
+    }
 
-	if record.CurrentState.AppState != record.DesiredState.AppState {
-		return true
-	}
+    // Compare the deployment status
+    if record.CurrentState.Status.Status.State != record.DesiredState.Status.Status.State {
+        return true
+    }
 
-	return record.DesiredState.AppDeploymentYAMLHash != record.CurrentState.AppDeploymentYAMLHash ||
-		record.DesiredState.AppState != record.CurrentState.AppState
+    // Compare the embedded AppDeploymentManifest specs by marshaling to JSON
+    currentSpecBytes, err1 := json.Marshal(record.CurrentState.AppDeploymentManifest.Spec)
+    desiredSpecBytes, err2 := json.Marshal(record.DesiredState.AppDeploymentManifest.Spec)
+    
+    if err1 != nil || err2 != nil {
+        // If marshaling fails, assume reconciliation is needed
+        return true
+    }
+
+    // If specs are different, reconciliation is needed
+    return string(currentSpecBytes) != string(desiredSpecBytes)
 }
+
 
 func (db *Database) GetDeviceSettings() (*DeviceSettingsRecord, error) {
 	return db.deviceSettings, nil
@@ -333,13 +449,13 @@ func (db *Database) SetDeviceSettings(settings DeviceSettingsRecord) error {
 	return nil
 }
 
-func (db *Database) SetDeviceOnboardState(state DeviceOnboardState) error {
+func (db *Database) SetDeviceOnboardState(state types.DeviceOnboardState) error {
 	db.deviceSettings.State = state
 	return nil
 }
 
 func (db *Database) IsDeviceOnboarded() (*DeviceSettingsRecord, bool, error) {
-	return db.deviceSettings, db.deviceSettings.State == DeviceOnboardStateOnboarded, nil
+	return db.deviceSettings, db.deviceSettings.State == types.DeviceOnboardStateOnboarded, nil
 }
 
 func (db *Database) SetDeviceCanDeployHelm(deployable bool) {

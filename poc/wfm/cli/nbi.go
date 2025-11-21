@@ -12,20 +12,17 @@ import (
 	"io"
 	"log"
 	"time"
-
+	"crypto/tls"
+    "net/http"
 	nonStdWfmNbi "github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
-	stdWfmSbi "github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
 )
 
 const (
 	// northboundBaseURL is the default base URL path for the Northbound API
 	northboundBaseURL = "margo/nbi/v1"
 
-	// southboundBaseURL is the default base URL path for the Northbound API
-	southboundBaseURL = "margo/sbi/v1"
-
 	// Default timeout for API requests
-	defaultTimeout = 30 * time.Second
+	nbiDefaultTimeout = 30 * time.Second
 )
 
 // Type aliases for better API ergonomics, and can be used later on to change the structs if needed
@@ -44,36 +41,57 @@ type (
 	DeviceListResp = nonStdWfmNbi.DeviceListResp
 )
 
-// WFMCli provides a client interface for the Margo Northbound API.
+// NbiApiClient provides a client interface for the Margo Northbound API.
 //
 // This client handles HTTP communication with the Northbound service and provides
 // high-level methods for application package management operations.
-type WFMCli struct {
+type NbiApiClient struct {
 	serverAddress string
 	nbiBaseURL    string
 	sbiBaseURL    string
 	timeout       time.Duration
 	logger        *log.Logger
+	httpClient    *http.Client
 }
 
 // WFMCliOption defines functional options for configuring the client
-type WFMCliOption func(*WFMCli)
+type WFMCliOption func(*NbiApiClient)
 
 // WithTimeout sets a custom timeout for API requests
 func WithTimeout(timeout time.Duration) WFMCliOption {
-	return func(cli *WFMCli) {
+	return func(cli *NbiApiClient) {
 		cli.timeout = timeout
 	}
 }
 
+// WithInsecureTLS configures the client to skip TLS verification (development only)
+func WithInsecureTLS() WFMCliOption {
+    return func(cli *NbiApiClient) {
+        cli.httpClient = &http.Client{
+            Transport: &http.Transport{
+                TLSClientConfig: &tls.Config{
+                    InsecureSkipVerify: true, // Only for development
+                },
+            },
+            Timeout: cli.timeout,
+        }
+    }
+}
+
+
 // WithLogger sets a custom logger for the client
 func WithLogger(logger *log.Logger) WFMCliOption {
-	return func(cli *WFMCli) {
+	return func(cli *NbiApiClient) {
 		cli.logger = logger
 	}
 }
 
-// NewWFMCli creates a new Northbound API client.
+func WithAuth() WFMCliOption {
+	return func(cli *NbiApiClient) {
+	}
+}
+
+// NewNbiHTTPCli creates a new Northbound API client.
 //
 // Parameters:
 //   - host: The hostname or IP address of the Northbound service
@@ -86,53 +104,55 @@ func WithLogger(logger *log.Logger) WFMCliOption {
 //
 // Example:
 //
-//	cli := NewWFMCli("localhost", 8080, nil,
+//	cli := NewNbiHTTPCli("localhost", 8080, nil,
 //	    WithTimeout(60*time.Second),
 //	    WithLogger(customLogger))
-func NewWFMCli(host string, port uint16, nbiBasePath, sbiBasePath *string, opts ...WFMCliOption) *WFMCli {
-	nbiBaseURLPath := northboundBaseURL
-	if nbiBasePath != nil {
-		nbiBaseURLPath = *nbiBasePath
-	}
+func NewNbiHTTPCli(host string, port uint16, nbiBasePath *string, opts ...WFMCliOption) *NbiApiClient {
+    nbiBaseURLPath := northboundBaseURL
+    if nbiBasePath != nil {
+        nbiBaseURLPath = *nbiBasePath
+    }
 
-	sbiBaseURLPath := southboundBaseURL
-	if sbiBasePath != nil {
-		sbiBaseURLPath = *nbiBasePath
-	}
-
-	cli := &WFMCli{
+	cli := &NbiApiClient{
 		serverAddress: fmt.Sprintf("%s:%d", host, port),
-		nbiBaseURL:    fmt.Sprintf("http://%s:%d/%s", host, port, nbiBaseURLPath),
-		sbiBaseURL:    fmt.Sprintf("http://%s:%d/%s", host, port, sbiBaseURLPath),
-		timeout:       defaultTimeout,
+		nbiBaseURL:    fmt.Sprintf("https://%s:%d/%s", host, port, nbiBaseURLPath),
+		timeout:       nbiDefaultTimeout,
 		logger:        log.Default(),
+		httpClient:    &http.Client{Timeout: nbiDefaultTimeout},
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(cli)
-	}
+    // Apply options
+    for _, opt := range opts {
+        opt(cli)
+    }
 
-	return cli
+    return cli
 }
+
 
 // createClient creates a new API client with proper error handling
-func (cli *WFMCli) createNonStdNbiClient() (*nonStdWfmNbi.Client, error) {
-	// fmt.Println("nbi base url", cli.nbiBaseURL)
-	client, err := nonStdWfmNbi.NewClient(cli.nbiBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create API client: %w", err)
-	}
-	return client, nil
+func (cli *NbiApiClient) createNonStdNbiClient() (*nonStdWfmNbi.Client, error) {
+    client, err := nonStdWfmNbi.NewClient(cli.nbiBaseURL)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create API client: %w", err)
+    }
+    
+    // Configure the client to use our custom HTTP client
+    if cli.httpClient != nil {
+        client.Client = cli.httpClient
+    }
+    
+    return client, nil
 }
 
+
 // createContext creates a context with timeout
-func (cli *WFMCli) createContext() (context.Context, context.CancelFunc) {
+func (cli *NbiApiClient) createContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), cli.timeout)
 }
 
 // handleErrorResponse processes error responses consistently
-func (cli *WFMCli) handleErrorResponse(errBody []byte, statusCode int, operation string) error {
+func (cli *NbiApiClient) handleErrorResponse(errBody []byte, statusCode int, operation string) error {
 	// Read response body safely
 	body, err := io.ReadAll(bytes.NewReader(errBody))
 	if err != nil {
@@ -164,7 +184,7 @@ func (cli *WFMCli) handleErrorResponse(errBody []byte, statusCode int, operation
 //	    Source: map[string]interface{}{"url": "https://github.com/user/app.git"},
 //	}
 //	resp, err := cli.OnboardAppPkg(req)
-func (cli *WFMCli) OnboardAppPkg(params AppPkgOnboardingReq) (*AppPkgOnboardingResp, error) {
+func (cli *NbiApiClient) OnboardAppPkg(params AppPkgOnboardingReq) (*AppPkgOnboardingResp, error) {
 	// Validate required parameters
 	if params.Metadata.Name == "" {
 		return nil, fmt.Errorf("package name cannot be empty")
@@ -216,7 +236,7 @@ func (cli *WFMCli) OnboardAppPkg(params AppPkgOnboardingReq) (*AppPkgOnboardingR
 // Returns:
 //   - *AppPkgSummary: The package summary with details
 //   - error: An error if the package is not found or cannot be retrieved
-func (cli *WFMCli) GetAppPkg(pkgId string) (*AppPkgSummary, error) {
+func (cli *NbiApiClient) GetAppPkg(pkgId string) (*AppPkgSummary, error) {
 	if pkgId == "" {
 		return nil, fmt.Errorf("package ID cannot be empty")
 	}
@@ -257,7 +277,7 @@ func (cli *WFMCli) GetAppPkg(pkgId string) (*AppPkgSummary, error) {
 // Returns:
 //   - *ListAppPkgsResp: The list response containing packages and metadata
 //   - error: An error if the request cannot be processed
-func (cli *WFMCli) ListAppPkgs(params ListAppPkgsParams) (*ListAppPkgsResp, error) {
+func (cli *NbiApiClient) ListAppPkgs(params ListAppPkgsParams) (*ListAppPkgsResp, error) {
 	client, err := cli.createNonStdNbiClient()
 	if err != nil {
 		return nil, err
@@ -297,7 +317,7 @@ func (cli *WFMCli) ListAppPkgs(params ListAppPkgsParams) (*ListAppPkgsResp, erro
 //
 // Returns:
 //   - error: An error if the package cannot be deleted
-func (cli *WFMCli) DeleteAppPkg(pkgId string) error {
+func (cli *NbiApiClient) DeleteAppPkg(pkgId string) error {
 	if pkgId == "" {
 		return fmt.Errorf("package ID cannot be empty")
 	}
@@ -330,7 +350,7 @@ func (cli *WFMCli) DeleteAppPkg(pkgId string) error {
 	}
 }
 
-func (cli *WFMCli) CreateDeployment(params DeploymentReq) (*DeploymentResp, error) {
+func (cli *NbiApiClient) CreateDeployment(params DeploymentReq) (*DeploymentResp, error) {
 	// Validate required parameters
 	// Create client and context
 	client, err := cli.createNonStdNbiClient()
@@ -368,7 +388,7 @@ func (cli *WFMCli) CreateDeployment(params DeploymentReq) (*DeploymentResp, erro
 }
 
 // GetDeployment retrieves details for a specific application deployment.
-func (cli *WFMCli) GetDeployment(deploymentId string) (*DeploymentResp, error) {
+func (cli *NbiApiClient) GetDeployment(deploymentId string) (*DeploymentResp, error) {
 	if deploymentId == "" {
 		return nil, fmt.Errorf("deployment ID cannot be empty")
 	}
@@ -402,7 +422,7 @@ func (cli *WFMCli) GetDeployment(deploymentId string) (*DeploymentResp, error) {
 }
 
 // ListDeployments retrieves a list of application packages.
-func (cli *WFMCli) ListDeployments(params DeploymentListParams) (*DeploymentListResp, error) {
+func (cli *NbiApiClient) ListDeployments(params DeploymentListParams) (*DeploymentListResp, error) {
 	client, err := cli.createNonStdNbiClient()
 	if err != nil {
 		return nil, err
@@ -435,7 +455,7 @@ func (cli *WFMCli) ListDeployments(params DeploymentListParams) (*DeploymentList
 	}
 }
 
-func (cli *WFMCli) DeleteDeployment(deploymentId string) error {
+func (cli *NbiApiClient) DeleteDeployment(deploymentId string) error {
 	if deploymentId == "" {
 		return fmt.Errorf("deployment ID cannot be empty")
 	}
@@ -468,7 +488,7 @@ func (cli *WFMCli) DeleteDeployment(deploymentId string) error {
 	}
 }
 
-func (cli *WFMCli) ListDevices() (*DeviceListResp, error) {
+func (cli *NbiApiClient) ListDevices() (*DeviceListResp, error) {
 	client, err := cli.createNonStdNbiClient()
 	if err != nil {
 		return nil, err
@@ -498,62 +518,5 @@ func (cli *WFMCli) ListDevices() (*DeviceListResp, error) {
 		return deviceListResp.JSON200, nil
 	default:
 		return nil, cli.handleErrorResponse(deviceListResp.Body, deviceListResp.StatusCode(), "list devices")
-	}
-}
-
-// Package client provides a CLI client for interacting with the Margo DesiredState API.
-//
-// This package offers a high-level interface for managing application packages through
-// the Margo DesiredState service, including operations for onboarding, listing, retrieving,
-// and deleting application packages.
-
-// Type aliases for better API ergonomics, and can be used later on to change the structs if needed
-type (
-	SyncAppStateReq  = stdWfmSbi.StateJSONRequestBody
-	SyncAppStateResp = stdWfmSbi.DesiredAppStates
-)
-
-// createStdSBIClient creates a new API client with proper error handling
-func (cli *WFMCli) createStdSBIClient() (*stdWfmSbi.Client, error) {
-	client, err := stdWfmSbi.NewClient(cli.sbiBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create API client: %w", err)
-	}
-	return client, nil
-}
-
-func (cli *WFMCli) PollAppState(deviceId string, params SyncAppStateReq) (*SyncAppStateResp, error) {
-	// Create client and context
-	client, err := cli.createStdSBIClient()
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := cli.createContext()
-	defer cancel()
-
-	// Make API request
-	resp, err := client.State(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("poll app state request failed: %s", err.Error())
-	}
-	defer resp.Body.Close()
-
-	// Parse response
-	desiredStateResp, err := stdWfmSbi.ParseStateResponse(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse app state response: %s", err.Error())
-	}
-
-	// Handle response based on status code
-	switch desiredStateResp.StatusCode() {
-	case 200, 202:
-		// cli.logger.Printf("Received desired state api response: %s", pretty.Sprint(desiredStateResp))
-		if desiredStateResp.JSON200 != nil {
-			return desiredStateResp.JSON200, nil
-		}
-		return nil, nil
-	default:
-		return nil, cli.handleErrorResponse(desiredStateResp.Body, desiredStateResp.StatusCode(), "sync app state")
 	}
 }

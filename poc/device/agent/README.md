@@ -1,7 +1,7 @@
 # Device Agent
 
 A Margo-compliant device agent for managing workloads on edge devices. The agent provides deployment, monitoring, and lifecycle management of applications across Kubernetes (Helm) and Docker Compose environments.
-Note: This is a PoC and follows the standards and SUPs defined within Margo, please check the official docs.
+Note: This is a Code-first Sandbox and follows the standards and SUPs defined within Margo, please check the official docs.
 
 ## Table of Contents
 
@@ -97,7 +97,7 @@ This creates an optimized, compressed binary with UPX compression.
 
 ```bash
 # Build Docker image
-docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
+docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
 
 cd poc/device/agent
 
@@ -107,14 +107,14 @@ docker run -d \
   -v /root/.kube/config:/root/.kube/config \
   -v ./data:/data \
   --name device-agent \
-  margo.org/device-agent:dev-sprint-6
+  margo.org/device-agent:latest
 ```
 
 ### Docker Deployment to manager Docker runtime (for compose apps)
 
 ```bash
 # Build Docker image
-docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:dev-sprint-6
+docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
 
 # Run container
 docker run -d \
@@ -122,7 +122,7 @@ docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v ./data:/data \
   --name device-agent \
-  margo.org/device-agent:dev-sprint-6
+  margo.org/device-agent:latest
 ```
 
 ## Configuration
@@ -814,4 +814,4 @@ runtimes:
 
 ---
 
-**Note**: This agent is part of the Margo PoC. For complete documentation and API specifications, refer to the main Margo documentation and reach out to the stakeholders.
+**Note**: This agent is part of the Margo Code-first Sandbox. For complete documentation and API specifications, refer to the main Margo documentation and reach out to the stakeholders.

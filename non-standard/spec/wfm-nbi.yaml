@@ -1307,8 +1307,8 @@ components:
       properties:
         state:
           type: string
-          enum: [RUNNING, UPDATING, CRASHLOOP, UNKNOWN, PENDING, STOPPED, REMOVING]
-          example: RUNNING
+          enum: [PENDING, INSTALLING, INSTALLED, REMOVING, REMOVED, FAILED, UPDATING, UPDATED]
+          example: PENDING
           description: State of the deployment
           readOnly: true
         contextualInfo:

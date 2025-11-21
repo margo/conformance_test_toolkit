@@ -51,7 +51,8 @@ func (client *Client) CheckForNewCommits() (hasNewCommits bool, newCommits []Com
 	// Open the existing repository
 	repo, err := goGit.PlainOpen(*client.repoPath)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to open repository at %s: %w", client.repoPath, err)
+		// client.repoPath is a *string; dereference for formatting
+		return false, nil, fmt.Errorf("failed to open repository at %s: %w", *client.repoPath, err)
 	}
 
 	// Get current HEAD commit

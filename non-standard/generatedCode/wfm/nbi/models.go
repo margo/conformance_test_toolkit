@@ -41,13 +41,14 @@ const (
 
 // Defines values for ApplicationDeploymentStatusState.
 const (
-	ApplicationDeploymentStatusStateCRASHLOOP ApplicationDeploymentStatusState = "CRASHLOOP"
-	ApplicationDeploymentStatusStatePENDING   ApplicationDeploymentStatusState = "PENDING"
-	ApplicationDeploymentStatusStateREMOVING  ApplicationDeploymentStatusState = "REMOVING"
-	ApplicationDeploymentStatusStateRUNNING   ApplicationDeploymentStatusState = "RUNNING"
-	ApplicationDeploymentStatusStateSTOPPED   ApplicationDeploymentStatusState = "STOPPED"
-	ApplicationDeploymentStatusStateUNKNOWN   ApplicationDeploymentStatusState = "UNKNOWN"
-	ApplicationDeploymentStatusStateUPDATING  ApplicationDeploymentStatusState = "UPDATING"
+	ApplicationDeploymentStatusStateFAILED     ApplicationDeploymentStatusState = "FAILED"
+	ApplicationDeploymentStatusStateINSTALLED  ApplicationDeploymentStatusState = "INSTALLED"
+	ApplicationDeploymentStatusStateINSTALLING ApplicationDeploymentStatusState = "INSTALLING"
+	ApplicationDeploymentStatusStatePENDING    ApplicationDeploymentStatusState = "PENDING"
+	ApplicationDeploymentStatusStateREMOVED    ApplicationDeploymentStatusState = "REMOVED"
+	ApplicationDeploymentStatusStateREMOVING   ApplicationDeploymentStatusState = "REMOVING"
+	ApplicationDeploymentStatusStateUPDATED    ApplicationDeploymentStatusState = "UPDATED"
+	ApplicationDeploymentStatusStateUPDATING   ApplicationDeploymentStatusState = "UPDATING"
 )
 
 // Defines values for ApplicationPackageOperation.

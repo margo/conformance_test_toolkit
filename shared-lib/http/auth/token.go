@@ -79,10 +79,9 @@ const (
 
 type AuthOption = func(context.Context, *http.Request) error
 
-func WithDeviceSignature(ctx context.Context, sign string) AuthOption {
+func WithSignRequest(ctx context.Context, signer func(ctx context.Context, req *http.Request) error) AuthOption {
 	return func(ctx context.Context, req *http.Request) error {
-		req.Header.Set("X-DEVICE-SIGNATURE", sign)
-		return nil
+		return signer(ctx, req)
 	}
 }
 

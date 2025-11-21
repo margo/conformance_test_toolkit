@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
-	Api_keyScopes    = "api_key.Scopes"
-	Margo_authScopes = "margo_auth.Scopes"
+	PayloadSignatureScopes = "PayloadSignature.Scopes"
 )
 
 // Defines values for ComponentStatusState.
@@ -21,21 +19,39 @@ const (
 	ComponentStatusStateInstalled  ComponentStatusState = "Installed"
 	ComponentStatusStateInstalling ComponentStatusState = "Installing"
 	ComponentStatusStatePending    ComponentStatusState = "Pending"
+	ComponentStatusStateRemoved    ComponentStatusState = "Removed"
+	ComponentStatusStateRemoving   ComponentStatusState = "Removing"
+	ComponentStatusStateUpdated    ComponentStatusState = "Updated"
+	ComponentStatusStateUpdating   ComponentStatusState = "Updating"
 )
 
-// Defines values for OverallStatusState.
+// Defines values for DeploymentStatusManifestKind.
 const (
-	OverallStatusStateFailed     OverallStatusState = "Failed"
-	OverallStatusStateInstalled  OverallStatusState = "Installed"
-	OverallStatusStateInstalling OverallStatusState = "Installing"
-	OverallStatusStatePending    OverallStatusState = "Pending"
+	DeploymentStatus DeploymentStatusManifestKind = "DeploymentStatus"
 )
 
-// Defines values for PropertiesRoles.
+// Defines values for DeploymentStatusManifestStatusState.
 const (
-	ClusterLead       PropertiesRoles = "cluster lead"
-	StandaloneCluster PropertiesRoles = "standalone cluster"
-	StandaloneDevice  PropertiesRoles = "standalone device"
+	DeploymentStatusManifestStatusStateFailed     DeploymentStatusManifestStatusState = "Failed"
+	DeploymentStatusManifestStatusStateInstalled  DeploymentStatusManifestStatusState = "Installed"
+	DeploymentStatusManifestStatusStateInstalling DeploymentStatusManifestStatusState = "Installing"
+	DeploymentStatusManifestStatusStatePending    DeploymentStatusManifestStatusState = "Pending"
+	DeploymentStatusManifestStatusStateRemoved    DeploymentStatusManifestStatusState = "Removed"
+	DeploymentStatusManifestStatusStateRemoving   DeploymentStatusManifestStatusState = "Removing"
+	DeploymentStatusManifestStatusStateUpdated    DeploymentStatusManifestStatusState = "Updated"
+	DeploymentStatusManifestStatusStateUpdating   DeploymentStatusManifestStatusState = "Updating"
+)
+
+// Defines values for DeviceCapabilitiesManifestKind.
+const (
+	DeviceCapabilities DeviceCapabilitiesManifestKind = "DeviceCapabilities"
+)
+
+// Defines values for DeviceCapabilitiesManifestPropertiesRoles.
+const (
+	ClusterLeader     DeviceCapabilitiesManifestPropertiesRoles = "Cluster Leader"
+	StandaloneCluster DeviceCapabilitiesManifestPropertiesRoles = "Standalone Cluster"
+	StandaloneDevice  DeviceCapabilitiesManifestPropertiesRoles = "Standalone Device"
 )
 
 // Defines values for AppDeploymentProfileType.
@@ -44,189 +60,113 @@ const (
 	HelmV3  AppDeploymentProfileType = "helm.v3"
 )
 
-// Defines values for AppStateAppState.
-const (
-	CRASHLOOP AppStateAppState = "CRASHLOOP"
-	PENDING   AppStateAppState = "PENDING"
-	REMOVING  AppStateAppState = "REMOVING"
-	RUNNING   AppStateAppState = "RUNNING"
-	STOPPED   AppStateAppState = "STOPPED"
-	UPDATING  AppStateAppState = "UPDATING"
-)
-
-// CPU Defines the CPU characteristics.
-type CPU struct {
-	// Cores Defines the cores available within the hosts CPU.
-	Cores int32 `json:"cores"`
-
-	// CpuArchitecture Defines the CPUs architecture. i.e. ARM/Intel x86.
-	CpuArchitecture string `json:"cpuArchitecture"`
-
-	// Frequency Defines the frequency of the CPU in GHz.
-	Frequency float32 `json:"frequency"`
-}
-
-// ComponentStatus Defines the status of a single deployment component.
+// ComponentStatus defines model for ComponentStatus.
 type ComponentStatus struct {
-	// Error Defines an error that occurred.
-	Error *Error `json:"error,omitempty"`
-
-	// Name Name of the deployment component (inherited from the deployment specification).
-	Name string `json:"name"`
-
-	// State The component's current deployment state.
+	Error *struct {
+		Code    *string `json:"code,omitempty"`
+		Message *string `json:"message,omitempty"`
+	} `json:"error,omitempty"`
+	Name  string               `json:"name"`
 	State ComponentStatusState `json:"state"`
 }
 
-// ComponentStatusState The component's current deployment state.
+// ComponentStatusState defines model for ComponentStatus.State.
 type ComponentStatusState string
 
-// DeploymentStatus Reports the status of a deployment.
-type DeploymentStatus struct {
-	// ApiVersion Identifier of the version of the API the object definition follows.
-	ApiVersion string `json:"apiVersion"`
+// DeploymentBundleRef Describes a single archive containing all ApplicationDeployment documents. If there are zero deployments (deployments array is empty) the property MUST be present with the value null (it MUST NOT be omitted).
+type DeploymentBundleRef struct {
+	// Digest The digest of the bundle archive. MUST equal the digest computed over the exact sequence of bytes (per Exact Bytes Rule) in the bundle endpoint's HTTP 200 OK response body.
+	Digest *string `json:"digest,omitempty"`
 
-	// Components Individual component deployment statuses.
-	Components []ComponentStatus `json:"components"`
+	// MediaType MUST be application/vnd.margo.bundle.v1+tar+gzip; a gzip-compressed tar whose root contains one or more ApplicationDeployment YAML files. If there are zero deployments then bundle MUST be null (an empty archive MUST NOT be served). The archive MUST contain exactly the set of YAML files referenced by deployments.
+	MediaType *string `json:"mediaType,omitempty"`
 
-	// DeploymentId The unique identifier UUID of the deployment specification.
-	DeploymentId openapi_types.UUID `json:"deploymentId"`
+	// SizeBytes Unsigned 64-bit advisory estimate of the decoded payload length in bytes for the bundle archive. Provided for bandwidth estimation and update planning. MUST NOT be used for integrity; digest verification remains mandatory.
+	SizeBytes *float32 `json:"sizeBytes,omitempty"`
 
-	// Kind Must be DeploymentStatus.
-	Kind string `json:"kind"`
-
-	// Status Defines the overall deployment status.
-	Status OverallStatus `json:"status"`
+	// Url Content-addressable retrieval endpoint of the form /api/v1/devices/{deviceId}/bundles/{digest} where {digest} equals bundle.digest.
+	Url *string `json:"url,omitempty"`
 }
 
-// DeviceCapabilities Reports the capabilities of a device.
-type DeviceCapabilities struct {
-	// ApiVersion Identifier of the version of the API the object definition follows.
-	ApiVersion string `json:"apiVersion"`
+// DeploymentManifestRef Reference to a deployment manifest with content addressing and integrity verification.
+type DeploymentManifestRef struct {
+	// DeploymentId The unique UUID from the ApplicationDeployment's metadata.annotations.id.
+	DeploymentId string `json:"deploymentId"`
 
-	// Kind Must be DeviceCapabilities.
-	Kind string `json:"kind"`
+	// Digest The digest of the individual ApplicationDeployment YAML file. MUST equal the digest computed over the exact sequence of bytes (per Exact Bytes Rule) in that deployment endpoint's HTTP 200 OK response body.
+	Digest string `json:"digest"`
 
-	// Properties Defines characteristics about the device.
-	Properties Properties `json:"properties"`
+	// SizeBytes Unsigned 64-bit advisory estimate of the decoded payload length in bytes for the deployment YAML. Provided for planning or progress display. MUST NOT be used for integrity; digest verification remains mandatory.
+	SizeBytes *float32 `json:"sizeBytes,omitempty"`
+
+	// Url Content-addressable endpoint of the form /api/v1/devices/{deviceId}/deployments/{deploymentId}/{digest}. The {digest} MUST equal deployments[].digest; the referenced resource is immutable
+	Url string `json:"url"`
 }
 
-// Error Defines an error that occurred.
-type Error struct {
-	// Code Associated error code.
-	Code *string `json:"code,omitempty"`
-
-	// Message Associated error message.
-	Message *string `json:"message,omitempty"`
+// DeploymentStatusManifest defines model for DeploymentStatusManifest.
+type DeploymentStatusManifest struct {
+	ApiVersion   string                       `json:"apiVersion"`
+	Components   []ComponentStatus            `json:"components"`
+	DeploymentId string                       `json:"deploymentId"`
+	Kind         DeploymentStatusManifestKind `json:"kind"`
+	Status       struct {
+		Error *struct {
+			Code    *string `json:"code,omitempty"`
+			Message *string `json:"message,omitempty"`
+		} `json:"error,omitempty"`
+		State DeploymentStatusManifestStatusState `json:"state"`
+	} `json:"status"`
 }
 
-// Interface Defines a device interface.
-type Interface struct {
-	// ModelNumber Model number of the interface.
-	ModelNumber string `json:"modelNumber"`
+// DeploymentStatusManifestKind defines model for DeploymentStatusManifest.Kind.
+type DeploymentStatusManifestKind string
 
-	// Name Name of the interface.
-	Name string `json:"name"`
+// DeploymentStatusManifestStatusState defines model for DeploymentStatusManifest.Status.State.
+type DeploymentStatusManifestStatusState string
 
-	// Properties Properties of the interface to inform the WOS with additional information.
-	Properties map[string]interface{} `json:"properties"`
-
-	// Type Type of the interface. i.e. Ethernet NIC
-	Type string `json:"type"`
+// DeviceCapabilitiesManifest defines model for DeviceCapabilitiesManifest.
+type DeviceCapabilitiesManifest struct {
+	ApiVersion string                         `json:"apiVersion"`
+	Kind       DeviceCapabilitiesManifestKind `json:"kind"`
+	Properties struct {
+		Id          string `json:"id"`
+		ModelNumber string `json:"modelNumber"`
+		Resources   struct {
+			Cpu struct {
+				Cores *float32 `json:"cores,omitempty"`
+			} `json:"cpu"`
+			Memory  string `json:"memory"`
+			Storage string `json:"storage"`
+		} `json:"resources"`
+		Roles        []DeviceCapabilitiesManifestPropertiesRoles `json:"roles"`
+		SerialNumber string                                      `json:"serialNumber"`
+		Vendor       string                                      `json:"vendor"`
+	} `json:"properties"`
 }
 
-// OnboardingRequest Request body for the /onboarding/device endpoint.
-type OnboardingRequest = map[string]interface{}
+// DeviceCapabilitiesManifestKind defines model for DeviceCapabilitiesManifest.Kind.
+type DeviceCapabilitiesManifestKind string
 
-// OnboardingResponse Response body for the /onboarding/device endpoint.
-type OnboardingResponse struct {
-	// ClientId The client ID for OAuth 2.0 authentication.
-	ClientId string `json:"clientId"`
+// DeviceCapabilitiesManifestPropertiesRoles defines model for DeviceCapabilitiesManifest.Properties.Roles.
+type DeviceCapabilitiesManifestPropertiesRoles string
 
-	// ClientSecret The client secret for OAuth 2.0 authentication.
-	ClientSecret string `json:"clientSecret"`
+// ManifestVersion Monotonically increasing unsigned 64-bit integer in the inclusive range [1, 2^64-1]. Prevents rollback attacks. The first manifest MUST use 1.
+type ManifestVersion = float32
 
-	// GitAccessToken An access token for authenticating with the Git repository.
-	GitAccessToken string `json:"gitAccessToken"`
+// UnsignedAppStateManifest defines model for UnsignedAppStateManifest.
+type UnsignedAppStateManifest struct {
+	// Bundle Describes a single archive containing all ApplicationDeployment documents. If there are zero deployments (deployments array is empty) the property MUST be present with the value null (it MUST NOT be omitted).
+	Bundle *DeploymentBundleRef `json:"bundle"`
 
-	// GitRepositoryUrl The URL for the Git repository containing the desired state.
-	GitRepositoryUrl string `json:"gitRepositoryUrl"`
+	// Deployments A list of deployment object references for the device. The reference contains some meta info and reference to the url where the deployment is available.
+	Deployments []DeploymentManifestRef `json:"deployments"`
 
-	// TokenEndpointUrl The URL for the OAuth 2.0 token endpoint.
-	TokenEndpointUrl string `json:"tokenEndpointUrl"`
+	// ManifestVersion Monotonically increasing unsigned 64-bit integer in the inclusive range [1, 2^64-1]. Prevents rollback attacks. The first manifest MUST use 1.
+	ManifestVersion ManifestVersion `json:"manifestVersion"`
 }
 
-// OverallStatus Defines the overall deployment status.
-type OverallStatus struct {
-	// Error Defines an error that occurred.
-	Error *Error `json:"error,omitempty"`
-
-	// State Current state of the overall deployment.
-	State OverallStatusState `json:"state"`
-}
-
-// OverallStatusState Current state of the overall deployment.
-type OverallStatusState string
-
-// Peripheral Defines a device peripheral.
-type Peripheral struct {
-	// ModelNumber Model number of the peripheral.
-	ModelNumber string `json:"modelNumber"`
-
-	// Name Name of the peripheral.
-	Name string `json:"name"`
-
-	// Properties Properties of the peripheral.
-	Properties map[string]interface{} `json:"properties"`
-
-	// Type Type of the peripheral. i.e. GPU
-	Type string `json:"type"`
-}
-
-// Properties Defines characteristics about the device.
-type Properties struct {
-	// Id Unique deviceID assigned to the device via the Device Owner.
-	Id string `json:"id"`
-
-	// Interfaces Defines the device's interfaces that are available to the application deployed on the device.
-	Interfaces []Interface `json:"interfaces"`
-
-	// ModelNumber Defines the model number of the device.
-	ModelNumber string `json:"modelNumber"`
-
-	// Peripherals Defines the device's peripherals available to the application deployed on the device.
-	Peripherals []Peripheral `json:"peripherals"`
-
-	// Resources Defines the device's resources available to the application deployed on the device.
-	Resources Resources `json:"resources"`
-
-	// Roles Defines the device role it can provide to the Margo environment.
-	Roles []PropertiesRoles `json:"roles"`
-
-	// SerialNumber Defines the serial number of the device.
-	SerialNumber string `json:"serialNumber"`
-
-	// Vendor Defines the device vendor.
-	Vendor string `json:"vendor"`
-}
-
-// PropertiesRoles defines model for Properties.Roles.
-type PropertiesRoles string
-
-// Resources Defines the device's resources available to the application deployed on the device.
-type Resources struct {
-	// Cpus Defines the device's CPUs that are available to the application deployed on the device.
-	Cpus []CPU `json:"cpus"`
-
-	// Memory Defines the memory capacity available for applications on the device in GBs.
-	Memory int32 `json:"memory"`
-
-	// Storage Defines the storage capacity available for applications to utilize in GBs.
-	Storage int32 `json:"storage"`
-}
-
-// AppDeployment Application Deployment manifest
-type AppDeployment struct {
+// AppDeploymentManifest Application Deployment manifest
+type AppDeploymentManifest struct {
 	// ApiVersion API version
 	ApiVersion string `json:"apiVersion"`
 
@@ -303,23 +243,6 @@ type AppParameterValue struct {
 	Value interface{} `json:"value"`
 }
 
-// AppState defines model for appState.
-type AppState struct {
-	// AppDeploymentYAML Base64 encoded MARGO ApplicationDescription YAML content
-	AppDeploymentYAML *string `json:"appDeploymentYAML,omitempty"`
-
-	// AppDeploymentYAMLHash App Hash encoding used for versioning the MARGO ApplicationDescription
-	AppDeploymentYAMLHash string           `json:"appDeploymentYAMLHash"`
-	AppId                 string           `json:"appId"`
-	AppState              AppStateAppState `json:"appState"`
-
-	// AppVersion Version String
-	AppVersion string `json:"appVersion"`
-}
-
-// AppStateAppState defines model for AppState.AppState.
-type AppStateAppState string
-
 // ComposeApplicationDeploymentProfileComponent Compose Application Deployment Profile Component
 type ComposeApplicationDeploymentProfileComponent struct {
 	// Name Name of the component
@@ -338,12 +261,6 @@ type ComposeApplicationDeploymentProfileComponent struct {
 		Wait *bool `json:"wait,omitempty"`
 	} `json:"properties"`
 }
-
-// CurrentAppStates defines model for currentAppStates.
-type CurrentAppStates = []AppState
-
-// DesiredAppStates defines model for desiredAppStates.
-type DesiredAppStates = []AppState
 
 // HelmApplicationDeploymentProfileComponent Helm Application Deployment Profile Component
 type HelmApplicationDeploymentProfileComponent struct {
@@ -364,37 +281,47 @@ type HelmApplicationDeploymentProfileComponent struct {
 	} `json:"properties"`
 }
 
-// PrivatePayload defines model for privatePayload.
-type PrivatePayload struct {
-	Code *string `json:"code,omitempty"`
+// GetApiV1ClientsClientIdBundlesDigestParams defines parameters for GetApiV1ClientsClientIdBundlesDigest.
+type GetApiV1ClientsClientIdBundlesDigestParams struct {
+	// IfNoneMatch Quoted ETag (same as digest) previously returned for this bundle.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
-// UserArray defines model for UserArray.
-type UserArray = []string
+// GetApiV1ClientsClientIdDeploymentsParams defines parameters for GetApiV1ClientsClientIdDeployments.
+type GetApiV1ClientsClientIdDeploymentsParams struct {
+	// IfNoneMatch ETag value of the last successfully synced manifest. The ETag is returned to the client from the /deployments endpoint, it is the digest of the state manifest.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 
-// ProcessParams defines parameters for Process.
-type ProcessParams struct {
-	// RpcId An RPC call to the WFM, initiated by the Device
-	RpcId *int `form:"rpcId,omitempty" json:"rpcId,omitempty"`
+	// Accept Indicates which manifest formats the client supports. Supported values: application/vnd.margo.manifest.v1+json.
+	Accept *string `json:"Accept,omitempty"`
 }
 
-// PostDeviceDeviceIdCapabilitiesJSONRequestBody defines body for PostDeviceDeviceIdCapabilities for application/json ContentType.
-type PostDeviceDeviceIdCapabilitiesJSONRequestBody = DeviceCapabilities
+// GetApiV1ClientsClientIdDeploymentsDeploymentIdDigestParams defines parameters for GetApiV1ClientsClientIdDeploymentsDeploymentIdDigest.
+type GetApiV1ClientsClientIdDeploymentsDeploymentIdDigestParams struct {
+	// IfNoneMatch Optional ETag for caching. The ETag is returned to the client from the /deployments endpoint, it is the digest of the state manifest.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 
-// PutDeviceDeviceIdCapabilitiesJSONRequestBody defines body for PutDeviceDeviceIdCapabilities for application/json ContentType.
-type PutDeviceDeviceIdCapabilitiesJSONRequestBody = DeviceCapabilities
+	// AcceptEncoding Indicates supported compression formats (e.g., gzip, br)
+	AcceptEncoding *string `json:"Accept-Encoding,omitempty"`
+}
 
-// PostDeviceDeviceIdDeploymentDeploymentIdStatusJSONRequestBody defines body for PostDeviceDeviceIdDeploymentDeploymentIdStatus for application/json ContentType.
-type PostDeviceDeviceIdDeploymentDeploymentIdStatusJSONRequestBody = DeploymentStatus
+// PostApiV1OnboardingJSONBody defines parameters for PostApiV1Onboarding.
+type PostApiV1OnboardingJSONBody struct {
+	// PublicCertificate Base64-encoded client certificate
+	PublicCertificate *string `json:"public_certificate,omitempty"`
+}
 
-// PostOnboardingDeviceJSONRequestBody defines body for PostOnboardingDevice for application/json ContentType.
-type PostOnboardingDeviceJSONRequestBody = OnboardingRequest
+// PostApiV1ClientsClientIdCapabilitiesJSONRequestBody defines body for PostApiV1ClientsClientIdCapabilities for application/json ContentType.
+type PostApiV1ClientsClientIdCapabilitiesJSONRequestBody = DeviceCapabilitiesManifest
 
-// ProcessJSONRequestBody defines body for Process for application/json ContentType.
-type ProcessJSONRequestBody = PrivatePayload
+// PutApiV1ClientsClientIdCapabilitiesJSONRequestBody defines body for PutApiV1ClientsClientIdCapabilities for application/json ContentType.
+type PutApiV1ClientsClientIdCapabilitiesJSONRequestBody = DeviceCapabilitiesManifest
 
-// StateJSONRequestBody defines body for State for application/json ContentType.
-type StateJSONRequestBody = CurrentAppStates
+// PostApiV1ClientsClientIdDeploymentDeploymentIdStatusJSONRequestBody defines body for PostApiV1ClientsClientIdDeploymentDeploymentIdStatus for application/json ContentType.
+type PostApiV1ClientsClientIdDeploymentDeploymentIdStatusJSONRequestBody = DeploymentStatusManifest
+
+// PostApiV1OnboardingJSONRequestBody defines body for PostApiV1Onboarding for application/json ContentType.
+type PostApiV1OnboardingJSONRequestBody PostApiV1OnboardingJSONBody
 
 // AsHelmApplicationDeploymentProfileComponent returns the union data inside the AppDeploymentProfile_Components_Item as a HelmApplicationDeploymentProfileComponent
 func (t AppDeploymentProfile_Components_Item) AsHelmApplicationDeploymentProfileComponent() (HelmApplicationDeploymentProfileComponent, error) {

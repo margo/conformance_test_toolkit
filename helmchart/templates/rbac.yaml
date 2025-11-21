@@ -2,17 +2,17 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "agentchart.fullname" . }}-sa
+  name: {{ include "agentchart.serviceaccountname" . }}
   namespace: {{ include "agentchart.namespace" . }}
   labels:
-    app: {{ include "agentchart.fullname" . }}
+    {{- include "agentchart.labels" . | nindent 4 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "agentchart.fullname" . }}-role
+  name: {{ include "agentchart.rolename" . }}
   labels:
-    app: {{ include "agentchart.fullname" . }}
+    {{- include "agentchart.labels" . | nindent 4 }}
 rules:
 - apiGroups: [""]
   resources: ["pods", "services", "endpoints", "nodes", "namespaces"]
@@ -50,15 +50,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "agentchart.fullname" . }}-binding
+  name: {{ include "agentchart.rolebindingname" . }}
   labels:
-    app: {{ include "agentchart.fullname" . }}
+    {{- include "agentchart.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "agentchart.fullname" . }}-role
+  name: {{ include "agentchart.rolename" . }}
 subjects:
 - kind: ServiceAccount
-  name: {{ include "agentchart.fullname" . }}-sa
+  name: {{ include "agentchart.serviceaccountname" . }}
   namespace: {{ include "agentchart.namespace" . }}
 {{- end }}

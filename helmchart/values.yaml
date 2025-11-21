@@ -10,11 +10,23 @@ image:
 rbac:
   create: true
 
-# if persistence.enabled=true then you need to give a volume claim name
-# the agent will use this volume claim to store its data, make sure that the volume claim is in the same namespace
-# where you have installed the chart
-# if persistence.enabled=false then an ephemeral volume will be used
-# which means that data will not be persisted if things crash, or restart
+# Secrets configuration
+secrets:
+  create: true  
+
+# Persistence configuration
+# If enabled, agent data (/data directory) will survive pod restarts
+# This prevents re-onboarding and re-syncing on every pod restart
 persistence:
-  enabled: false
-  claimName: ""
+  # Set to true to enable persistent storage (RECOMMENDED for production)
+  enabled: true
+  
+  # Leave empty to auto-create a PVC, or specify an existing PVC name
+  existingClaim: ""
+  
+  # Size of the PVC (only used if existingClaim is empty)
+  size: 1Gi
+  
+  # Storage class name (leave empty to use cluster default)
+  # Examples: "standard", "gp2", "local-path"
+  storageClassName: ""

@@ -1,11 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ include "custom-otel-helm.fullname" . }}
+  labels:
+    {{- include "custom-otel-helm.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app: {{ .Chart.Name }}
+    {{- include "custom-otel-helm.selectorLabels" . | nindent 4 }}
   ports:
     - protocol: TCP
       port: {{ .Values.service.port }}
