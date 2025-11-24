@@ -91,5 +91,5 @@ In order to deploy the Sandbox, clone the [MARGO repository](https://github.com/
   sudo -E bash ./device-agent.sh  # Option 4 or 6: Device-agent Stop
   sudo -E bash ./device-agent.sh  # Option 2: Uninstall-prerequisites
   sudo -E bash ./device-agent.sh  # Option 9: otel-collector-promtail-uninstallation
-  sudo -E bash ./device-agent.sh  # Option 11: cleanup-residual
+  sudo -E bash ./device-agent.sh  # Option 10: cleanup-residual
   ```

@@ -38,7 +38,9 @@ Please leave a comment as we welcome feedback, a * is always appreciated !!
 ---
 
 ### Quick Start Guide
-This section allows you to set up a 'Sandbox' environment for experimenting with the MARGO specifications and APIs. This includes instructions on the prerequisites for your setup, how to set up a build environment, creating a deployment on a set of virtual machines and running scenarios between the MARGO WFM and the Device-Agent using a simple CLI.
+This section allows you to set up the 'Sandbox' environment for experimenting with the MARGO specifications and APIs. This includes instructions on the prerequisites for your setup, how to set up a build environment, creating a deployment on a set of virtual machines and running scenarios between the MARGO WFM and the Device-Agent using a simple CLI. 
+
+Here is [Simplified Guide](./docs/simplified-setup-guide.md) to get you started quickly. Read the detailed steps below to explore further.
 
 #### Development Toolset
 - [Development Toolset](./docs/dev-toolsets.md)
