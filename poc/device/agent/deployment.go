@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/kr/pretty"
 	"github.com/margo/dev-repo/poc/device/agent/database"
@@ -28,16 +28,16 @@ type DeploymentManager struct {
 	log           *zap.SugaredLogger
 	stopChan      chan struct{}
 	//  Mutex to prevent concurrent reconciliation
-    reconcileLocks sync.Map // map[deploymentId]bool
+	reconcileLocks sync.Map // map[deploymentId]bool
 }
 
 func NewDeploymentManager(db database.DatabaseIfc, helmClient *workloads.HelmClient, composeClient *workloads.DockerComposeCliClient, log *zap.SugaredLogger) *DeploymentManager {
 	return &DeploymentManager{
-		database:      db,
-		helmClient:    helmClient,
-		composeClient: composeClient,
-		log:           log,
-		stopChan:      make(chan struct{}),
+		database:       db,
+		helmClient:     helmClient,
+		composeClient:  composeClient,
+		log:            log,
+		stopChan:       make(chan struct{}),
 		reconcileLocks: sync.Map{},
 	}
 }
@@ -87,93 +87,92 @@ func (dm *DeploymentManager) reconcileAll() {
 }
 
 func (dm *DeploymentManager) reconcileDeployment(deploymentId string) {
-    //  Prevent concurrent reconciliation of the same deployment
-    if _, loaded := dm.reconcileLocks.LoadOrStore(deploymentId, true); loaded {
-        dm.log.Debugw("Reconciliation already in progress, skipping", "deploymentId", deploymentId)
-        return
-    }
-    defer dm.reconcileLocks.Delete(deploymentId)
-    
-    record, err := dm.database.GetDeployment(deploymentId)
-    if err != nil {
-        dm.log.Errorw("Failed to get deployment", "deploymentId", deploymentId, "error", err)
-        return
-    }
+	//  Prevent concurrent reconciliation of the same deployment
+	if _, loaded := dm.reconcileLocks.LoadOrStore(deploymentId, true); loaded {
+		dm.log.Debugw("Reconciliation already in progress, skipping", "deploymentId", deploymentId)
+		return
+	}
+	defer dm.reconcileLocks.Delete(deploymentId)
 
-    if record.DesiredState == nil {
-        return
-    }
+	record, err := dm.database.GetDeployment(deploymentId)
+	if err != nil {
+		dm.log.Errorw("Failed to get deployment", "deploymentId", deploymentId, "error", err)
+		return
+	}
 
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-    defer cancel()
+	if record.DesiredState == nil {
+		return
+	}
 
-    // Get the desired state from the manifest
-    desiredState := record.DesiredState.Status.Status.State
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
-    // Get current state (what's actually deployed)
-    var currentState sbi.DeploymentStatusManifestStatusState
-    if record.CurrentState != nil {
-        currentState = record.CurrentState.Status.Status.State
-    } else {
-        currentState = sbi.DeploymentStatusManifestStatusStatePending
-    }
+	// Get the desired state from the manifest
+	desiredState := record.DesiredState.Status.Status.State
 
-    dm.log.Debugw("Reconciling deployment",
-        "deploymentId", deploymentId,
-        "desiredState", desiredState,
-        "currentState", currentState)
+	// Get current state (what's actually deployed)
+	var currentState sbi.DeploymentStatusManifestStatusState
+	if record.CurrentState != nil {
+		currentState = record.CurrentState.Status.Status.State
+	} else {
+		currentState = sbi.DeploymentStatusManifestStatusStatePending
+	}
 
-    // Only reconcile if states don't match
-    switch desiredState {
-    case sbi.DeploymentStatusManifestStatusStatePending:
-        // Only deploy if not already installed
-        if currentState != sbi.DeploymentStatusManifestStatusStateInstalled {
-            dm.log.Debugw("deploying pending deployment", "deploymentId", deploymentId)
-            dm.deployOrUpdate(ctx, deploymentId, *record.DesiredState)
-        } else {
-            dm.log.Debugw("deployment already installed, skipping", "deploymentId", deploymentId)
-        }
+	dm.log.Debugw("Reconciling deployment",
+		"deploymentId", deploymentId,
+		"desiredState", desiredState,
+		"currentState", currentState)
 
-    case sbi.DeploymentStatusManifestStatusStateInstalling:
-        // Only deploy if not already installed
-        if currentState != sbi.DeploymentStatusManifestStatusStateInstalled {
-            dm.log.Debugw("deploying or updating the deployment", "deploymentId", deploymentId)
-            dm.deployOrUpdate(ctx, deploymentId, *record.DesiredState)
-        } else {
-            dm.log.Debugw("deployment already installed, skipping", "deploymentId", deploymentId)
-        }
+	// Only reconcile if states don't match
+	switch desiredState {
+	case sbi.DeploymentStatusManifestStatusStatePending:
+		// Only deploy if not already installed
+		if currentState != sbi.DeploymentStatusManifestStatusStateInstalled {
+			dm.log.Debugw("deploying pending deployment", "deploymentId", deploymentId)
+			dm.deployOrUpdate(ctx, deploymentId, *record.DesiredState)
+		} else {
+			dm.log.Debugw("deployment already installed, skipping", "deploymentId", deploymentId)
+		}
 
-    case sbi.DeploymentStatusManifestStatusStateRemoving:
-        // Only remove if not already removed
-        if currentState != sbi.DeploymentStatusManifestStatusStateRemoved {
-            dm.log.Debugw("removing the deployment", "deploymentId", deploymentId)
-            dm.remove(ctx, deploymentId)
-        } else {
-            dm.log.Debugw("deployment already removed, skipping", "deploymentId", deploymentId)
-        }
+	case sbi.DeploymentStatusManifestStatusStateInstalling:
+		// Only deploy if not already installed
+		if currentState != sbi.DeploymentStatusManifestStatusStateInstalled {
+			dm.log.Debugw("deploying or updating the deployment", "deploymentId", deploymentId)
+			dm.deployOrUpdate(ctx, deploymentId, *record.DesiredState)
+		} else {
+			dm.log.Debugw("deployment already installed, skipping", "deploymentId", deploymentId)
+		}
 
-    case sbi.DeploymentStatusManifestStatusStateRemoved:
-        dm.log.Debugw("deployment already removed", "deploymentId", deploymentId)
-        return
+	case sbi.DeploymentStatusManifestStatusStateRemoving:
+		// Only remove if not already removed
+		if currentState != sbi.DeploymentStatusManifestStatusStateRemoved {
+			dm.log.Debugw("removing the deployment", "deploymentId", deploymentId)
+			dm.remove(ctx, deploymentId)
+		} else {
+			dm.log.Debugw("deployment already removed, skipping", "deploymentId", deploymentId)
+		}
 
-    case sbi.DeploymentStatusManifestStatusStateInstalled:
-        // Check if current state matches
-        if currentState != sbi.DeploymentStatusManifestStatusStateInstalled {
-            dm.log.Debugw("current state doesn't match desired, reconciling", "deploymentId", deploymentId)
-            dm.deployOrUpdate(ctx, deploymentId, *record.DesiredState)
-        } else {
-            dm.log.Debugw("deployment already installed and matches desired state", "deploymentId", deploymentId)
-        }
+	case sbi.DeploymentStatusManifestStatusStateRemoved:
+		dm.log.Debugw("deployment already removed", "deploymentId", deploymentId)
+		return
 
-    case sbi.DeploymentStatusManifestStatusStateFailed:
-        dm.log.Warnw("deployment in failed state", "deploymentId", deploymentId)
-        return
+	case sbi.DeploymentStatusManifestStatusStateInstalled:
+		// Check if current state matches
+		if currentState != sbi.DeploymentStatusManifestStatusStateInstalled {
+			dm.log.Debugw("current state doesn't match desired, reconciling", "deploymentId", deploymentId)
+			dm.deployOrUpdate(ctx, deploymentId, *record.DesiredState)
+		} else {
+			dm.log.Debugw("deployment already installed and matches desired state", "deploymentId", deploymentId)
+		}
 
-    default:
-        dm.log.Warnw("unknown deployment state", "deploymentId", deploymentId, "state", desiredState)
-    }
+	case sbi.DeploymentStatusManifestStatusStateFailed:
+		dm.log.Warnw("deployment in failed state", "deploymentId", deploymentId)
+		return
+
+	default:
+		dm.log.Warnw("unknown deployment state", "deploymentId", deploymentId, "state", desiredState)
+	}
 }
-
 
 func (dm *DeploymentManager) deployOrUpdate(ctx context.Context, deploymentId string, desiredState database.AppDeploymentState) {
 	dm.database.SetPhase(deploymentId, "DEPLOYING", "Starting deployment")
@@ -227,61 +226,60 @@ func (dm *DeploymentManager) deployOrUpdate(ctx context.Context, deploymentId st
 }
 
 func (dm *DeploymentManager) deployOrUpdateHelm(ctx context.Context, deploymentId string, appDeployment sbi.AppDeploymentManifest) error {
-    component := appDeployment.Spec.DeploymentProfile.Components[0]
-    helmComp, err := component.AsHelmApplicationDeploymentProfileComponent()
-    if err != nil {
-        return fmt.Errorf("invalid helm component: %v", err)
-    }
+	component := appDeployment.Spec.DeploymentProfile.Components[0]
+	helmComp, err := component.AsHelmApplicationDeploymentProfileComponent()
+	if err != nil {
+		return fmt.Errorf("invalid helm component: %v", err)
+	}
 
-    // Generate release name
-    releaseName := fmt.Sprintf("%s-%s", helmComp.Name, deploymentId[:8])
+	// Generate release name
+	releaseName := fmt.Sprintf("%s-%s", helmComp.Name, deploymentId[:8])
 
-    // Get values
-    componentValues, _ := pkg.ConvertAllAppDeploymentParamsToValues(*appDeployment.Spec.Parameters)
-    values := componentValues[helmComp.Name]
-    
-    // Override fullname to make resources unique
-    if values == nil {
-        values = make(map[string]interface{})
-    }
-    values["fullnameOverride"] = releaseName  // Makes all K8s resources unique
-    
-    dm.log.Infow("Deploying with unique resource names", 
-        "releaseName", releaseName, 
-        "fullnameOverride", releaseName)
+	// Get values
+	componentValues, _ := pkg.ConvertAllAppDeploymentParamsToValues(*appDeployment.Spec.Parameters)
+	values := componentValues[helmComp.Name]
 
-    // Deploy/Update
-    release, err := dm.helmClient.GetReleaseStatus(ctx, releaseName, "")
-    if err != nil {
-        dm.log.Infow("failed to check whether a release exists or not, assuming that it doesn't exist, will proceed with installation", "releaseName", releaseName, "deploymentId", deploymentId, "err", err.Error())
-																		
-    }
+	// Override fullname to make resources unique
+	if values == nil {
+		values = make(map[string]interface{})
+	}
+	values["fullnameOverride"] = releaseName // Makes all K8s resources unique
 
-    if release != nil {
-        // Release exists, update it
-        dm.log.Infow("Updating existing Helm release", "releaseName", releaseName, "deploymentId", deploymentId)
-        err = dm.helmClient.UpdateChart(ctx, releaseName, helmComp.Properties.Repository, "", values)
-        if err != nil {
-            return fmt.Errorf("failed to upgrade existing release: %v", err)
-        }
+	dm.log.Infow("Deploying with unique resource names",
+		"releaseName", releaseName,
+		"fullnameOverride", releaseName)
 
-								  
-        return nil
-    }
+	// Deploy/Update
+	release, err := dm.helmClient.GetReleaseStatus(ctx, releaseName, "")
+	if err != nil {
+		dm.log.Infow("failed to check whether a release exists or not, assuming that it doesn't exist, will proceed with installation", "releaseName", releaseName, "deploymentId", deploymentId, "err", err.Error())
 
-    // New deployment
-    dm.log.Infow("Installing new Helm release", "releaseName", releaseName, "deploymentId", deploymentId)
-    revision := "latest"
-    if helmComp.Properties.Revision != nil {
-        revision = *helmComp.Properties.Revision
-    }
-    wait := helmComp.Properties.Wait != nil && *helmComp.Properties.Wait
-    err = dm.helmClient.InstallChart(ctx, releaseName, helmComp.Properties.Repository, "", revision, wait, values)
+	}
 
-    dm.log.Infow("Helm deployment successful", "appId", deploymentId, "releaseName", releaseName)
-    return err
+	if release != nil {
+		// Release exists, update it
+		dm.log.Infow("Updating existing Helm release", "releaseName", releaseName, "deploymentId", deploymentId)
+		err = dm.helmClient.UpdateChart(ctx, releaseName, helmComp.Properties.Repository, "", values)
+		if err != nil {
+			return fmt.Errorf("failed to upgrade existing release: %v", err)
+		}
+		return nil
+	}
+
+	// New deployment
+	dm.log.Infow("Installing new Helm release", "releaseName", releaseName, "deploymentId", deploymentId)
+	revision := "latest"
+	if helmComp.Properties.Revision != nil {
+		revision = *helmComp.Properties.Revision
+	}
+	wait := helmComp.Properties.Wait != nil && *helmComp.Properties.Wait
+	err = dm.helmClient.InstallChart(ctx, releaseName, helmComp.Properties.Repository, "", revision, wait, values)
+	if err != nil {
+		return err
+	}
+	dm.log.Infow("Helm deployment successful", "appId", deploymentId, "releaseName", releaseName)
+	return nil
 }
-
 
 func (dm *DeploymentManager) deployOrUpdateCompose(ctx context.Context, deploymentId string, appDeployment sbi.AppDeploymentManifest) error {
 	component := appDeployment.Spec.DeploymentProfile.Components[0]
@@ -333,83 +331,82 @@ func (dm *DeploymentManager) deployOrUpdateCompose(ctx context.Context, deployme
 }
 
 func (dm *DeploymentManager) remove(ctx context.Context, deploymentId string) {
-    dm.database.SetPhase(deploymentId, "REMOVING", "Starting removal")
+	dm.database.SetPhase(deploymentId, "REMOVING", "Starting removal")
 
-    record, err := dm.database.GetDeployment(deploymentId)
-    if err != nil {
-        dm.log.Warnw("Deployment not found for removal", "deploymentId", deploymentId)
-        return
-    }
+	record, err := dm.database.GetDeployment(deploymentId)
+	if err != nil {
+		dm.log.Warnw("Deployment not found for removal", "deploymentId", deploymentId)
+		return
+	}
 
-    if record.CurrentState == nil {
-        dm.log.Infow("No current state found, proceeding with complete removal", "deploymentId", deploymentId)
-        
-        // Update desired state to REMOVED before deleting
-        if record.DesiredState != nil {
-            removedState := *record.DesiredState
-            removedState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoved
-            dm.database.SetCurrentState(deploymentId, removedState)
-        }
-        
-        dm.database.SetPhase(deploymentId, "REMOVED", "Removal Complete")
-        dm.database.RemoveDeployment(deploymentId)
-        return
-    }
+	if record.CurrentState == nil {
+		dm.log.Infow("No current state found, proceeding with complete removal", "deploymentId", deploymentId)
 
-    //  Set current state to REMOVING
-    currentState := *record.CurrentState
-    currentState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoving
-    dm.database.SetCurrentState(deploymentId, currentState)
+		// Update desired state to REMOVED before deleting
+		if record.DesiredState != nil {
+			removedState := *record.DesiredState
+			removedState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoved
+			dm.database.SetCurrentState(deploymentId, removedState)
+		}
 
-    // Use the AppDeploymentManifest directly
-    appDeployment := record.CurrentState.AppDeploymentManifest
+		dm.database.SetPhase(deploymentId, "REMOVED", "Removal Complete")
+		dm.database.RemoveDeployment(deploymentId)
+		return
+	}
 
-    if len(appDeployment.Spec.DeploymentProfile.Components) == 0 {
-        dm.log.Warnw("No components to remove", "deploymentId", deploymentId)
-        
-        // Update state to REMOVED
-        removedState := currentState
-        removedState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoved
-        dm.database.SetCurrentState(deploymentId, removedState)
-        
-        dm.database.SetPhase(deploymentId, "REMOVED", "No components to remove")
-        dm.database.RemoveDeployment(deploymentId)
-        return
-    }
+	//  Set current state to REMOVING
+	currentState := *record.CurrentState
+	currentState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoving
+	dm.database.SetCurrentState(deploymentId, currentState)
 
-    // Route removal based on deployment type
-    profileType := appDeployment.Spec.DeploymentProfile.Type
+	// Use the AppDeploymentManifest directly
+	appDeployment := record.CurrentState.AppDeploymentManifest
 
-    var removeErr error
-    switch profileType {
-    case sbi.HelmV3:
-        removeErr = dm.removeHelm(ctx, deploymentId, appDeployment)
-    case sbi.Compose:
-        removeErr = dm.removeCompose(ctx, deploymentId, appDeployment)
-    default:
-        dm.log.Warnw("Unknown deployment type for removal", "type", profileType, "deploymentId", deploymentId)
-    }
+	if len(appDeployment.Spec.DeploymentProfile.Components) == 0 {
+		dm.log.Warnw("No components to remove", "deploymentId", deploymentId)
 
-    // Update current state to REMOVED (even if removal failed)
-    removedState := currentState
-    removedState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoved
-    dm.database.SetCurrentState(deploymentId, removedState)
+		// Update state to REMOVED
+		removedState := currentState
+		removedState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoved
+		dm.database.SetCurrentState(deploymentId, removedState)
 
-    if removeErr != nil {
-        dm.log.Errorw("Removal failed but marking as removed", 
-            "deploymentId", deploymentId, 
-            "error", removeErr)
-        dm.database.SetPhase(deploymentId, "REMOVED", fmt.Sprintf("Removal completed with errors: %v", removeErr))
-    } else {
-        dm.database.SetPhase(deploymentId, "REMOVED", "Removal Complete")
-    }
+		dm.database.SetPhase(deploymentId, "REMOVED", "No components to remove")
+		dm.database.RemoveDeployment(deploymentId)
+		return
+	}
 
-    // Remove from local database (triggers status report via subscriber)
-    dm.database.RemoveDeployment(deploymentId)
-    
-    dm.log.Infow("Removal completed", "appId", deploymentId)
+	// Route removal based on deployment type
+	profileType := appDeployment.Spec.DeploymentProfile.Type
+
+	var removeErr error
+	switch profileType {
+	case sbi.HelmV3:
+		removeErr = dm.removeHelm(ctx, deploymentId, appDeployment)
+	case sbi.Compose:
+		removeErr = dm.removeCompose(ctx, deploymentId, appDeployment)
+	default:
+		dm.log.Warnw("Unknown deployment type for removal", "type", profileType, "deploymentId", deploymentId)
+	}
+
+	// Update current state to REMOVED (even if removal failed)
+	removedState := currentState
+	removedState.Status.Status.State = sbi.DeploymentStatusManifestStatusStateRemoved
+	dm.database.SetCurrentState(deploymentId, removedState)
+
+	if removeErr != nil {
+		dm.log.Errorw("Removal failed but marking as removed",
+			"deploymentId", deploymentId,
+			"error", removeErr)
+		dm.database.SetPhase(deploymentId, "REMOVED", fmt.Sprintf("Removal completed with errors: %v", removeErr))
+	} else {
+		dm.database.SetPhase(deploymentId, "REMOVED", "Removal Complete")
+	}
+
+	// Remove from local database (triggers status report via subscriber)
+	dm.database.RemoveDeployment(deploymentId)
+
+	dm.log.Infow("Removal completed", "appId", deploymentId)
 }
-
 
 func (dm *DeploymentManager) removeHelm(ctx context.Context, deploymentId string, appDeployment sbi.AppDeploymentManifest) error {
 	component := appDeployment.Spec.DeploymentProfile.Components[0]

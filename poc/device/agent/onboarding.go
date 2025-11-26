@@ -150,6 +150,8 @@ func (da *DeviceClientSettings) Onboard(ctx context.Context) (deviceClientId str
 		OAuthClientSecret:     da.oAuthClientSecret,
 		OAuthTokenEndpointUrl: da.oauthTokenUrl,
 		AuthEnabled:           da.authEnabled,
+		CanDeployHelm:         da.canDeployHelm,
+		CanDeployCompose:      da.canDeployCompose,
 	})
 
 	return da.deviceClientId, nil
@@ -180,17 +182,16 @@ func (da *DeviceClientSettings) OnboardWithRetries(ctx context.Context, retries 
 }
 
 func (da *DeviceClientSettings) ReportCapabilities(ctx context.Context, capabilities sbi.DeviceCapabilitiesManifest) error {
-    da.log.Infow("Starting capabilities reporting", "deviceClientId", da.deviceClientId)
-    err := da.apiClient.ReportCapabilities(ctx, da.deviceClientId, capabilities)
-    if err != nil {
-        da.log.Errorw("Failed to report capabilities", "error", err, "deviceClientId", da.deviceClientId)
-        return fmt.Errorf("failed to report capabilities: %w", err)
-    }
+	da.log.Infow("Starting capabilities reporting", "deviceClientId", da.deviceClientId)
+	err := da.apiClient.ReportCapabilities(ctx, da.deviceClientId, capabilities)
+	if err != nil {
+		da.log.Errorw("Failed to report capabilities", "error", err, "deviceClientId", da.deviceClientId)
+		return fmt.Errorf("failed to report capabilities: %w", err)
+	}
 
-    da.log.Infow("Capabilities reported successfully", "deviceClientId", da.deviceClientId)
-    return nil
+	da.log.Infow("Capabilities reported successfully", "deviceClientId", da.deviceClientId)
+	return nil
 }
-
 
 func (da *DeviceClientSettings) IsOnboarded() (bool, error) {
 	_, isOnboarded, err := da.db.IsDeviceOnboarded()

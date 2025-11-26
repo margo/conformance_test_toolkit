@@ -9,6 +9,14 @@ image:
 # RBAC configuration
 rbac:
   create: true
+  # Scope of permissions
+  scope: cluster  # or 'namespace' for restricted access
+  
+  # Fine-grained control
+  permissions:
+    allowCRDManagement: true
+    allowRBACManagement: true
+    allowClusterResources: true
 
 # Secrets configuration
 secrets:

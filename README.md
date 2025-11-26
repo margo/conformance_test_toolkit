@@ -106,7 +106,7 @@ You can see a view of the MARGO system design, with an overlay of the components
 This includes the following elements - 
 
 #### Symphony WFM
-- This Code First Sandbox uses [Eclipse Symphony](https://github.com/eclipse-symphony/symphony) as Workload Fleet Manager
+- This Code First Sandbox uses [Eclipse Symphony](https://github.com/margo/symphony) as Workload Fleet Manager.
 - As mentioned in MARGO architecture and overlay architecture WFM connects through MARGO envisioned communication mechanisms
 
 #### Repositories and Registry
@@ -137,7 +137,7 @@ This pattern is often referred to as HB-MVP (Host-Bound MVP):
 - **Managers**: Managers implement the platform-agnostic business logic for a given capability. They receive requests from vendors and orchestrate the necessary actions, often by interacting with one or more providers. Managers are designed for reuse and encapsulate the core business logic.
 - **Providers**: Providers are responsible for interacting with specific external systems or dependencies. They abstract away the details of platform-specific interactions, containing any platform-specific knowledge within their scope. Managers utilize providers to perform actions on external resources.
 
-Code Frist Sandbox uses MVP pattern to implement MARGO specification.
+Code First Sandbox uses MVP pattern to implement MARGO specification.
 
 ---
 
@@ -147,7 +147,7 @@ Code Frist Sandbox uses MVP pattern to implement MARGO specification.
 - Use of X.509 certificates to represent both parties within the REST API construction. These certificates are utilized to prove each participant's identity, establish a secure TLS session, and securely transport information within secure envelopes. Supports client authentication using X.509 certificates conforming to RFC 5280.
 - The device establishes a secure HTTPS connection using server-side TLS. It validates the server's identity using the public root CA certificate. By utilizing the certificates to create payload envelopes (HTTP request body), the device's management client can ensure secure transport between the device's management client and the Workload Fleet Management web service.
 - For API security, server side TLS 1.3 (minimum) is used, where the keys are obtained from the Server's X.509 Certificate as defined in the standard HTTP over TLS.
-- For API integrity, the device's management client is issued a client-specific X.509 certificate. The issuer of the client X.509 certificate is trusted under the assumption that the root CA download to the Workload Fleet Management server occurs as a precondition to onboarding the devices.
+- For API integrity, the device's management client is issued a client-specific X.509 certificate. The issuer of the client X.509 certificate is trusted under the assumption that the root CA download to the Workload Fleet Management server occurs as a precondition to onboarding the devices. This CA can be provided to the device in any offline mode.
 
 ---
 
