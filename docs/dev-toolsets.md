@@ -21,7 +21,7 @@ Development toolsets used and their purposes:
   - Container orchestration for services
   - Building and running device-agent containers
   - Running Symphony API as containerized service
-  - Managing multi-container applications (Harbor, Keycloak, Gogs)
+  - Managing multi-container applications (Harbor, Observability stack)
 
 #### Rust
 - **Uses**:
@@ -61,12 +61,8 @@ Development toolsets used and their purposes:
   - Private container registry
   - Storing and managing Docker images and helm artefacts
   - Image security scanning and vulnerability management
-
-#### Gogs
-- **Uses**:
-  - Git repository hosting
   - Management of workload packages as per MARGO defined specification
-  - Nextcloud, Nginx and Custom OTEL workload packages are  uploaded to Gogs while environment setup. These [Margo Packages](../poc/tests/artefacts) are based on MARGO application description specification 
+  - Nextcloud, Nginx and Custom OTEL workload packages are  uploaded to Harbor while environment setup. These [Margo Packages](../poc/tests/artefacts) are based on MARGO application description specification 
   - API-based repository creation and management
 
 ---
@@ -111,13 +107,6 @@ Development toolsets used and their purposes:
 
 ### 🔐 Security & Authentication
 
-#### Keycloak
-- **Uses**:
-  - Identity and access management 
-  - OAuth/OIDC authentication
-  - User federation and SSO
-
-  **Note: Keycloak is not currently being used. Server-side TLS is used and the client establishes initial trust using rootCA/public certificates then server assigns a unique client-id. This is as per approved MARGO SUP.** 
 
 #### OpenSSL
 - **Uses**:

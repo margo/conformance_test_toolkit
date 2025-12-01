@@ -104,8 +104,7 @@ On each VM, you need to configure environment variables (settings that tell the 
 3. **Set Up Storage and Code Repository**
    
    This happens automatically in Step 2 - it creates:
-   - **Harbor**: For storing application container images and Helm charts as OCI-compliant manifests
-   - **Gogs**: For storing application vendors' application packages
+   - **Harbor**: For storing application container images, Helm charts as OCI-compliant manifests and application vendors' MARGO compliant application packages.
 
 4. **Start the Workload Fleet Manager**
    ```bash
@@ -184,9 +183,14 @@ You need to copy a security file from the WFM VM to each Device VM.
    
    Option A - Using SCP (from Docker Device VM):
    ```bash
-   scp username@WFM-VM-IP:$HOME/symphony/api/certificates/ca-cert.pem $HOME/dev-repo/docker-compose/config/
+   sudo scp username@WFM-VM-IP:$(ssh username@WFM-VM-IP 'echo $HOME')/symphony/api/certificates/ca-cert.pem $HOME/dev-repo/docker-compose/config/
    ```
    Replace `username` with your WFM VM username and `WFM-VM-IP` with the IP address from step 1.
+   
+   ```bash
+   Example:
+   sudo scp azureuser@10.10.10.4:$(ssh azureuser@10.10.10.4 'echo $HOME')/symphony/api/certificates/ca-cert.pem $HOME/dev-repo/docker-compose/config/
+   ```
    
    Option B - Manual copy:
    - Open the file on WFM VM and copy its contents
@@ -198,10 +202,14 @@ You need to copy a security file from the WFM VM to each Device VM.
    
    Option A - Using SCP (from K3s Device VM):
    ```bash
-   scp username@WFM-VM-IP:$HOME/symphony/api/certificates/ca-cert.pem $HOME/certs/
+   sudo scp username@WFM-VM-IP:$(ssh username@WFM-VM-IP 'echo $HOME')/symphony/api/certificates/ca-cert.pem $HOME/certs/
    ```
    Replace `username` with your WFM VM username and `WFM-VM-IP` with the IP address from step 1.
-   
+   ```bash
+   Example:
+   sudo scp azureuser@10.10.10.4:$(ssh azureuser@10.10.10.4 'echo $HOME')/symphony/api/certificates/ca-cert.pem $HOME/certs/
+   ```
+
    Option B - Manual copy:
    - Open the file on WFM VM and copy its contents
    - Create the file `ca-cert.pem` in `$HOME/certs/` on K3s Device VM and paste the contents
@@ -280,10 +288,7 @@ sudo -E bash ./device-agent.sh
 
    **For K3s Device VM:**
    ```bash
-   # First, find the pod name
-   kubectl get pods -n default | grep device-agent
-   
-   # Then view the logs (replace <pod-name> with actual pod name from above)
+   # View the logs (replace <pod-name> with actual pod name from above using #7)
    kubectl logs -f <pod-name> -n default
    ```
    Example: `kubectl logs -f device-agent-deploy-7d8f9c5b6-xyz12 -n default`

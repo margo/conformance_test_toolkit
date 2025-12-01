@@ -13,17 +13,20 @@ EXPOSED_HARBOR_PORT="${EXPOSED_HARBOR_PORT:-8081}"
 EXPOSED_SYMPHONY_IP="${EXPOSED_SYMPHONY_IP:-127.0.0.1}"
 EXPOSED_SYMPHONY_PORT="${EXPOSED_SYMPHONY_PORT:-8082}"
 
-#--  device node IP (can be overridden via env) for prometheus to scrape metrics 
+#--- device node IP (can be overridden via env) for prometheus to scrape metrics 
 DEVICE_NODE_IP="${DEVICE_NODE_IP:-127.0.0.1}"
 
-#--- gogs settings (can be overridden via env)
-EXPOSED_GOGS_IP="${EXPOSED_GOGS_IP:-127.0.0.1}"
-EXPOSED_GOGS_PORT="${EXPOSED_GOGS_PORT:-8084}"
+#--- OCI Registry settings (can be overridden via env) - NEW
+REGISTRY_URL="${REGISTRY_URL:-http://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}}"
+REGISTRY_USER="${REGISTRY_USER:-admin}"
+REGISTRY_PASS="${REGISTRY_PASS:-Harbor12345}"
+OCI_ORGANIZATION="${OCI_ORGANIZATION:-library}"
+
 
 # ----------------------------
 # Utility Functions
 # ----------------------------
-MAESTRO_CLI_PATH="$HOME/symphony/cli"
+MAESTRO_CLI_PATH="$HOME/symphony/cli"  
 
 install_basic_utilities() {
   apt install jq -y
@@ -111,35 +114,50 @@ list_all() {
 # ----------------------------
 get_package_upload_request_file_path() {
   local choice="$1"
+  
+  # Use host:port only (strip http://)
+  REGISTRY_HOST="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
+  
   case $choice in
     1) 
-      GIT_URL="http://${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/custom-otel"
       original_pkg_file="$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml"
       pkg_file="$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml.copy"
       cp -f ${original_pkg_file} ${pkg_file} 
-      sed -i "s|{{URL}}|$GIT_URL|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{BRANCH}}|master|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_URL}}|${REGISTRY_HOST}|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REPOSITORY}}|${OCI_ORGANIZATION}/custom-otel-helm-app-package|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{TAG}}|latest|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_USER}}|${REGISTRY_USER}|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_PASS}}|${REGISTRY_PASS}|g" "$pkg_file" 2>/dev/null || true
       echo $pkg_file ;;
+      
     2)
-      GIT_URL="http://${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nginx"
       original_pkg_file="$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml"
       pkg_file="$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml.copy"
       cp -f ${original_pkg_file} ${pkg_file}
-      sed -i "s|{{URL}}|$GIT_URL|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{BRANCH}}|master|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_URL}}|${REGISTRY_HOST}|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REPOSITORY}}|${OCI_ORGANIZATION}/nginx-helm-app-package|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{TAG}}|latest|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_USER}}|${REGISTRY_USER}|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_PASS}}|${REGISTRY_PASS}|g" "$pkg_file" 2>/dev/null || true
       echo $pkg_file ;;
+      
     3)
-      GIT_URL="http://${EXPOSED_GOGS_IP}:${EXPOSED_GOGS_PORT}/gogsadmin/nextcloud"
       original_pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml"
       pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml.copy"
       cp -f ${original_pkg_file} ${pkg_file}
-      sed -i "s|{{URL}}|$GIT_URL|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{BRANCH}}|master|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_URL}}|${REGISTRY_HOST}|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REPOSITORY}}|${OCI_ORGANIZATION}/nextcloud-compose-app-package|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{TAG}}|latest|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_USER}}|${REGISTRY_USER}|g" "$pkg_file" 2>/dev/null || true
+      sed -i "s|{{REGISTRY_PASS}}|${REGISTRY_PASS}|g" "$pkg_file" 2>/dev/null || true
       echo $pkg_file ;;
+      
     *) 
       echo "" ;;
   esac
 }
+
+
 
 get_package_name() {
   local choice="$1"

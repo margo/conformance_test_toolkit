@@ -1,7 +1,7 @@
 ##### [Back To Main](../README.md)
 # WFM, Device-Agent and Observability stack Setup Guide
 
-This directory contains scripts to set up a complete WFM environment with Symphony API, device agents, and observability stack.
+Scripts to set up a complete WFM environment with Symphony API, device agents, and observability stack.
 
 ## 📋 Prerequisites
 
@@ -17,12 +17,10 @@ This directory contains scripts to set up a complete WFM environment with Sympho
 
 The setup consists of three main components:
 
-1. **WFM Node** (`wfm.sh`) - Main workfleet management server (symphony). For Code First Sandbox purpose this script is deploying 
+1. **WFM Node** (`wfm.sh`) - Workload Fleet Manager Node. For Code First Sandbox this script is deploying 
     1. **WFM (Symphony)**: Workload Fleet Manager
-    2. **Gogs**: Stores Margo application/workload artefacts (Application description manifest stored in margo.yaml file and related resources)
-    3. **Harbor**: Stores docker images and helm charts as OCI compliant artefacts
-    4. **Keycloak**: Earlier it was used while device onboarding to get client-id, this was removed as WFM is generating client-id while authenticating the device with server-side TLS as part of Initial Trust Establishment. WFM Server verifies client certificate and assigns client-id.
-    5. **Observability stack**: Ideally observability stack should be hosted on separate VM. In this Code First Sandbox, stack is hosted on WFM and observability data sent to otel collector on device agent. OTEL collector forwards the data to Observability stack(WFM VM). Stack includes jaeger for workload traces, prometheus for workload metrices, grafana and loki for workoad logging.
+    2. **Harbor**: Stores docker images, helm charts as OCI compliant artefacts and Margo application/workload artefacts (Application description manifest stored in margo.yaml file and related resources)
+    3. **Observability stack**: Ideally observability stack should be hosted on separate VM. In this Code First Sandbox, stack is hosted on WFM and workloads observability data collected at otel collector on device agent. OTEL collector forwards the data to Observability stack(WFM VM). Stack includes jaeger for workload traces, prometheus for workload metrices, grafana and loki for workoad logging.
 
 
 2. **WFM/Easy CLI** (`wfm-cli.sh`) - Interactive command-line interface for WFM. Used for application package and deployment instance LCM operations
@@ -42,8 +40,6 @@ export GITHUB_TOKEN=<your-github-personal-access-token>
 
 # WFM Node specific (replace with actual IP addresses)
 export EXPOSED_HARBOR_IP=<wfm-machine-ip>
-export EXPOSED_GOGS_IP=<wfm-machine-ip>
-export EXPOSED_KEYCLOAK_IP=<wfm-machine-ip>
 export EXPOSED_SYMPHONY_IP=<wfm-machine-ip>
 export DEVICE_NODE_IP=<device-agent-machine-ip>
 
@@ -59,12 +55,10 @@ export EXPOSED_HARBOR_IP=<wfm-machine-ip>
 
 ```bash
 Examples: 
-For wfm.sh script
+For wfm.sh and wfm-cli.sh script
 export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-personal-access-token>  
 export EXPOSED_HARBOR_IP=10.139.9.90
-export EXPOSED_GOGS_IP=10.139.9.90
-export EXPOSED_KEYCLOAK_IP=10.139.9.90
 export EXPOSED_SYMPHONY_IP=10.139.9.90
 export DEVICE_NODE_IP=10.139.9.151
 export SYMPHONY_BRANCH=main
@@ -77,9 +71,7 @@ export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-personal-access-token>
 export DEV_REPO_BRANCH=main
 export WFM_IP=10.139.9.90
-export WFM_PORT=8082
 export EXPOSED_HARBOR_IP=10.139.9.90
-export EXPOSED_HARBOR_PORT=8081
 sudo -E bash device-agent.sh
 ```
 
@@ -89,7 +81,7 @@ Execute the WFM setup script on your main server:
 sudo -E bash wfm.sh
 ```
 **Interactive Menu Options:**
-1. **PreRequisites: Setup** - Install all dependencies and services. This includes docker, docker compose, redis, rust, go, helm, git, jq, symphony, gogs, harbor, k3s etc.    
+1. **PreRequisites: Setup** - Install all dependencies and services. This includes docker, docker compose, redis, rust, go, helm, git, jq, symphony, oras cli, harbor, k3s etc.    
 2. **PreRequisites: Cleanup** - Remove all installed components.
 3. **Symphony: Start** - Start the Symphony API server.
 4. **Symphony: Stop** - Stop the Symphony API server.
@@ -137,7 +129,6 @@ sudo -E bash bash wfm-cli.sh
 
 The WFM setup installs and configures:
 - **Harbor** - Container registry (Port: 8081)
-- **Gogs** - Git repository server (Port: 8084)
 - **Symphony API** - Main WFM server (Port: 8082)
 - **K3s** - Lightweight Kubernetes
 - **Observability Stack** - Jaeger, Prometheus, Grafana, Loki
@@ -158,7 +149,6 @@ After successful setup, access services at:
 |---------|-----|-------------|
 | Symphony API | `http://<WFM_IP>:8082` | - |
 | Harbor Registry | `http://<WFM_IP>:8081` | admin/Harbor12345 |
-| Gogs | `http://<WFM_IP>:8084` | gogsadmin/admin123 |
 | Grafana | `http://<WFM_IP>:32000` | admin/admin |
 | Prometheus | `http://<WFM_IP>:30900` | - |
 | Jaeger | `http://<WFM_IP>:32500` | - |
@@ -238,7 +228,6 @@ Ensure the following ports are available:
 **WFM Node:**
 - 8081 (Harbor)
 - 8082 (Symphony API)
-- 8084 (Gogs)
 - 30900 (Prometheus)
 - 32000 (Grafana)
 - 32500 (Jaeger)

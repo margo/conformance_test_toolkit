@@ -131,6 +131,31 @@ install_helm() {
   fi
 }
 
+configure_helm_registries() {
+  echo "Configuring Helm registry authentication..."
+  
+  # Login to ghcr.io if GitHub credentials are available
+  if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_TOKEN" ]; then
+    echo "Authenticating Helm with GitHub Container Registry..."
+    echo "$GITHUB_TOKEN" | helm registry login ghcr.io -u "$GITHUB_USER" --password-stdin
+    
+    if [ $? -eq 0 ]; then
+      echo "✅ Helm authenticated with ghcr.io"
+    else
+      echo "⚠️ Failed to authenticate with ghcr.io (continuing anyway)"
+    fi
+  else
+    echo "⚠️ GitHub credentials not set, skipping ghcr.io authentication"
+    echo "   Set GITHUB_USER and GITHUB_TOKEN to enable external registry access"
+  fi
+  
+  # Verify Helm config was created
+  if [ -f "$HOME/.config/helm/registry/config.json" ]; then
+    echo "✅ Helm registry config created at $HOME/.config/helm/registry/config.json"
+  fi
+}
+
+
 install_go() {
   if which go >/dev/null 2>&1; then
     echo 'Go already installed, skipping installation';
@@ -414,6 +439,18 @@ build_start_device_agent_k3s_service() {
     else
         echo "⚠️ Certificates not found in $HOME/certs, skipping TLS secret creation"
     fi
+
+    # Step 5.1: Create Helm registry config secret (For ghcr.io access)
+    if [ -f "$HOME/.config/helm/registry/config.json" ]; then
+        echo "Creating Helm registry config secret..."
+        kubectl delete secret helm-registry-config --namespace=default 2>/dev/null || true
+        
+        kubectl create secret generic helm-registry-config \
+            --from-file=config.json="$HOME/.config/helm/registry/config.json" \
+            --namespace=default
+        
+        echo "✅ Helm registry config secret created"
+    fi
     
 														
     # Step 6: Clean up old resources 
@@ -695,6 +732,7 @@ install_prerequisites() {
   clone_dev_repo
   setup_k3s
   add_container_registry_mirror_to_k3s
+  configure_helm_registries
   echo 'prerequisites installation completed.'
 }
 

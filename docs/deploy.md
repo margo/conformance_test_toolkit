@@ -3,7 +3,7 @@
 
  **1. 3-VM Architecture**: You can setup the Code First Sandbox using 3 VMs on a single host, where one VM is for WFM, one for a K3s cluster as a single node, and one more for a single node docker compose device. The Sandbox is tested with non cloud environment and all 3 VMs must have static IPs with connectivity between them.
 
-   1. **WFM-VM**: WFM setup has been done using Symphony, Harbor and Gogs. Also runs observability stack(Jaeger, Prometheus, Grafana and Loki)
+   1. **WFM-VM**: WFM setup has been done using Symphony and Harbor. Also runs observability stack(Jaeger, Prometheus, Grafana and Loki)
    2. **K3s-Device-VM**: Runs device-agent as k3s pod. Also runs OTEL collector, promtail and workloads.
    3. **Docker-compose-Device-VM**: Runs device-agent as docker container. Also runs OTEL collector, promtail and workloads.
   

@@ -69,7 +69,6 @@ The repository is divided into three main parts. You can find more details here 
 | Component Type | Component Name | Version |
 |---|---|---|
 | Container Registry | Harbor | v2.13.2 |
-| Repository Management | Gogs | Latest |
 | Observability Stack | Prometheus | Latest |
 | Observability Stack | Grafana | Latest |
 | Observability Stack | Jaeger | Latest |
@@ -110,9 +109,11 @@ This includes the following elements -
 - As mentioned in MARGO architecture and overlay architecture WFM connects through MARGO envisioned communication mechanisms
 
 #### Repositories and Registry
-- Gogs and Harbor provide application registry and repository functionalities.
-- Application supplier's packages are stored in Gogs and docker images/helm artifacts related to these applications are stored in Harbor registry.
-- Application packages are pulled/pushed/deleted from Gogs repository whenever WFM performs application package LCM operation.
+- Harbor provide application registry and images/helm-charts repository functionalities.
+- Application supplier's packages , images/helm-charts are stored in Harbor.
+ and docker images/helm artifacts related to these applications are stored in Harbor registry.
+- Application packages are pulled/pushed/deleted from Harbor repository.
+- WFM stores application packages in its database and are used during LCM (Life Cycle Management) operation.
 - The WFM Client/Device-agent pulls docker images/helm artifacts from Harbor whenever workloads are getting deployed corresponding to the application packages during instance deployment.
 
 #### Telemetry and Monitoring

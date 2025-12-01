@@ -19,7 +19,7 @@
 
   2. **Configure Infrastructure Services**
      ```bash
-     # Step-1 sets up Harbor registry, Gogs Git service, clones repositories and automatically configures container registry and Git repositories with predefined application packages like Nextcloud, Nginx and Custom OTEL.
+     # Step-1 sets up Harbor registry, clones repositories and automatically configures container registry and Git repositories with predefined application packages like Nextcloud, Nginx and Custom OTEL.
      ```
 
   3. **Build and Start Symphony API**

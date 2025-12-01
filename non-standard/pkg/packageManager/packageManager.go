@@ -3,14 +3,20 @@ package packageManager
 import (
 	"archive/tar"
 	"compress/gzip"
+	//"context"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
 	"github.com/margo/dev-repo/non-standard/pkg/models"
 	"github.com/margo/dev-repo/shared-lib/git"
+	//"github.com/margo/dev-repo/shared-lib/oci"
 	"gopkg.in/yaml.v3"
 )
 
@@ -125,6 +131,267 @@ func (pm *PackageManager) LoadPackageFromGit(url, branchName, subPath string, au
 	}
 
 	return dirPath, appPackage, nil
+}
+
+// LoadPackageFromOci loads an application package from an OCI registry.
+//
+// This method pulls an OCI artifact (image) from the specified registry, extracts its contents
+// to a temporary directory, and loads the application package from the extracted files. It supports
+// both public and private registries through optional authentication.
+//
+// Parameters:
+//   - registryUrl: The OCI registry URL and repository path (e.g., "docker.io/myuser/myapp", "ghcr.io/org/app")
+//   - tag: The tag of the artifact to pull (e.g., "latest", "v1.0.0", "stable")
+//   - username: Optional username for registry authentication (can be empty string for public registries)
+//   - token: Optional access token or password for registry authentication (can be empty string for public registries)
+//
+// Returns:
+//   - pkgPath: The absolute path to the extracted package directory
+//   - pkg: The loaded application package with description and resources
+//   - err: An error if the pull or load operation fails
+//
+// Important Notes:
+//   - The caller is responsible for cleaning up the returned pkgPath directory
+//   - The OCI artifact must contain a valid margo.yaml file in its root layer
+//   - Resources directory is optional and will be loaded if present in the artifact
+//   - Authentication is optional; leave username and token empty for public registries
+//   - The artifact is extracted layer by layer to reconstruct the package structure
+//
+// Example:
+//
+//	pm := NewPackageManager()
+//	pkgPath, pkg, err := pm.LoadPackageFromOci(
+//	    "docker.io/myuser/myapp",
+//	    "v1.0.0",
+//	    "myusername",
+//	    "mytoken",
+//	)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer os.RemoveAll(pkgPath) // Clean up temporary directory
+//
+// Errors:
+//   - Returns error if OCI client initialization fails
+//   - Returns error if artifact pull operation fails
+//   - Returns error if temporary directory creation fails
+//   - Returns error if artifact extraction fails
+//   - Returns error if package loading from extracted directory fails
+//   - Returns error if margo.yaml file is missing or invalid in the artifact
+// func (pm *PackageManager) LoadPackageFromOci(registryUrl, repository, tag string, username, passwordOrToken string, insecure bool, timeout time.Duration) (pkgPath string, pkg *models.AppPkg, err error) {
+// 	// Initialize OCI client with authentication
+// 	var ociClient *oci.Client
+// 	if username != "" && passwordOrToken != "" {
+// 		ociClient, err = oci.NewClient(&oci.Config{
+// 			Registry: registryUrl,
+// 			Username: username,
+// 			Password: passwordOrToken,
+// 			Insecure: insecure,
+// 			Timeout:  timeout,
+// 		})
+// 	} else {
+// 		ociClient, err = oci.NewClient(&oci.Config{
+// 			Registry: registryUrl,
+// 			Insecure: insecure,
+// 			Timeout:  timeout,
+// 		})
+// 	}
+
+// 	if err != nil {
+// 		return "", nil, fmt.Errorf("failed to initialize OCI client: %w", err)
+// 	}
+
+// 	// Construct full reference with tag
+// 	reference := fmt.Sprintf("%s/%s:%s", registryUrl, repository, tag)
+
+// 	// Pull the image/artifact from OCI registry
+// 	image, _, err := ociClient.PullImage(context.Background(), reference)
+// 	if err != nil {
+// 		return "", nil, fmt.Errorf("failed to pull OCI artifact from %s: %w", reference, err)
+// 	}
+
+// 	// Create temporary directory for extraction
+// 	tempDir, err := os.MkdirTemp("", "margo-oci-pkg-*")
+// 	if err != nil {
+// 		return "", nil, fmt.Errorf("failed to create temporary directory: %w", err)
+// 	}
+
+// 	// Extract image layers to temporary directory
+// 	if err := extractImageToDir(image, tempDir); err != nil {
+// 		os.RemoveAll(tempDir)
+// 		return "", nil, fmt.Errorf("failed to extract OCI artifact: %w", err)
+// 	}
+
+// 	// Load package from extracted directory
+// 	appPackage, err := pm.LoadPackageFromDir(tempDir)
+// 	if err != nil {
+// 		// Clean up on failure
+// 		os.RemoveAll(tempDir)
+// 		return "", nil, fmt.Errorf("failed to load package from extracted OCI artifact: %w", err)
+// 	}
+
+// 	return tempDir, appPackage, nil
+// }
+
+// LoadPackageFromOci loads an application package from an OCI registry. USING ORAS CLI.
+func (pm *PackageManager) LoadPackageFromOci(registryUrl, repository, tag string, username, passwordOrToken string, insecure bool, timeout time.Duration) (pkgPath string, pkg *models.AppPkg, err error) {
+    // Create temporary directory for extraction
+    tempDir, err := os.MkdirTemp("", "margo-oci-pkg-*")
+    if err != nil {
+        return "", nil, fmt.Errorf("failed to create temporary directory: %w", err)
+    }
+
+    // Strip http:// or https:// from registryUrl for ORAS compatibility
+    cleanRegistryUrl := strings.TrimPrefix(registryUrl, "http://")
+    cleanRegistryUrl = strings.TrimPrefix(cleanRegistryUrl, "https://")
+    
+    // Construct OCI reference (without protocol)
+    reference := fmt.Sprintf("%s/%s:%s", cleanRegistryUrl, repository, tag)
+    
+    // Add authentication if provided
+    if username != "" && passwordOrToken != "" {
+        // Login first (use clean registry URL)
+        loginCmd := exec.Command("oras", "login", cleanRegistryUrl,
+            "-u", username,
+            "-p", passwordOrToken,
+            "--plain-http")
+        if err := loginCmd.Run(); err != nil {
+            os.RemoveAll(tempDir)
+            return "", nil, fmt.Errorf("failed to login to OCI registry: %w", err)
+        }
+    }
+    
+    // Pull artifact to temp directory
+    pullCmd := exec.Command("oras", "pull", reference, "--plain-http")
+    pullCmd.Dir = tempDir
+    output, err := pullCmd.CombinedOutput()
+    if err != nil {
+        os.RemoveAll(tempDir)
+        return "", nil, fmt.Errorf("failed to pull OCI artifact: %w, output: %s", err, string(output))
+    }
+
+    // Load package from extracted directory
+    appPackage, err := pm.LoadPackageFromDir(tempDir)
+    if err != nil {
+        os.RemoveAll(tempDir)
+        return "", nil, fmt.Errorf("failed to load package from extracted OCI artifact: %w", err)
+    }
+
+    return tempDir, appPackage, nil
+}
+
+
+
+
+// extractImageToDir extracts all layers of an OCI image to a directory.
+//
+// This method processes each layer of an OCI image sequentially, extracting
+// the tar archive contents to the destination directory. It handles directories,
+// regular files, and symbolic links, preserving file permissions and structure.
+//
+// Parameters:
+//   - image: The OCI image to extract
+//   - destDir: The destination directory where contents should be extracted
+//
+// Returns:
+//   - error: An error if layer extraction or file writing fails
+//
+// Extraction behavior:
+//   - Processes layers in order (later layers can overwrite earlier ones)
+//   - Creates directories with original permissions
+//   - Writes regular files with original permissions
+//   - Creates symbolic links preserving link targets
+//   - Skips special file types (block devices, character devices, etc.)
+//
+// Example:
+//
+//	err := extractImageToDir(image, "/tmp/extracted-package")
+//	if err != nil {
+//	    log.Fatal("Failed to extract image:", err)
+//	}
+//
+// Errors:
+//   - Returns error if image layers cannot be accessed
+//   - Returns error if layer decompression fails
+//   - Returns error if tar reading fails
+//   - Returns error if directory creation fails
+//   - Returns error if file writing fails
+func extractImageToDir(image v1.Image, destDir string) error {
+	// Get image layers
+	layers, err := image.Layers()
+	if err != nil {
+		return fmt.Errorf("failed to get image layers: %w", err)
+	}
+
+	// Extract each layer
+	for i, layer := range layers {
+		// Get uncompressed layer content
+		layerReader, err := layer.Uncompressed()
+		if err != nil {
+			return fmt.Errorf("failed to get uncompressed layer %d: %w", i, err)
+		}
+		defer layerReader.Close()
+
+		// Create tar reader
+		tarReader := tar.NewReader(layerReader)
+
+		// Extract all files from the layer
+		for {
+			header, err := tarReader.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("failed to read tar header in layer %d: %w", i, err)
+			}
+
+			// Construct target path
+			targetPath := filepath.Join(destDir, header.Name)
+
+			// Handle different file types
+			switch header.Typeflag {
+			case tar.TypeDir:
+				// Create directory
+				if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
+					return fmt.Errorf("failed to create directory %s: %w", targetPath, err)
+				}
+
+			case tar.TypeReg:
+				// Create parent directory if needed
+				if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+					return fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
+				}
+
+				// Create and write file
+				outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, os.FileMode(header.Mode))
+				if err != nil {
+					return fmt.Errorf("failed to create file %s: %w", targetPath, err)
+				}
+
+				if _, err := io.Copy(outFile, tarReader); err != nil {
+					outFile.Close()
+					return fmt.Errorf("failed to write file %s: %w", targetPath, err)
+				}
+				outFile.Close()
+
+			case tar.TypeSymlink:
+				// Create parent directory if needed
+				if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+					return fmt.Errorf("failed to create parent directory for symlink %s: %w", targetPath, err)
+				}
+
+				// Create symlink
+				if err := os.Symlink(header.Linkname, targetPath); err != nil {
+					return fmt.Errorf("failed to create symlink %s: %w", targetPath, err)
+				}
+
+			default:
+				// Skip other types (block devices, character devices, etc.)
+				continue
+			}
+		}
+	}
+	return nil
 }
 
 // LoadPackageFromDir loads an application package from a local directory.

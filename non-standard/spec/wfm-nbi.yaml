@@ -1455,10 +1455,12 @@ components:
           type: string
           enum:
             - GIT_REPO
+            - OCI_REPO
           description: Type of source for the application package
         source:
           oneOf:
             - $ref: '#/components/schemas/GitRepo'
+            - $ref: '#/components/schemas/OciRepo'
           description: Source configuration based on sourceType
     
     GitRepo:
@@ -1507,6 +1509,57 @@ components:
       oneOf:
         - required: [branch]
         - required: [tag]
+
+    OciRepo:
+      type: object
+      required:
+        - registryUrl
+        - repository
+      properties:
+        registryUrl:
+          type: string
+          description: OCI registry URL
+          example: "docker.io"
+        repository:
+          type: string
+          description: Repository name
+          example: "library/nginx"
+        tag:
+          type: string
+          description: Artefact tag (mutually exclusive with digest)
+          example: "latest"
+        digest:
+          type: string
+          description: Artefact digest (mutually exclusive with tag)
+          example: "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+          pattern: '^sha256:[a-f0-9]{64}$'
+        authentication:
+          $ref: '#/components/schemas/OciAuthentication'
+        # tlsOptions: not added as of now
+    
+    OciAuthentication:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - "none"
+            - "basic"
+            - "token"
+          description: Authentication type
+        username:
+          type: string
+          description: Username for basic authentication
+        password:
+          type: string
+          format: password
+          description: Password for basic authentication
+        token:
+          type: string
+          format: password
+          description: Token for token-based authentication
 
     ApplicationPackageStatus:
       type: object

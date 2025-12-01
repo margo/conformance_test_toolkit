@@ -71,6 +71,7 @@ const (
 // Defines values for ApplicationPackageSpecSourceType.
 const (
 	GITREPO ApplicationPackageSpecSourceType = "GIT_REPO"
+	OCIREPO ApplicationPackageSpecSourceType = "OCI_REPO"
 )
 
 // Defines values for ApplicationPackageStatusState.
@@ -102,6 +103,13 @@ const (
 	FAILED     DeviceOnboardStatus = "FAILED"
 	INPROGRESS DeviceOnboardStatus = "IN-PROGRESS"
 	ONBOARDED  DeviceOnboardStatus = "ONBOARDED"
+)
+
+// Defines values for OciAuthenticationType.
+const (
+	Basic OciAuthenticationType = "basic"
+	None  OciAuthenticationType = "none"
+	Token OciAuthenticationType = "token"
 )
 
 // APIResponse defines model for APIResponse.
@@ -731,6 +739,41 @@ type Metadata struct {
 	Namespace *string `json:"namespace,omitempty"`
 }
 
+// OciAuthentication defines model for OciAuthentication.
+type OciAuthentication struct {
+	// Password Password for basic authentication
+	Password *string `json:"password,omitempty"`
+
+	// Token Token for token-based authentication
+	Token *string `json:"token,omitempty"`
+
+	// Type Authentication type
+	Type OciAuthenticationType `json:"type"`
+
+	// Username Username for basic authentication
+	Username *string `json:"username,omitempty"`
+}
+
+// OciAuthenticationType Authentication type
+type OciAuthenticationType string
+
+// OciRepo defines model for OciRepo.
+type OciRepo struct {
+	Authentication *OciAuthentication `json:"authentication,omitempty"`
+
+	// Digest Artefact digest (mutually exclusive with tag)
+	Digest *string `json:"digest,omitempty"`
+
+	// RegistryUrl OCI registry URL
+	RegistryUrl string `json:"registryUrl"`
+
+	// Repository Repository name
+	Repository string `json:"repository"`
+
+	// Tag Artefact tag (mutually exclusive with digest)
+	Tag *string `json:"tag,omitempty"`
+}
+
 // PaginationMetadata defines model for PaginationMetadata.
 type PaginationMetadata struct {
 	// Continue Indicates if there are more items to retrieve
@@ -1004,6 +1047,32 @@ func (t *ApplicationPackageSpec_Source) FromGitRepo(v GitRepo) error {
 
 // MergeGitRepo performs a merge with any union data inside the ApplicationPackageSpec_Source, using the provided GitRepo
 func (t *ApplicationPackageSpec_Source) MergeGitRepo(v GitRepo) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JsonMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsOciRepo returns the union data inside the ApplicationPackageSpec_Source as a OciRepo
+func (t ApplicationPackageSpec_Source) AsOciRepo() (OciRepo, error) {
+	var body OciRepo
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOciRepo overwrites any union data inside the ApplicationPackageSpec_Source as the provided OciRepo
+func (t *ApplicationPackageSpec_Source) FromOciRepo(v OciRepo) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeOciRepo performs a merge with any union data inside the ApplicationPackageSpec_Source, using the provided OciRepo
+func (t *ApplicationPackageSpec_Source) MergeOciRepo(v OciRepo) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
