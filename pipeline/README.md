@@ -5,7 +5,7 @@ Scripts to set up a complete WFM environment with Symphony API, device agents, a
 
 ## 📋 Prerequisites
 
-- [ Ubuntu/Debian-based VM requirements](../docs/deploy.md#vm-requirements)
+- Version ubuntu-24.04.3-desktop-amd64 [ Ubuntu/Debian-based VM requirements](../docs/deploy.md#vm-requirements) 
 - Internet connectivity.
 - GitHub account with access to [MARGO Development Repository](https://github.com/margo/dev-repo) and [Forked Symphony Repository](https://github.com/margo/symphony) under margo organization.
 - GitHub personal access token (GITHUB_TOKEN).
@@ -33,45 +33,26 @@ The setup consists of three main components:
 
 Before running any scripts, export the required environment variables:
 
+**For wfm.sh and wfm-cli.sh script**
 ```bash
-# Required for all setups
 export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-personal-access-token>
-
-# WFM Node specific (replace with actual IP addresses)
 export EXPOSED_HARBOR_IP=<wfm-machine-ip>
 export EXPOSED_SYMPHONY_IP=<wfm-machine-ip>
-export DEVICE_NODE_IP=<device-agent-machine-ip>
-
-# Branch configuration (change branch as per your need)
-export SYMPHONY_BRANCH=main    
-export DEV_REPO_BRANCH=main    
-
-# Device Agent script specific
-export WFM_IP=<wfm-machine-ip>
-export WFM_PORT=8082
-export EXPOSED_HARBOR_IP=<wfm-machine-ip>
-```
-
-```bash
-Examples: 
-For wfm.sh and wfm-cli.sh script
-export GITHUB_USER=<your-github-username>
-export GITHUB_TOKEN=<your-github-personal-access-token>  
-export EXPOSED_HARBOR_IP=10.139.9.90
-export EXPOSED_SYMPHONY_IP=10.139.9.90
-export DEVICE_NODE_IP=10.139.9.151
+export DEVICE_NODE_IPS="<k3-device-machine-ip:port>,<docker-device-machine-ip:port>" # "172.19.59.148:30999,172.19.59.150:8899"  port:30999 is for k3s device & port:8899 is for docker device
 export SYMPHONY_BRANCH=main
 export DEV_REPO_BRANCH=main
 sudo -E bash wfm.sh
-_________________________________________________________
+```
 
-For device-agent.sh script
+**For device-agent.sh script**
+```bash
 export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-personal-access-token>
+export DEVICE_TYPE=<device-type> # Options: "k3s" or "docker", Use device-type carefully when running this script based on device
 export DEV_REPO_BRANCH=main
-export WFM_IP=10.139.9.90
-export EXPOSED_HARBOR_IP=10.139.9.90
+export WFM_IP=<wfm-machine-ip>
+export EXPOSED_HARBOR_IP=<wfm-machine-ip>
 sudo -E bash device-agent.sh
 ```
 

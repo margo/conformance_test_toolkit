@@ -13,10 +13,8 @@ EXPOSED_HARBOR_PORT="${EXPOSED_HARBOR_PORT:-8081}"
 EXPOSED_SYMPHONY_IP="${EXPOSED_SYMPHONY_IP:-127.0.0.1}"
 EXPOSED_SYMPHONY_PORT="${EXPOSED_SYMPHONY_PORT:-8082}"
 
-#--- device node IP (can be overridden via env) for prometheus to scrape metrics 
-DEVICE_NODE_IP="${DEVICE_NODE_IP:-127.0.0.1}"
 
-#--- OCI Registry settings (can be overridden via env) - NEW
+#--- OCI Registry settings (can be overridden via env)
 REGISTRY_URL="${REGISTRY_URL:-http://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}}"
 REGISTRY_USER="${REGISTRY_USER:-admin}"
 REGISTRY_PASS="${REGISTRY_PASS:-Harbor12345}"
@@ -131,17 +129,6 @@ get_package_upload_request_file_path() {
       echo $pkg_file ;;
       
     2)
-      original_pkg_file="$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml"
-      pkg_file="$HOME/symphony/cli/templates/margo/nginx-helm/package.yaml.copy"
-      cp -f ${original_pkg_file} ${pkg_file}
-      sed -i "s|{{REGISTRY_URL}}|${REGISTRY_HOST}|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REPOSITORY}}|${OCI_ORGANIZATION}/nginx-helm-app-package|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{TAG}}|latest|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REGISTRY_USER}}|${REGISTRY_USER}|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REGISTRY_PASS}}|${REGISTRY_PASS}|g" "$pkg_file" 2>/dev/null || true
-      echo $pkg_file ;;
-      
-    3)
       original_pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml"
       pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml.copy"
       cp -f ${original_pkg_file} ${pkg_file}
@@ -157,14 +144,11 @@ get_package_upload_request_file_path() {
   esac
 }
 
-
-
 get_package_name() {
   local choice="$1"
   case $choice in
     1) echo "Custom OTEL Helm App" ;;
-    2) echo "Nginx Helm App" ;;
-    3) echo "Nextcloud Compose App" ;;
+    2) echo "Nextcloud Compose App" ;;
     *) echo "Unknown Package" ;;
   esac
 }
@@ -174,19 +158,18 @@ upload_app_package() {
   echo "===================="
   echo "Select one of the packages:"
   echo "1) Custom OTEL Helm App"
-  echo "2) Nginx Helm App"
-  echo "3) Nextcloud Compose App"
-  echo "4) Exit"
+  echo "2) Nextcloud Compose App"
+  echo "3) Exit"
   echo ""
   
-  read -p "Enter choice [1-4]: " app_package_choice
+  read -p "Enter choice [1-3]: " app_package_choice
   
-  if [ "$app_package_choice" = "4" ]; then
+  if [ "$app_package_choice" = "3" ]; then
     echo "Returning to main menu..."
     return 0
   fi
   
-  if ! validate_choice "$app_package_choice" 3; then
+  if ! validate_choice "$app_package_choice" 2; then
     return 1
   fi
   
@@ -250,7 +233,6 @@ delete_app_package() {
 # ----------------------------
 # Instance Management Functions
 # ----------------------------
-# Add this helper function to get deployment file paths
 get_instance_file_path() {
   local package_name="$1"
   local file_path=""
@@ -265,10 +247,6 @@ get_instance_file_path() {
     "custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
       original_file_path="$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml"
       file_path="$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml.copy"
-      cp -f ${original_file_path} ${file_path} ;;
-    "nginx-helm-app"|"nginx"|"nginx-pkg") 
-      original_file_path="$HOME/symphony/cli/templates/margo/nginx-helm/instance.yaml"
-      file_path="$HOME/symphony/cli/templates/margo/nginx-helm/instance.yaml.copy"
       cp -f ${original_file_path} ${file_path} ;;
     "nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
       original_file_path="$HOME/symphony/cli/templates/margo/nextcloud-compose/instance.yaml"
@@ -294,8 +272,6 @@ get_oci_repository_path() {
   case $package_name in
     "custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
       container_url="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-helm" ;;
-    "nginx-helm-app"|"nginx"|"nginx-pkg")
-      container_url="oci://ghcr.io/nginx/charts/nginx-ingress" ;; 
     "nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
       container_url="https://raw.githubusercontent.com/docker/awesome-compose/refs/heads/master/nextcloud-redis-mariadb/compose.yaml" ;;
     *)
@@ -305,7 +281,6 @@ get_oci_repository_path() {
   echo "$container_url"
 }
 
-# Updated deploy_instance function
 deploy_instance() {
   echo "🚀 Deploy Instance"
   echo "=================="
@@ -335,7 +310,7 @@ deploy_instance() {
     return 1
   fi
 
-   # Get app package details and extract metadata.name
+  # Get app package details and extract metadata.name
   echo "📋 Getting package details..."
   app_packages=$(${MAESTRO_CLI_PATH}/maestro wfm list app-pkg -o json 2>/dev/null)
   
@@ -379,9 +354,6 @@ deploy_instance() {
   fi
   
   echo "📄 Using deployment file: $deploy_file"
-
-  
-  
 
   # Update deployment file with device and package info if needed
   sed -i "s|{{DEVICE_ID}}|$device_id|g" "$deploy_file" 2>/dev/null || true

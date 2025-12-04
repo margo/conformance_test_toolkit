@@ -10,8 +10,8 @@ GITHUB_USER="${GITHUB_USER:-}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 #--- branch details (can be overridden via env)
-SYMPHONY_BRANCH="${SYMPHONY_BRANCH:-sup/app-registry-on-oci}"
-DEV_REPO_BRANCH="${DEV_REPO_BRANCH:-sup/app-registry-on-oci}"
+SYMPHONY_BRANCH="${SYMPHONY_BRANCH:-main}"
+DEV_REPO_BRANCH="${DEV_REPO_BRANCH:-main}"
 
 #--- harbor settings (can be overridden via env)
 EXPOSED_HARBOR_IP="${EXPOSED_HARBOR_IP:-127.0.0.1}"
@@ -21,8 +21,10 @@ EXPOSED_HARBOR_PORT="${EXPOSED_HARBOR_PORT:-8081}"
 EXPOSED_SYMPHONY_IP="${EXPOSED_SYMPHONY_IP:-127.0.0.1}"
 EXPOSED_SYMPHONY_PORT="${EXPOSED_SYMPHONY_PORT:-8082}"
 
-#--- device node IP (can be overridden via env) for prometheus to scrape metrics 
-DEVICE_NODE_IP="${DEVICE_NODE_IP:-127.0.0.1}"
+#--- device node IPs (can be overridden via env) for prometheus to scrape metrics
+# Format: "IP1:PORT1,IP2:PORT2" or just "IP1,IP2" (defaults to port 30999 for k3s)
+DEVICE_NODE_IPS="${DEVICE_NODE_IPS:-127.0.0.1:30999}"
+
 
 
 #--- Registry settings (can be overridden via env)
@@ -454,13 +456,20 @@ enable_tls_in_symphony_api() {
 }
 
 install_jaeger() {
+  # Check if Jaeger Helm release exists and is healthy
+  if helm status $JAEGER_RELEASE -n "$NAMESPACE_OBSERVABILITY" >/dev/null 2>&1; then
+    echo "⚠️ Jaeger Helm release found, checking pod health..."
+     
+  fi
+
   echo "🔄 Refreshing Jaeger Helm repo..."
   helm repo remove jaegertracing || true
   helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
   helm repo update
 
-  echo "🚀 Installing Jaeger with OTLP and NodePort configuration..."
+  echo "🚀 Installing Jaeger v3.4.1 with OTLP and NodePort configuration..."
   helm install $JAEGER_RELEASE jaegertracing/jaeger \
+    --version 3.4.1 \
     --namespace $NAMESPACE_OBSERVABILITY \
     --set agent.enabled=false \
     --set collector.enabled=true \
@@ -519,6 +528,7 @@ install_jaeger() {
   echo "📡 OTLP HTTP: Port 4318"
 }
 
+
 # Function to create observability namespace
 create_observability_namespace() {
     echo "🔧 Checking observability namespace..."
@@ -534,7 +544,32 @@ create_observability_namespace() {
 
 install_prometheus() {
   cd "$HOME/dev-repo/pipeline/observability"
-  echo "📡 Setting up Prometheus to expose metrics for OTEL Collector..."
+  echo "📡 Setting up Prometheus to scrape metrics from multiple devices..."
+
+  # Parse DEVICE_NODE_IPS and build targets array
+  TARGETS_ARRAY="["
+  if [ -n "$DEVICE_NODE_IPS" ]; then
+    IFS=',' read -ra DEVICES <<< "$DEVICE_NODE_IPS"
+    
+    for i in "${!DEVICES[@]}"; do
+      device=$(echo "${DEVICES[$i]}" | xargs)
+      
+      # Check if port is specified
+      if [[ "$device" == *":"* ]]; then
+        TARGET="'${device}'"
+      else
+        TARGET="'${device}:30999'"
+      fi
+      
+      # Add comma separator except for last item
+      if [ $i -eq $((${#DEVICES[@]} - 1)) ]; then
+        TARGETS_ARRAY="${TARGETS_ARRAY}${TARGET}"
+      else
+        TARGETS_ARRAY="${TARGETS_ARRAY}${TARGET}, "
+      fi
+    done
+  fi
+  TARGETS_ARRAY="${TARGETS_ARRAY}]"
 
   cat <<EOF > prometheus-values.yaml
 server:
@@ -553,7 +588,7 @@ server:
       scrape_configs:
         - job_name: 'otel-collector'
           static_configs:
-            - targets: ['${DEVICE_NODE_IP}:30999']
+            - targets: ${TARGETS_ARRAY}
 EOF
 
   helm repo remove prometheus-community || true
@@ -561,19 +596,21 @@ EOF
   helm repo update
 
   helm install $PROM_RELEASE prometheus-community/prometheus \
+    --version 27.49.0 \
     --namespace $NAMESPACE_OBSERVABILITY \
     -f prometheus-values.yaml
 
   echo "✅ Prometheus setup complete!"
   echo "📊 Prometheus UI: NodePort 30900"
-  echo "📡 Metrics exposed at ${DEVICE_NODE_IP}:30999"
+  echo "📡 Monitoring devices: $DEVICE_NODE_IPS"
 
   patch_prometheus_configmap
 }
 
+
 patch_prometheus_configmap() {
   cd "$HOME/dev-repo/pipeline/observability"
-  echo "🛠 Applying Prometheus ConfigMap with DEVICE_NODE_IP..."
+  echo "🛠 Applying Prometheus ConfigMap with device targets..."
 
   CM_SOURCE="collector-scrape-cm-change.txt"
   CM_TARGET="collector-scrape-cm-change.yaml"
@@ -583,7 +620,35 @@ patch_prometheus_configmap() {
     exit 1
   fi
 
-  sed "s|__DEVICE_NODE_IP__|${DEVICE_NODE_IP}|g" "$CM_SOURCE" > "$CM_TARGET"
+  # Build targets array from DEVICE_NODE_IPS
+  TARGETS_ARRAY="["
+  if [ -n "$DEVICE_NODE_IPS" ]; then
+    IFS=',' read -ra DEVICES <<< "$DEVICE_NODE_IPS"
+    
+    for i in "${!DEVICES[@]}"; do
+      device=$(echo "${DEVICES[$i]}" | xargs)
+      
+      # Check if port is specified
+      if [[ "$device" == *":"* ]]; then
+        TARGET="'${device}'"
+      else
+        TARGET="'${device}:30999'"
+      fi
+      
+      # Add comma separator except for last item
+      if [ $i -eq $((${#DEVICES[@]} - 1)) ]; then
+        TARGETS_ARRAY="${TARGETS_ARRAY}${TARGET}"
+      else
+        TARGETS_ARRAY="${TARGETS_ARRAY}${TARGET}, "
+      fi
+    done
+  fi
+  TARGETS_ARRAY="${TARGETS_ARRAY}]"
+
+  echo "📡 Device targets: $TARGETS_ARRAY"
+  
+  # Replace placeholder with targets array
+  sed "s|__DEVICE_TARGETS__|${TARGETS_ARRAY}|g" "$CM_SOURCE" > "$CM_TARGET"
 
   echo "📄 Applying ConfigMap with force replace..."
   
@@ -608,6 +673,7 @@ patch_prometheus_configmap() {
   rm -f "$CM_TARGET"
   echo "✅ ConfigMap applied and temporary file removed."
 }
+
 
 
 install_loki() {
@@ -650,7 +716,7 @@ backend:
   replicas: 0
 EOF
 
-  helm install $LOKI_RELEASE grafana/loki -f loki-values.yaml --namespace $NAMESPACE_OBSERVABILITY
+  helm install $LOKI_RELEASE grafana/loki --version 6.46.0 -f loki-values.yaml --namespace $NAMESPACE_OBSERVABILITY
 
   echo "🔧 Patching Loki service to expose via NodePort 32100..."
  sudo kubectl patch svc loki -n $NAMESPACE_OBSERVABILITY \
@@ -678,6 +744,7 @@ install_grafana() {
   helm repo update
 
   helm install $GRAFANA_RELEASE grafana/grafana \
+    --version 10.3.0 \
     --namespace $NAMESPACE_OBSERVABILITY \
     --set service.type=NodePort \
     --set service.nodePort=32000 \
@@ -1187,6 +1254,8 @@ install_prerequisites() {
   echo "Running all pre-req setup tasks..."
   install_basic_utilities
   install_go
+  install_vim
+  install_and_enable_ssh
   install_docker_compose
   add_insecure_registry_to_daemon
   setup_k3s
@@ -1237,6 +1306,8 @@ start_symphony_api_container(){
         return 1
     fi
     
+    git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/";
+    go env -w GOPRIVATE="github.com/margo/*";
     echo "Using GitHub credentials for user: $GITHUB_USER"
 
     # Stop and remove existing container if present
@@ -1461,6 +1532,63 @@ generate_server_certs() {
     
     rm -f "$server_csr"
     chmod 600 "$server_key"
+}
+install_vim() {
+  echo "[INFO] Checking if Vim editor is installed..."
+  if command -v vim >/dev/null 2>&1; then
+    echo "[INFO] Vim is already installed."
+    return
+  fi
+
+  echo "[INFO] Installing Vim..."
+  if command -v apt >/dev/null 2>&1; then
+    sudo apt update -y
+    sudo apt install -y vim
+  else
+    sudo yum install -y vim || sudo dnf install -y vim
+  fi
+
+  echo "[SUCCESS] Vim installed and ready to use."
+}
+
+
+install_and_enable_ssh() {
+  echo "[INFO] Checking OS type..."
+  
+  # Detect package manager
+  if command -v apt >/dev/null 2>&1; then
+    OS="debian"
+    echo $OS
+  elif command -v yum >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
+    OS="rhel"
+    echo $OS
+  else
+    echo "[ERROR] Unsupported OS. Only Debian/Ubuntu & RHEL/CentOS supported."
+    return 1
+  fi
+
+  echo "[INFO] Installing OpenSSH Server..."
+  if [ "$OS" = "debian" ]; then
+    sudo apt update -y
+    sudo apt install -y openssh-server
+  else
+    sudo yum install -y openssh-server || sudo dnf install -y openssh-server
+  fi
+
+  echo "[INFO] Enabling and starting SSH service..."
+  UNIT=$(systemctl list-unit-files | awk '/^ssh\.service/ {print "ssh"} /^sshd\.service/ {print "sshd"}' | head -n1)
+
+  if [ -z "$UNIT" ]; then
+    echo "[ERROR] SSH service unit not found."
+    return 1
+  fi
+
+  sudo systemctl enable "$UNIT"
+  sudo systemctl restart "$UNIT"
+
+  echo "[INFO] Verifying SSH status:"
+  sudo sudo systemctl status ssh --no-pager || sudo systemctl status sshd
+  echo "[SUCCESS] SSH service installed and running."
 }
 
 
