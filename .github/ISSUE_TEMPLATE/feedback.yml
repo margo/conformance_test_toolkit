@@ -1,0 +1,21 @@
+name: "Feedback"
+description: "An open feedback form for the MARGO community"
+title: "[FB: ]"
+labels: ["DRAFT"]
+assignees:
+  - "nilanjan-samajdar"
+body:
+  - type: markdown
+    attributes:
+      value: |
+         Provide feedback in general.
+         Your feedback will be the chosen one that brings harmony to this codebase.
+         If reffering to specific files in documentation or code, please provide file-name and line-number.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: "Feedback"
+      description: "Feedback" 
+      placeholder: "I sense a disturbance in the logic—care to bring balance with your review?"
+    validations:
+      required: true
