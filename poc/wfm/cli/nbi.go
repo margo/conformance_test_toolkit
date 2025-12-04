@@ -14,7 +14,7 @@ import (
 	"time"
 	"crypto/tls"
     "net/http"
-	nonStdWfmNbi "github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
+	nonStdWfmNbi "github.com/margo/sandbox/non-standard/generatedCode/wfm/nbi"
 )
 
 const (

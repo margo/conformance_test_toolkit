@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/margo/dev-repo/poc/device/agent/database"
-	"github.com/margo/dev-repo/poc/device/agent/types"
-	wfm "github.com/margo/dev-repo/poc/wfm/cli"
-	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
+	"github.com/margo/sandbox/poc/device/agent/database"
+	"github.com/margo/sandbox/poc/device/agent/types"
+	wfm "github.com/margo/sandbox/poc/wfm/cli"
+	"github.com/margo/sandbox/standard/generatedCode/wfm/sbi"
 	"go.uber.org/zap"
 )
 

@@ -1,6 +1,6 @@
 package models
 
-import "github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
+import "github.com/margo/sandbox/non-standard/generatedCode/wfm/nbi"
 
 type AppPkg struct {
 	Id          string

@@ -159,11 +159,11 @@ install_go() {
 # Repository Functions
 # ----------------------------
 clone_dev_repo() {
-  echo "Cloning dev-repo on ($VM2_HOST)..."
+  echo "Cloning sandbox on ($VM2_HOST)..."
   cd $HOME
-  sudo rm -rf dev-repo
-  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git"
-  cd dev-repo
+  sudo rm -rf sandbox
+  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/sandbox.git"
+  cd sandbox
   git checkout ${DEV_REPO_BRANCH}
   cd ..
 }
@@ -173,7 +173,7 @@ clone_dev_repo() {
 # ----------------------------
 update_agent_sbi_url() {
   echo 'Updating wfm.sbiUrl in agent config ...'
-  sed -i "s|sbiUrl:.*|sbiUrl: https://$WFM_IP:$WFM_PORT/v1alpha2/margo|" "$HOME/dev-repo/poc/device/agent/config/config.yaml"
+  sed -i "s|sbiUrl:.*|sbiUrl: https://$WFM_IP:$WFM_PORT/v1alpha2/margo|" "$HOME/sandbox/poc/device/agent/config/config.yaml"
 }
 
 # ----------------------------
@@ -288,7 +288,7 @@ install_and_enable_ssh() {
 #-----------------------------------------------------------------
 
 enable_kubernetes_runtime() {
-  CONFIG_FILE="$HOME/dev-repo/helmchart/config/config.yaml"
+  CONFIG_FILE="$HOME/sandbox/helmchart/config/config.yaml"
   echo "Enabling Kubernetes section in config.yaml for ServiceAccount authentication..."
   sed -i \
   -e 's/^[[:space:]]*#\s*-\s*type:\s*KUBERNETES/- type: KUBERNETES/' \
@@ -312,7 +312,7 @@ enable_kubernetes_runtime() {
 }
 
 enable_docker_runtime() {
-  CONFIG_FILE="$HOME/dev-repo/docker-compose/config/config.yaml"
+  CONFIG_FILE="$HOME/sandbox/docker-compose/config/config.yaml"
  echo "Enabling docker section in config.yaml..."
  sed -i \
   -e 's/^[[:space:]]*#\s*- type: DOCKER/  - type: DOCKER/' \
@@ -328,7 +328,7 @@ enable_docker_runtime() {
 # Device Agent Build Functions
 # ----------------------------
 build_device_agent_docker() {
-  cd "$HOME/dev-repo"
+  cd "$HOME/sandbox"
   echo 'Checking if device-agent image already exists...'
 
 # Check if the image exists
@@ -348,7 +348,7 @@ build_device_agent_docker() {
 
 start_device_agent_docker_service() {
   echo 'Starting device-agent...'
-  cd "$HOME/dev-repo/docker-compose"
+  cd "$HOME/sandbox/docker-compose"
   mkdir -p config
   
  if [ -f "$HOME/certs/device-private.key" ] && [ -f "$HOME/certs/device-public.crt" ] && [ -f "$HOME/certs/device-ecdsa.crt" ] && [ -f "$HOME/certs/device-ecdsa.key" ] && [ -f "$HOME/certs/ca-cert.pem" ]; then
@@ -375,17 +375,17 @@ start_device_agent_docker_service() {
 
 stop_device_agent_service_docker() {
   echo "Stopping device-agent..."
-  cd "$HOME/dev-repo/docker-compose"
+  cd "$HOME/sandbox/docker-compose"
   docker compose down
   
   # Prompt user to delete /data folder
   echo ""
   echo "⚠️  Warning: Deleting /data folder will require device re-onboarding"
-  read -p "Do you want to delete data folder at $HOME/dev-repo/docker-compose/data? (y/n): " delete_data
+  read -p "Do you want to delete data folder at $HOME/sandbox/docker-compose/data? (y/n): " delete_data
   
   if [[ "$delete_data" =~ ^[Yy]$ ]]; then
     echo "Deleting data folder..."
-    if rm -rf "$HOME/dev-repo/docker-compose/data"; then
+    if rm -rf "$HOME/sandbox/docker-compose/data"; then
       echo '✅ Data folder deleted successfully'
       echo 'ℹ️ Device re-onboarding will be required'
     else
@@ -398,7 +398,7 @@ stop_device_agent_service_docker() {
 
 
 build_start_device_agent_k3s_service() {
-    cd "$HOME/dev-repo"
+    cd "$HOME/sandbox"
     echo "Building and deploying device-agent on Kubernetes..."
     
     # Step 1: Build the Docker image if it doesn't exist
@@ -547,7 +547,7 @@ build_start_device_agent_k3s_service() {
 
 stop_device_agent_kubernetes() {
   echo "Stopping device-agent..."
-  cd "$HOME/dev-repo"
+  cd "$HOME/sandbox"
 
   # Ask user about PVC deletion FIRST (before Helm uninstall)
   DELETE_PVC=false
@@ -1000,7 +1000,7 @@ create_observability_namespace() {
 
 install_otel_collector_promtail_docker() {
   echo "Installing OTEL Collector v0.140.0 and Promtail v2.9.10 as Docker containers..."
-  cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
+  cd "$HOME/sandbox/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
   
   # Fix Docker socket permissions for OTEL Collector access
   echo "Setting Docker socket permissions..."
@@ -1170,7 +1170,7 @@ uninstall_otel_collector_promtail_wrapper() {
 
 uninstall_otel_collector_promtail_docker() {
   echo "🧹 Uninstalling Promtail and OTEL Collector containers..."
-  cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
+  cd "$HOME/sandbox/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
   
   if [ -f "docker-compose-observability.yml" ]; then
     docker compose -f docker-compose-observability.yml down
@@ -1183,7 +1183,7 @@ uninstall_otel_collector_promtail_docker() {
 
 install_otel_collector_promtail() {
   echo "Installing OTEL Collector and Promtail..."
-  cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
+  cd "$HOME/sandbox/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
   create_observability_namespace
   install_promtail
   install_otel_collector
@@ -1192,7 +1192,7 @@ install_otel_collector_promtail() {
 
 uninstall_otel_collector_promtail() {
   echo "🧹 Uninstalling Promtail and OTEL Collector..."
-  cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
+  cd "$HOME/sandbox/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
    
    # Uninstall helm releases only if they exist
     for release in $PROMTAIL_RELEASE $OTEL_RELEASE; do
@@ -1211,7 +1211,7 @@ uninstall_otel_collector_promtail() {
 }
 
 cleanup_residual() {
-  rm -rf "$HOME/dev-repo"
+  rm -rf "$HOME/sandbox"
   rm -rf "$HOME/symphony"
  }
 

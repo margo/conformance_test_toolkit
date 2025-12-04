@@ -1,4 +1,4 @@
-module github.com/margo/dev-repo
+module github.com/margo/sandbox
 
 go 1.24.4
 

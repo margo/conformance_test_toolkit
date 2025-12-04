@@ -5,7 +5,7 @@ set -e
 # Configuration
 WFM_SBI_SPEC=("spec/wfm-sbi.yaml")
 OUTPUT_DIR="./generatedCode"
-WFM_SBI_PACKAGE_NAME="github.com/margo/dev-repo/standard/generatedCode/wfm"
+WFM_SBI_PACKAGE_NAME="github.com/margo/sandbox/standard/generatedCode/wfm"
 
 # Colors
 RED='\033[0;31m'

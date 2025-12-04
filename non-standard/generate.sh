@@ -6,8 +6,8 @@ set -e
 WFM_NBI_SPEC_FILE=("spec/wfm-nbi.yaml")
 # WFM_SBI_SPEC_FILE=("spec/wfm-sbi.yaml")
 OUTPUT_DIR="./generatedCode"
-WFM_NBI_PACKAGE_NAME="github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
-# WFM_SBI_PACKAGE_NAME="github.com/margo/dev-repo/non-standard/generatedCode/wfm/sbi"
+WFM_NBI_PACKAGE_NAME="github.com/margo/sandbox/non-standard/generatedCode/wfm/nbi"
+# WFM_SBI_PACKAGE_NAME="github.com/margo/sandbox/non-standard/generatedCode/wfm/sbi"
 
 # Colors
 RED='\033[0;31m'

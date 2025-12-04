@@ -10,7 +10,7 @@ This repository contains the proof-of-concept components, shared libraries, stan
 ## Repository Structure
 
 ```
-dev-repo/
+sandbox/
 ├── .github/        # GitHub workflows and templates
 ├── .vscode/        # VS Code configuration
 ├── LICENSE         # Project license
@@ -50,8 +50,8 @@ Experimental implementations and prototypes for Margo.
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/margo/dev-repo
-cd dev-repo
+git clone https://github.com/margo/sandbox
+cd sandbox
 ```
 
 2. **Install dependencies:**

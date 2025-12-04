@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
+	"github.com/margo/sandbox/standard/generatedCode/wfm/sbi"
 )
 
 // SBIAPIClient interface

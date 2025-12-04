@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
+	"github.com/margo/sandbox/standard/generatedCode/wfm/sbi"
 )
 
 func ParseAppDeploymentFromBase64(base64Yaml string) (*sbi.AppDeploymentManifest, error) {

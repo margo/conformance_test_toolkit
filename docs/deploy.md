@@ -21,7 +21,7 @@
 
  
 **3. Deployment Configurations**:
-In order to deploy the Sandbox, clone the [MARGO repository](https://github.com/margo/dev-repo) and run the following [Automation Scripts](https://github.com/margo/dev-repo/tree/main/pipeline).       
+In order to deploy the Sandbox, clone the [MARGO repository](https://github.com/margo/sandbox) and run the following [Automation Scripts](https://github.com/margo/sandbox/tree/main/pipeline).       
 
  **3.1** Deploy containerized instance of Symphony API on WFM VM.
 
@@ -49,7 +49,7 @@ In order to deploy the Sandbox, clone the [MARGO repository](https://github.com/
     Locate the ca-cert.pem on the WFM-VM at : cd $HOME/symphony/api/certificates
 
     # Copy the ca-cert.pem file to the following destination paths on the Device VM:
-    For Docker Compose–based Device-Agent: : $HOME/dev-repo/docker-compose/config
+    For Docker Compose–based Device-Agent: : $HOME/sandbox/docker-compose/config
     For K3s-based Device-Agent: :  $HOME/certs
 
    ```

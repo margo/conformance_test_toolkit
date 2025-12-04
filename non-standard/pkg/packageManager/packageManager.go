@@ -13,10 +13,10 @@ import (
 	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
-	"github.com/margo/dev-repo/non-standard/pkg/models"
-	"github.com/margo/dev-repo/shared-lib/git"
-	//"github.com/margo/dev-repo/shared-lib/oci"
+	"github.com/margo/sandbox/non-standard/generatedCode/wfm/nbi"
+	"github.com/margo/sandbox/non-standard/pkg/models"
+	"github.com/margo/sandbox/shared-lib/git"
+	//"github.com/margo/sandbox/shared-lib/oci"
 	"gopkg.in/yaml.v3"
 )
 

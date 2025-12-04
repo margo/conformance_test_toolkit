@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	httputils "github.com/margo/dev-repo/shared-lib/http"
-	"github.com/margo/dev-repo/shared-lib/http/auth"
+	httputils "github.com/margo/sandbox/shared-lib/http"
+	"github.com/margo/sandbox/shared-lib/http/auth"
 )
 
 // DownloadResult contains information about the download operation

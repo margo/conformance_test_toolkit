@@ -41,7 +41,7 @@ You need to download the MARGO code to all three VMs. Follow these steps on **ea
 
 4. **Download the Repository**
    ```bash
-   git clone https://github.com/margo/dev-repo.git
+   git clone https://github.com/margo/sandbox.git
    ```
    
    When prompted, enter:
@@ -50,12 +50,12 @@ You need to download the MARGO code to all three VMs. Follow these steps on **ea
 
 5. **Navigate to the Downloaded Folder**
    ```bash
-   cd dev-repo
+   cd sandbox
    ```
 
 **Note:** Repeat these steps on all three VMs (WFM VM, K3s Device VM, and Docker Device VM).
 
-**Important:** We're using `$HOME/workspace/dev-repo` instead of `$HOME/dev-repo` because the automation scripts will clone their own copies to `$HOME`. This keeps your working copy separate from the automated setup.
+**Important:** We're using `$HOME/workspace/sandbox` instead of `$HOME/sandbox` because the automation scripts will clone their own copies to `$HOME`. This keeps your working copy separate from the automated setup.
 
 **Troubleshooting:**
 - If you get "Permission denied" error, make sure your GitHub account has access to the MARGO repository
@@ -69,7 +69,7 @@ On each VM, you need to configure environment variables (settings that tell the 
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Follow the detailed setup guide**
@@ -92,7 +92,7 @@ On each VM, you need to configure environment variables (settings that tell the 
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Install Basic Tools**
@@ -132,7 +132,7 @@ On each VM, you need to configure environment variables (settings that tell the 
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Install Basic Tools**
@@ -201,7 +201,7 @@ You need to copy a security file from the WFM VM to each Device VM.
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Start the device agent**
@@ -215,7 +215,7 @@ You need to copy a security file from the WFM VM to each Device VM.
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Start the device agent**
@@ -229,7 +229,7 @@ You need to copy a security file from the WFM VM to each Device VM.
 
 On each Device VM:
 ```bash
-cd $HOME/workspace/dev-repo/pipeline
+cd $HOME/workspace/sandbox/pipeline
 sudo -E bash ./device-agent.sh
 ```
 - Type `8` and press Enter
@@ -253,7 +253,7 @@ sudo -E bash ./device-agent.sh
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Check device status**
@@ -287,7 +287,7 @@ On the WFM VM:
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Make the script executable and run it**
@@ -673,7 +673,7 @@ If you want to remove everything and start over:
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Stop and clean up services**
@@ -691,7 +691,7 @@ If you want to remove everything and start over:
 
 1. **Navigate to the pipeline folder**
    ```bash
-   cd $HOME/workspace/dev-repo/pipeline
+   cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Stop and clean up services**

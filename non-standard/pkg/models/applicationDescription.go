@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/margo/dev-repo/non-standard/generatedCode/wfm/nbi"
+	"github.com/margo/sandbox/non-standard/generatedCode/wfm/nbi"
 	"gopkg.in/yaml.v3"
 )
 

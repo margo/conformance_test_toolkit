@@ -11,7 +11,7 @@ import (
 
 	"errors"
 
-	"github.com/margo/dev-repo/shared-lib/http"
+	"github.com/margo/sandbox/shared-lib/http"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"

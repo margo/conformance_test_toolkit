@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/margo/dev-repo/shared-lib/http/auth"
+	"github.com/margo/sandbox/shared-lib/http/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

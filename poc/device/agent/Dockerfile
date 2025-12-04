@@ -41,7 +41,7 @@ VOLUME ["/config"]
 
 # Add metadata labels
 LABEL description="Margo Device Agent for edge workload management" \
-      source="https://github.com/margo/dev-repo" \
+      source="https://github.com/margo/sandbox" \
       title="Device Agent"
 
 # Use ENTRYPOINT for better flexibility

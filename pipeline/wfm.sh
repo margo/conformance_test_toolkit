@@ -217,11 +217,11 @@ clone_symphony_repo() {
 
 clone_dev_repo() {
   cd "$HOME"
-  sudo rm -rf "$HOME/dev-repo"
-  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/dev-repo.git"
-  cd "$HOME/dev-repo"
+  sudo rm -rf "$HOME/sandbox"
+  git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/sandbox.git"
+  cd "$HOME/sandbox"
   git checkout ${DEV_REPO_BRANCH} || echo 'Branch ${DEV_REPO_BRANCH} not found'
-  echo "dev-repo checkout to branch ${DEV_REPO_BRANCH} done"
+  echo "sandbox checkout to branch ${DEV_REPO_BRANCH} done"
 }
 
 # ----------------------------
@@ -233,7 +233,7 @@ setup_harbor() {
   if docker ps --format '{{.Names}}' | grep -q harbor; then
     echo 'Harbor is already running, skipping startup.'
   else
-    cd "$HOME/dev-repo/pipeline/harbor"
+    cd "$HOME/sandbox/pipeline/harbor"
     #Update harbor.yml with EXPOSED_HARBOR_IP
     sudo sed -i "s|^hostname: .*|hostname: $EXPOSED_HARBOR_IP|" harbor.yml
     echo 'Starting Harbor...'
@@ -254,7 +254,7 @@ setup_harbor() {
 push_nextcloud_to_oci() {
   echo "📦 Pushing Nextcloud application package to OCI Registry..."
   
-  local app_dir="$HOME/dev-repo/poc/tests/artefacts/nextcloud-compose/margo-package"
+  local app_dir="$HOME/sandbox/poc/tests/artefacts/nextcloud-compose/margo-package"
   local repository="${OCI_ORGANIZATION}/nextcloud-compose-app-package"
   local tag="latest"
   
@@ -298,7 +298,7 @@ push_nextcloud_to_oci() {
 push_nginx_to_oci() {
   echo "📦 Pushing Nginx application package to OCI Registry..."
   
-  local app_dir="$HOME/dev-repo/poc/tests/artefacts/nginx-helm/margo-package"
+  local app_dir="$HOME/sandbox/poc/tests/artefacts/nginx-helm/margo-package"
   local repository="${OCI_ORGANIZATION}/nginx-helm-app-package"
   local tag="latest"
   
@@ -342,7 +342,7 @@ push_nginx_to_oci() {
 push_otel_to_oci() {
   echo "📦 Pushing OTEL application package to OCI Registry..."
   
-  local app_dir="$HOME/dev-repo/poc/tests/artefacts/open-telemetry-demo-helm/margo-package"
+  local app_dir="$HOME/sandbox/poc/tests/artefacts/open-telemetry-demo-helm/margo-package"
   local repository="${OCI_ORGANIZATION}/otel-demo-app-package"
   local tag="latest"
   
@@ -385,7 +385,7 @@ push_otel_to_oci() {
 push_custom_otel_to_oci() {
   echo "📦 Pushing Custom OTEL application package to OCI Registry..."
   
-  local app_dir="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package"
+  local app_dir="$HOME/sandbox/poc/tests/artefacts/custom-otel-helm-app/margo-package"
   local repository="${OCI_ORGANIZATION}/custom-otel-helm-app-package"
   local tag="latest"
   
@@ -543,7 +543,7 @@ create_observability_namespace() {
 }
 
 install_prometheus() {
-  cd "$HOME/dev-repo/pipeline/observability"
+  cd "$HOME/sandbox/pipeline/observability"
   echo "📡 Setting up Prometheus to scrape metrics from multiple devices..."
 
   # Parse DEVICE_NODE_IPS and build targets array
@@ -609,7 +609,7 @@ EOF
 
 
 patch_prometheus_configmap() {
-  cd "$HOME/dev-repo/pipeline/observability"
+  cd "$HOME/sandbox/pipeline/observability"
   echo "🛠 Applying Prometheus ConfigMap with device targets..."
 
   CM_SOURCE="collector-scrape-cm-change.txt"
@@ -760,8 +760,8 @@ observability_stack_install(){
 echo "Observability stack installation started"
 
 # Check if collector-scrape-cm-change.txt file exists
-if [ ! -f "$HOME/dev-repo/pipeline/observability/collector-scrape-cm-change.txt" ]; then
-    echo "Error: collector-scrape-cm-change.txt file not found in $HOME/dev-repo/pipeline/observability"
+if [ ! -f "$HOME/sandbox/pipeline/observability/collector-scrape-cm-change.txt" ]; then
+    echo "Error: collector-scrape-cm-change.txt file not found in $HOME/sandbox/pipeline/observability"
     echo "Please ensure the file exists before proceeding."
     exit 1
 fi
@@ -779,7 +779,7 @@ echo "Observability stack installation completed"
 
 observability_stack_uninstall(){
     echo "Observability stack uninstall started"
-    cd "$HOME/dev-repo/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
+    cd "$HOME/sandbox/pipeline/observability" || { echo '❌ observability dir missing'; exit 1; }
 
     # Uninstall helm releases only if they exist
     for release in $PROM_RELEASE $JAEGER_RELEASE $GRAFANA_RELEASE $LOKI_RELEASE; do
@@ -1001,8 +1001,8 @@ cleanup_symphony_builds() {
 remove_cloned_repositories() {
   echo "2. Removing cloned repositories..."
   
-  # Remove dev-repo
-  [ -d "$HOME/dev-repo" ] && sudo rm -rf "$HOME/dev-repo" && echo "✅ Removed dev-repo"
+  # Remove sandbox
+  [ -d "$HOME/sandbox" ] && sudo rm -rf "$HOME/sandbox" && echo "✅ Removed sandbox"
   
   # Remove symphony repo
   [ -d "$HOME/symphony" ] && sudo rm -rf "$HOME/symphony" && echo "✅ Removed symphony repository"
@@ -1069,13 +1069,13 @@ stop_harbor_service() {
 
   # Stop Harbor container
   if docker ps --format '{{.Names}}' | grep -q harbor; then
-    cd "$HOME/dev-repo/pipeline/harbor"
+    cd "$HOME/sandbox/pipeline/harbor"
     docker compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Harbor containers"
     sleep 10
   fi
 
   # Remove Harbor compose directory
-  [ -d "$HOME/dev-repo/pipeline/harbor" ] && rm -rf "$HOME/dev-repo/pipeline/harbor" && echo "✅ Removed Harbor compose directory"
+  [ -d "$HOME/sandbox/pipeline/harbor" ] && rm -rf "$HOME/sandbox/pipeline/harbor" && echo "✅ Removed Harbor compose directory"
 
   # Remove Harbor images
   # docker images | grep harbor | awk '{print $3}' | xargs -r docker rmi -f && echo "✅ Removed Harbor images"
@@ -1102,7 +1102,7 @@ cleanup_basic_utilities() {
 build_custom_otel_container_images() {
   echo "Building/Downloading Custom Otel images..."
 
-  cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/app"
+  cd "$HOME/sandbox/poc/tests/artefacts/custom-otel-helm-app/code/app"
   docker build . -t "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
   echo "Ensuring Harbor registry login..."
   docker login "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}" -u admin -p Harbor12345
@@ -1112,14 +1112,14 @@ build_custom_otel_container_images() {
   docker push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app:latest"
   
   OTEL_APP_CONTAINER_URL="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-app"
-  deploy_file="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
+  deploy_file="$HOME/sandbox/poc/tests/artefacts/custom-otel-helm-app/code/helm/values.yaml"
   tag="latest"
   
   echo "Preparing Helm chart..."
-  cd "$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code"
+  cd "$HOME/sandbox/poc/tests/artefacts/custom-otel-helm-app/code"
   
   # Read existing chart version 
-  CHART_FILE="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/code/helm/Chart.yaml"
+  CHART_FILE="$HOME/sandbox/poc/tests/artefacts/custom-otel-helm-app/code/helm/Chart.yaml"
   CHART_VERSION=$(grep "^version:" "$CHART_FILE" | awk '{print $2}')
   
   echo "Using existing chart version: $CHART_VERSION"
@@ -1139,7 +1139,7 @@ build_custom_otel_container_images() {
   # Update margo.yaml in package directory with placeholders
   HELM_REPOSITORY="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-helm"
   HELM_REVISION="$CHART_VERSION"
-  helm_deploy_file="$HOME/dev-repo/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
+  helm_deploy_file="$HOME/sandbox/poc/tests/artefacts/custom-otel-helm-app/margo-package/margo.yaml"
 
   echo "Updating margo.yaml with chart version $CHART_VERSION..."
   

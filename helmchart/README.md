@@ -1,9 +1,9 @@
 ##### [Back To Main](../README.md)
 # Pre-requisites:
 - Kubernetes runtime (k3s/k8s)
-- Ensure that you have the container image for the device agent with you, if not you can build it using the following command(assuming that you cloned the entire dev-repo at one place). To build, please run the following command (you can use nordctl or other tools as per your preference):
+- Ensure that you have the container image for the device agent with you, if not you can build it using the following command(assuming that you cloned the entire sandbox at one place). To build, please run the following command (you can use nordctl or other tools as per your preference):
 ```bash
-cd dev-repo
+cd sandbox
 docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
 docker save -o device-agent.tar margo.org/device-agent:latest
 # use this command if on k8s cluster
@@ -36,7 +36,7 @@ ClusterRoleBinding to link ServiceAccount with permissions
 The device-agent will authenticate using the ServiceAccount token automatically mounted by Kubernetes at /var/run/secrets/kubernetes.io/serviceaccount/token.
 
 ```bash
-Note: Refer build_start_device_agent_k3s_service() in /dev-repo/pipeline/device-agent.sh for details of the method used for creation of ServiceAccount , ClusterRole and ClusterRoleBinding. Also code ensures that the device-agent's ServiceAccount has the necessary permissions to interact with Kubernetes resources, particularly secrets and configmaps.
+Note: Refer build_start_device_agent_k3s_service() in /sandbox/pipeline/device-agent.sh for details of the method used for creation of ServiceAccount , ClusterRole and ClusterRoleBinding. Also code ensures that the device-agent's ServiceAccount has the necessary permissions to interact with Kubernetes resources, particularly secrets and configmaps.
 ```
 
 5. Verification:

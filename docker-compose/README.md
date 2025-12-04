@@ -1,9 +1,9 @@
 ##### [Back To Main](../README.md)
 # Pre-requisites:
 - Docker and Docker Compose installed
-- Ensure that you have the container image for the device agent with you, if not you can build it using the following command (assuming that you cloned the entire dev-repo at one place). To build, please run the following command:
+- Ensure that you have the container image for the device agent with you, if not you can build it using the following command (assuming that you cloned the entire sandbox at one place). To build, please run the following command:
 ```bash
-cd dev-repo
+cd sandbox
 docker build -f poc/device/agent/Dockerfile . -t margo.org/device-agent:latest
 cd docker-compose
 ```

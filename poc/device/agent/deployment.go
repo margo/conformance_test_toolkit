@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/kr/pretty"
-	"github.com/margo/dev-repo/poc/device/agent/database"
-	"github.com/margo/dev-repo/shared-lib/workloads"
-	"github.com/margo/dev-repo/standard/generatedCode/wfm/sbi"
-	"github.com/margo/dev-repo/standard/pkg"
+	"github.com/margo/sandbox/poc/device/agent/database"
+	"github.com/margo/sandbox/shared-lib/workloads"
+	"github.com/margo/sandbox/standard/generatedCode/wfm/sbi"
+	"github.com/margo/sandbox/standard/pkg"
 	"go.uber.org/zap"
 )
 

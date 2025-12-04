@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/margo/dev-repo/shared-lib/http/auth"
+	"github.com/margo/sandbox/shared-lib/http/auth"
 )
 
 // NewGetRequest creates a new GET HTTP request with authentication and query parameters
