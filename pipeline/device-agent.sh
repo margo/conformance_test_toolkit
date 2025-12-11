@@ -31,6 +31,12 @@ NAMESPACE_OBSERVABILITY="observability"
 PROMTAIL_RELEASE="promtail"
 OTEL_RELEASE="otel-collector"
 
+
+# Pinned software versions (can be overridden via env)
+DOCKER_VERSION="${DOCKER_VERSION:-29.1.2}"
+DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-5.0.0}"
+
+
 validate_pre_required_vars() {
   local required_vars=("GITHUB_USER" "GITHUB_TOKEN" "DEV_REPO_BRANCH" "WFM_IP" "WFM_PORT")
   for var in "${required_vars[@]}"; do
@@ -73,37 +79,81 @@ install_basic_utilities() {
 }
 
 
-install_docker_compose_v2() {
 
+
+install_docker_and_compose() {
+  cd $HOME
+  
+  # Define pinned versions
+  local DOCKER_VERSION="${DOCKER_VERSION:-29.1.2}"
+  local DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-5.0.0}"
+  local UBUNTU_CODENAME=$(lsb_release -cs 2>/dev/null || echo "noble")
+  
+  # Install Docker if not present
   if ! command -v docker >/dev/null 2>&1; then
-    echo 'Docker not found. Installing Docker...'
-    apt-get remove -y docker docker-engine docker.io containerd runc || true
-    curl -fsSL "https://get.docker.com" -o get-docker.sh; sh get-docker.sh
+    echo "Docker not found. Installing Docker ${DOCKER_VERSION}..."
+    
+    # Remove old Docker packages
+    apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+    
+    # Add Docker's official GPG key and repository
+    apt-get update
+    apt-get install -y ca-certificates curl
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      ${UBUNTU_CODENAME} stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    apt-get update
+    
+    # Install specific Docker version
+    apt-get install -y \
+      docker-ce=5:${DOCKER_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME} \
+      docker-ce-cli=5:${DOCKER_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME} \
+      containerd.io=1.7.27-1 \
+      docker-buildx-plugin=0.23.0-1~ubuntu.24.04~${UBUNTU_CODENAME}
+    
     usermod -aG docker $USER
+    echo "✅ Docker ${DOCKER_VERSION} installed successfully"
   else
     echo 'Docker already installed.'
+    CURRENT_DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null)
+    echo "Current Docker version: $CURRENT_DOCKER_VERSION"
   fi
 
-  echo "Installing Docker Compose V2 plugin..."
-
-  # Correct path for get.docker.com installation
-  sudo mkdir -p /usr/libexec/docker/cli-plugins
-
-# Get latest Tag
-COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d'"' -f4)
-echo "Using Docker Compose version: $COMPOSE_VERSION"
-
-sudo curl -L \
-  "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-Linux-x86_64" \
-  -o /usr/libexec/docker/cli-plugins/docker-compose
-
-					  
-sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
-
-					   
+  # Install specific Docker Compose plugin version
+  if ! apt list --installed 2>/dev/null | grep -q docker-compose-plugin; then
+    echo "Installing Docker Compose plugin ${DOCKER_COMPOSE_VERSION}..."
+    apt-get update
+    apt-get install -y docker-compose-plugin=${DOCKER_COMPOSE_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME}
+  else
+    echo 'Docker Compose plugin already installed.'
+    CURRENT_COMPOSE_VERSION=$(docker compose version --short 2>/dev/null | sed 's/v//')
+    echo "Current Docker Compose version: v$CURRENT_COMPOSE_VERSION"
+  fi
+  
+  # Remove old standalone binaries
+  echo 'Cleaning up old docker-compose binaries...'
+  rm -f /usr/local/bin/docker-compose /usr/bin/docker-compose 2>/dev/null || true
+  
+  # Verify versions
+  echo ""
+  echo "Docker version:"
+  docker version | grep -E "Version|API version" | head -4
+  echo ""
+  echo "Docker Compose version:"
   docker compose version
-  echo "✅ Docker Compose V2 installed successfully"
+  
+  # Hold packages at current versions
+  echo "🔒 Holding Docker packages at current versions..."
+  apt-mark hold docker-ce docker-ce-cli docker-compose-plugin containerd.io docker-buildx-plugin
+  
+  echo "✅ Docker ${DOCKER_VERSION} and Docker Compose v${DOCKER_COMPOSE_VERSION} ready"
 }
+
 
 
 
@@ -181,8 +231,17 @@ update_agent_sbi_url() {
 # ----------------------------
 check_k3s_installed() {
   if command -v k3s >/dev/null 2>&1; then
-    echo 'k3s already installed, skipping installation.'
-    k3s --version
+    echo 'k3s already installed.'
+    
+    # Check current version
+    CURRENT_K3S_VERSION=$(k3s --version | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+' | head -1)
+    echo "Current k3s version: $CURRENT_K3S_VERSION"
+    
+    if [ "$CURRENT_K3S_VERSION" != "$K3S_VERSION" ]; then
+      echo "⚠️  Expected k3s version: $K3S_VERSION"
+      echo "ℹ️  To upgrade/downgrade, uninstall current k3s and run installation again"
+    fi
+    
     return 0
   else
     return 1
@@ -197,9 +256,13 @@ install_k3s_dependencies() {
 
 install_k3s() {
   if ! check_k3s_installed; then
-    echo 'Installing k3s...'
+    echo "Installing k3s ${K3S_VERSION}..."
     install_k3s_dependencies
-    curl -sfL https://get.k3s.io | sh -
+    
+    # Install specific k3s version
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${K3S_VERSION}" sh -
+    
+    echo "✅ k3s ${K3S_VERSION} installed successfully"
   fi
 }
 
@@ -207,6 +270,11 @@ verify_k3s_status() {
   echo 'Verifying k3s status...'
   sudo systemctl status k3s --no-pager || true
   sudo k3s kubectl get nodes || true
+  
+  # Show installed version
+  echo ""
+  echo "Installed k3s version:"
+  k3s --version | head -1
 }
 
 setup_kubeconfig() {
@@ -223,6 +291,7 @@ setup_k3s() {
   install_k3s
   verify_k3s_status
   setup_kubeconfig
+  echo "✅ k3s ${K3S_VERSION} setup complete"
 }
 
 install_vim() {
@@ -761,7 +830,7 @@ install_prerequisites() {
   install_vim
   install_and_enable_ssh
   install_basic_utilities
-  install_docker_compose_v2 
+  install_docker_and_compose
   clone_dev_repo
   # Only install k3s for k3s device type
   if [ "$DEVICE_TYPE" = "k3s" ]; then
@@ -1090,6 +1159,7 @@ receivers:
     endpoint: unix:///var/run/docker.sock
     collection_interval: 10s
     timeout: 5s
+    api_version: "1.44"
 
 exporters:
   # Send traces to Jaeger on WFM server

@@ -108,92 +108,411 @@ list_all() {
 }
 
 # ----------------------------
-# Package Management Functions
+# Dynamic Instance File Generation
 # ----------------------------
-get_package_upload_request_file_path() {
-  local choice="$1"
+
+generate_instance_yaml_from_oci() {
+  local package_name="$1"
+  local package_id="$2"
+  local device_id="$3"
+  local output_file="$4"
   
-  # Use host:port only (strip http://)
-  REGISTRY_HOST="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
+  local harbor_url="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
   
-  case $choice in
-    1) 
-      original_pkg_file="$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml"
-      pkg_file="$HOME/symphony/cli/templates/margo/custom-otel-helm/package.yaml.copy"
-      cp -f ${original_pkg_file} ${pkg_file} 
-      sed -i "s|{{REGISTRY_URL}}|${REGISTRY_HOST}|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REPOSITORY}}|${OCI_ORGANIZATION}/custom-otel-helm-app-package|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{TAG}}|latest|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REGISTRY_USER}}|${REGISTRY_USER}|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REGISTRY_PASS}}|${REGISTRY_PASS}|g" "$pkg_file" 2>/dev/null || true
-      echo $pkg_file ;;
+  # Pull margo.yaml from OCI to extract metadata
+  local temp_dir=$(mktemp -d)
+  cd "$temp_dir"
+  
+  # echo "📥 Pulling package metadata from OCI..."  
+  # echo "🔍 Package: ${harbor_url}/${OCI_ORGANIZATION}/${package_name}:latest"  
+  
+  # Pull entire package (suppress output)
+  if ! oras pull "${harbor_url}/${OCI_ORGANIZATION}/${package_name}:latest" \
+      --plain-http \
+      -u "${REGISTRY_USER}:${REGISTRY_PASS}" >/dev/null 2>&1; then
+    echo "❌ Failed to pull package from OCI" >&2
+    cd - >/dev/null
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  
+  if [ ! -f "margo.yaml" ]; then
+    echo "❌ margo.yaml not found in package" >&2
+    cd - >/dev/null
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  
+  # echo "✅ Successfully pulled margo.yaml"  
+  
+  # Extract metadata from margo.yaml
+  local app_name=$(grep -E "^\s*name:" margo.yaml | head -1 | sed 's/.*name:\s*//' | tr -d '"' | tr -d "'" | xargs)
+  
+  # Try multiple patterns to find deployment type in nested structure
+  local deployment_type=""
+  
+  # Pattern 1: Look for "type:" under deploymentProfile section
+  deployment_type=$(awk '/deploymentProfile:/,/^[^ ]/ {if (/^\s+type:/) print}' margo.yaml | sed 's/.*type:\s*//' | tr -d '"' | tr -d "'" | xargs | head -1)
+  
+  # Pattern 2: If not found, try looking for spec.type
+  if [ -z "$deployment_type" ]; then
+    deployment_type=$(awk '/^spec:/,/^[^ ]/ {if (/^\s+type:/) print}' margo.yaml | sed 's/.*type:\s*//' | tr -d '"' | tr -d "'" | xargs | head -1)
+  fi
+  
+  # Pattern 3: Check if package name contains hints
+  if [ -z "$deployment_type" ]; then
+    if [[ "$package_name" =~ compose ]]; then
+      deployment_type="compose"
+    elif [[ "$package_name" =~ helm ]]; then
+      deployment_type="helm.v3"
+    fi
+  fi
+  
+  # echo "🔍 Extracted deployment type: '$deployment_type'"  
+  
+  # Determine deployment profile type
+  local profile_type=""
+  case "$deployment_type" in
+    helm|helm.v3)
+      profile_type="helm.v3"
+      ;;
+    compose|docker-compose)
+      profile_type="compose"
+      ;;
+    *)
+      # echo "⚠️  Could not determine deployment type from margo.yaml" >&2  
+      # echo "ℹ️  Inferring from package name..." >&2  
       
-    2)
-      original_pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml"
-      pkg_file="$HOME/symphony/cli/templates/margo/nextcloud-compose/package.yaml.copy"
-      cp -f ${original_pkg_file} ${pkg_file}
-      sed -i "s|{{REGISTRY_URL}}|${REGISTRY_HOST}|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REPOSITORY}}|${OCI_ORGANIZATION}/nextcloud-compose-app-package|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{TAG}}|latest|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REGISTRY_USER}}|${REGISTRY_USER}|g" "$pkg_file" 2>/dev/null || true
-      sed -i "s|{{REGISTRY_PASS}}|${REGISTRY_PASS}|g" "$pkg_file" 2>/dev/null || true
-      echo $pkg_file ;;
-      
-    *) 
-      echo "" ;;
+      # Infer from package name as last resort
+      if [[ "$package_name" =~ compose ]]; then
+        profile_type="compose"
+        # echo "📋 Inferred type: compose (from package name)" >&2  
+      else
+        profile_type="helm.v3"
+        # echo "📋 Defaulting to: helm.v3" >&2  
+      fi
+      ;;
   esac
+  
+  # echo "📋 Final deployment type: $profile_type"  
+  
+  # Get repository path
+  local repository=$(get_oci_repository_path "$package_name" "$temp_dir/margo.yaml")
+
+  
+  # Generate instance.yaml based on deployment type
+  if [ "$profile_type" = "helm.v3" ]; then
+    generate_helm_instance "$app_name" "$package_id" "$device_id" "$repository" "$output_file" "$temp_dir/margo.yaml"
+  elif [ "$profile_type" = "compose" ]; then
+    generate_compose_instance "$app_name" "$package_id" "$device_id" "$repository" "$output_file" "$temp_dir/margo.yaml"
+  else
+    echo "❌ Unsupported deployment type: $profile_type" >&2
+    cd - >/dev/null
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  
+  cd - >/dev/null
+  rm -rf "$temp_dir"
+  
+  # echo "✅ Generated instance file: $output_file"  
+  return 0
 }
 
-get_package_name() {
-  local choice="$1"
-  case $choice in
-    1) echo "Custom OTEL Helm App" ;;
-    2) echo "Nextcloud Compose App" ;;
-    *) echo "Unknown Package" ;;
-  esac
+
+
+
+# Generate Helm-based instance.yaml
+generate_helm_instance() {
+  local app_name="$1"
+  local package_id="$2"
+  local device_id="$3"
+  local repository="$4"
+  local output_file="$5"
+  local margo_file="$6"
+  
+  # Extract Helm-specific metadata
+  local chart_version=$(grep -E "^\s*version:" "$margo_file" | head -1 | sed 's/.*version:\s*//' | tr -d '"' | tr -d "'" | xargs)
+  chart_version="${chart_version:-0.1.0}"
+  
+  # Sanitize instance name (lowercase, no spaces)
+  local instance_name=$(echo "${app_name}-instance" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+  
+  cat > "$output_file" <<EOF
+# This is an input template allowing the WFM user to modify deployment instance specific parameters(currently read-only).
+# This file is not MARGO specified, however these parameters will be used to create the MARGO ApplicationDeployment
+
+apiVersion: non-margo.org
+kind: ApplicationDeployment
+metadata:
+  name: ${instance_name}
+spec:
+  appPackageRef:
+    id: ${package_id}
+  deviceRef:
+    id: ${device_id}
+  deploymentProfile:
+    type: helm.v3
+    components:
+      - name: ${app_name}
+        properties:  
+          repository: ${repository}
+          revision: ${chart_version}
+          wait: true
+          timeout: 5m
+EOF
+
+  # Add parameters if they exist in margo.yaml
+  if grep -q "parameters:" "$margo_file"; then
+    echo "  parameters:" >> "$output_file"
+    
+    # Extract OTEL endpoint if present (common pattern)
+    if grep -qi "otel\|otlp" "$margo_file"; then
+      cat >> "$output_file" <<EOF
+    otlpEndpoint:
+      value: "http://otel-collector-opentelemetry-collector.observability:4318"
+      targets:
+      - pointer: env.OTEL_EXPORTER_OTLP_ENDPOINT
+        components: ["${app_name}"]
+EOF
+    fi
+  fi
 }
+
+# Generate Compose-based instance.yaml
+generate_compose_instance() {
+  local app_name="$1"
+  local package_id="$2"
+  local device_id="$3"
+  local repository="$4"
+  local output_file="$5"
+  local margo_file="$6"
+  
+  # Sanitize instance name
+  local instance_name=$(echo "${app_name}-instance" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+  local stack_name=$(echo "${app_name}-stack" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+  
+  cat > "$output_file" <<EOF
+# This is an input template allowing the WFM user to modify deployment instance specific parameters(currently read-only).
+# This file is not MARGO specified, however these parameters will be used to create the MARGO ApplicationDeployment
+apiVersion: non-margo.org
+kind: ApplicationDeployment
+metadata:
+  name: ${instance_name}
+spec:
+  appPackageRef:
+    id: ${package_id}
+  deviceRef:
+    id: ${device_id}
+  deploymentProfile:
+    type: compose
+    components:
+      - name: ${stack_name}
+        properties:  
+          packageLocation: ${repository}
+EOF
+
+  # Add common Compose parameters
+  if grep -q "parameters:" "$margo_file"; then
+    echo "  parameters:" >> "$output_file"
+    
+    # Add port mapping if specified
+    local default_port=$(grep -E "^\s*port:" "$margo_file" | head -1 | sed 's/.*port:\s*//' | tr -d '"' | tr -d "'" | xargs)
+    if [ -n "$default_port" ]; then
+      cat >> "$output_file" <<EOF
+    servicePort:
+      value: ${default_port}
+      targets:
+        - pointer: PORTS.80
+          components: ["${stack_name}"]
+EOF
+    fi
+  fi
+}
+
+
+# ----------------------------
+# Harbor OCI Discovery Functions
+# ----------------------------
+discover_app_packages_from_harbor() {
+  # Send discovery message to stderr so it doesn't get captured
+  echo "🔍 Discovering app packages from Harbor OCI Registry..." >&2
+  
+  local harbor_url="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
+  local org="${OCI_ORGANIZATION}"
+  
+  # Get list of repositories from Harbor API
+  local repos=$(curl -s -u "${REGISTRY_USER}:${REGISTRY_PASS}" \
+    "http://${harbor_url}/api/v2.0/projects/${org}/repositories" | \
+    jq -r '.[].name' 2>/dev/null)
+  
+  if [ -z "$repos" ]; then
+    echo "❌ No repositories found in Harbor" >&2
+    return 1
+  fi
+  
+  # Filter for app-package repositories (must end with -app-package)
+  local app_packages=$(echo "$repos" | grep -E "app-package$" | sed "s|${org}/||")
+  
+  if [ -z "$app_packages" ]; then
+    echo "❌ No app packages found" >&2
+    echo "ℹ️  App packages must end with '-app-package' suffix" >&2
+    echo "ℹ️  Example: nginx-helm-app-package, wordpress-compose-app-package" >&2
+    return 1
+  fi
+  
+  # Output package names to stdout
+  echo "$app_packages"
+}
+
+
+
+
+get_package_metadata_from_oci() {
+  local package_repo="$1"
+  local harbor_url="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
+  local full_repo="${OCI_ORGANIZATION}/${package_repo}"
+  
+  # Pull margo.yaml from OCI to get metadata
+  local temp_dir=$(mktemp -d)
+  cd "$temp_dir"
+  
+  oras pull "${harbor_url}/${full_repo}:latest" \
+    --plain-http \
+    -u "${REGISTRY_USER}:${REGISTRY_PASS}" \
+    margo.yaml 2>/dev/null
+  
+  if [ -f "margo.yaml" ]; then
+    # Extract display name from margo.yaml
+    local display_name=$(grep -E "^\s*name:" margo.yaml | head -1 | sed 's/.*name:\s*//' | tr -d '"')
+    echo "${display_name:-${package_repo}}"
+  else
+    echo "${package_repo}"
+  fi
+  
+  cd - >/dev/null
+  rm -rf "$temp_dir"
+}
+
 
 upload_app_package() {
   echo "📦 Upload App Package"
   echo "===================="
+  
+  # Discover packages from Harbor
+  local packages=$(discover_app_packages_from_harbor)
+  
+  if [ -z "$packages" ]; then
+    echo "❌ No app packages available"
+    read -p "Press Enter to continue..."
+    return 1
+  fi
+  
+  # Build menu dynamically
   echo "Select one of the packages:"
-  echo "1) Custom OTEL Helm App"
-  echo "2) Nextcloud Compose App"
-  echo "3) Exit"
+  local -a package_array
+  local index=1
+  
+  while IFS= read -r pkg; do
+    package_array+=("$pkg")
+    local display_name=$(get_package_metadata_from_oci "$pkg")
+    echo "$index) $display_name"
+    ((index++))
+  done <<< "$packages"
+  
+  echo "$index) Exit"
   echo ""
   
-  read -p "Enter choice [1-3]: " app_package_choice
+  read -p "Enter choice [1-$index]: " app_package_choice
   
-  if [ "$app_package_choice" = "3" ]; then
+  if [ "$app_package_choice" = "$index" ]; then
     echo "Returning to main menu..."
     return 0
   fi
   
-  if ! validate_choice "$app_package_choice" 2; then
+  local max_choice=$((index - 1))
+  if ! validate_choice "$app_package_choice" "$max_choice"; then
     return 1
   fi
   
-  local package_file=$(get_package_upload_request_file_path "$app_package_choice")
-  local package_name=$(get_package_name "$app_package_choice")
+  # Get selected package
+  local selected_pkg="${package_array[$((app_package_choice - 1))]}"
+  local package_name=$(get_package_metadata_from_oci "$selected_pkg")
   
-  if [ ! -f "$package_file" ]; then
-    echo "❌ Package file not found: $package_file"
+  # Generate package.yaml for WFM
+  local temp_pkg_file=$(mktemp)
+  generate_wfm_package_yaml "$selected_pkg" "$temp_pkg_file"
+  
+  if [ ! -f "$temp_pkg_file" ]; then
+    echo "❌ Failed to generate package file"
     return 1
   fi
   
   echo "📤 Uploading $package_name to WFM..."
   if check_maestro_cli; then
-    if ${MAESTRO_CLI_PATH}/maestro wfm apply -f "$package_file"; then
+    if ${MAESTRO_CLI_PATH}/maestro wfm apply -f "$temp_pkg_file"; then
       echo "✅ $package_name uploaded successfully!"
-      echo ""
     else
       echo "❌ Failed to upload $package_name"
     fi
   fi
   
+  rm -f "$temp_pkg_file"
   echo ""
   read -p "Press Enter to continue..."
 }
+
+generate_wfm_package_yaml() {
+  local package_repo="$1"
+  local output_file="$2"
+  local harbor_url="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
+  
+  cat > "$output_file" <<EOF
+# This is an input template allowing the WFM user to modify deployment instance specific parameters.
+# This file is not MARGO specified, however these parameters will be used to create the MARGO ApplicationDeployment  
+apiVersion: non-margo.org
+kind: ApplicationPackage
+metadata:
+  name: ${package_repo}
+  labels:
+    env: dev
+  annotations:
+    description: "Application package from Harbor OCI Registry"
+spec:
+  sourceType: OCI_REPO
+  source:
+    registryUrl: "http://${harbor_url}"
+    repository: "${OCI_ORGANIZATION}/${package_repo}"
+    tag: "latest"
+    authentication:
+      type: "basic"
+      username: "${REGISTRY_USER}"
+      password: "${REGISTRY_PASS}"
+EOF
+}
+
+# Keep these for backward compatibility with existing deployments
+get_package_name() {
+  local choice="$1"
+  case $choice in
+    1) echo "Custom OTEL Helm App" ;;
+    2) echo "Nextcloud Compose App" ;;
+    *) 
+      # Fallback to dynamic discovery
+      local packages=$(discover_app_packages_from_harbor)
+      local package_array=($packages)
+      local idx=$((choice - 1))
+      if [ $idx -lt ${#package_array[@]} ]; then
+        get_package_metadata_from_oci "${package_array[$idx]}"
+      else
+        echo "Unknown Package"
+      fi
+      ;;
+  esac
+}
+
+
+
 
 delete_app_package() {
   echo "🗑️  Delete App Package"
@@ -231,8 +550,10 @@ delete_app_package() {
 }
 
 # ----------------------------
-# Instance Management Functions
+# Instance Management Functions (ENHANCED)
 # ----------------------------
+
+# Dynamic instance file path discovery
 get_instance_file_path() {
   local package_name="$1"
   local file_path=""
@@ -243,44 +564,106 @@ get_instance_file_path() {
     return 1
   fi
   
+  # Try to find matching template directory dynamically
+  local template_base="$HOME/symphony/cli/templates/margo"
+  
+  # First try exact match (backward compatibility)
   case $package_name in
-    "custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
-      original_file_path="$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml"
-      file_path="$HOME/symphony/cli/templates/margo/custom-otel-helm/instance.yaml.copy"
-      cp -f ${original_file_path} ${file_path} ;;
-    "nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
-      original_file_path="$HOME/symphony/cli/templates/margo/nextcloud-compose/instance.yaml"
-      file_path="$HOME/symphony/cli/templates/margo/nextcloud-compose/instance.yaml.copy"
-      cp -f ${original_file_path} ${file_path} ;;
+    "custom-otel-helm-app-package"|"custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
+      original_file_path="$template_base/custom-otel-helm/instance.yaml"
+      file_path="$template_base/custom-otel-helm/instance.yaml.copy"
+      ;;
+    "nextcloud-compose-app-package"|"nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
+      original_file_path="$template_base/nextcloud-compose/instance.yaml"
+      file_path="$template_base/nextcloud-compose/instance.yaml.copy"
+      ;;
     *)
-      return 1 ;;
+      # Dynamic discovery: search for matching directory
+      # Remove "-app-package" suffix if present for matching
+      local search_name="${package_name%-app-package}"
+      
+      # Search for directory containing the package name (case-insensitive)
+      local template_dir=$(find "$template_base" -maxdepth 1 -type d -iname "*${search_name}*" 2>/dev/null | head -1)
+      
+      if [ -n "$template_dir" ] && [ -f "$template_dir/instance.yaml" ]; then
+        original_file_path="$template_dir/instance.yaml"
+        file_path="$template_dir/instance.yaml.copy"
+      else
+        echo "❌ No instance template found for package '$package_name'" >&2
+        echo "ℹ️  Searched in: $template_base" >&2
+        return 1
+      fi
+      ;;
   esac
   
-  # Verify file exists before returning
-  if [ -f "$file_path" ]; then
+  # Copy and verify file exists
+  if [ -f "$original_file_path" ]; then
+    cp -f "$original_file_path" "$file_path"
     echo "$file_path"
   else
-    echo "❌ Deployment file not found: $file_path" >&2
+    echo "❌ Deployment file not found: $original_file_path" >&2
     return 1
   fi
 }
 
+
+# Dynamic OCI repository path discovery
 get_oci_repository_path() {
   local package_name="$1"
+  local margo_file="$2"  # Accept margo.yaml file path
+  local harbor_url="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
   local container_url=""
   
+  # First try hardcoded mappings (backward compatibility)
   case $package_name in
-    "custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
-      container_url="oci://${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/library/custom-otel-helm" ;;
-    "nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
-      container_url="https://raw.githubusercontent.com/docker/awesome-compose/refs/heads/master/nextcloud-redis-mariadb/compose.yaml" ;;
+    "custom-otel-helm-app-package"|"custom-otel-helm-app"|"custom-otel"|"otel-demo-pkg")
+      container_url="oci://${harbor_url}/library/custom-otel-helm"
+      ;;
+    "nextcloud-compose-app-package"|"nextcloud-compose-app"|"nextcloud"|"nextcloud-pkg")
+      container_url="https://raw.githubusercontent.com/docker/awesome-compose/refs/heads/master/nextcloud-redis-mariadb/compose.yaml"
+      ;;
     *)
-      container_url="" ;;
+      # Use the already-pulled margo.yaml file
+      if [ -f "$margo_file" ]; then
+        # Simple grep-based extraction for packageLocation (Compose)
+        local compose_location=$(grep "packageLocation:" "$margo_file" | \
+                                head -1 | \
+                                sed 's/.*packageLocation:\s*//' | \
+                                tr -d '"' | tr -d "'" | xargs)
+        
+        # Simple grep-based extraction for repository (Helm)
+        local helm_repo=$(grep "repository:" "$margo_file" | \
+                         grep -v "registryUrl" | \
+                         head -1 | \
+                         sed 's/.*repository:\s*//' | \
+                         tr -d '"' | tr -d "'" | xargs)
+        
+        # Use whichever is found
+        if [ -n "$compose_location" ]; then
+          container_url="$compose_location"
+        elif [ -n "$helm_repo" ]; then
+          container_url="$helm_repo"
+        else
+          # Fallback: construct OCI path from package name
+          local chart_name="${package_name%-app-package}"
+          container_url="oci://${harbor_url}/library/${chart_name}"
+        fi
+      else
+        # If file doesn't exist, construct default OCI path
+        local chart_name="${package_name%-app-package}"
+        container_url="oci://${harbor_url}/library/${chart_name}"
+      fi
+      ;;
   esac
   
   echo "$container_url"
 }
 
+
+
+
+
+																		
 deploy_instance() {
   echo "🚀 Deploy Instance"
   echo "=================="
@@ -311,7 +694,7 @@ deploy_instance() {
   fi
 
   # Get app package details and extract metadata.name
-  echo "📋 Getting package details..."
+  # echo "📋 Getting package details..."  
   app_packages=$(${MAESTRO_CLI_PATH}/maestro wfm list app-pkg -o json 2>/dev/null)
   
   if [ $? -ne 0 ] || [ -z "$app_packages" ]; then
@@ -321,9 +704,8 @@ deploy_instance() {
   
   # Parse JSON to find the package and extract metadata.name
   if command -v jq >/dev/null 2>&1; then
-    echo "🔍 Searching for package: $package_id"
+    # echo "🔍 Searching for package: $package_id"  
     
-    # Search by both ID and name in the nested structure
     package_name=$(echo "$app_packages" | jq -r --arg pkg_id "$package_id" '
       .Data[0].items[] | 
       select(.metadata.id == $pkg_id or .metadata.name == $pkg_id) | 
@@ -341,25 +723,84 @@ deploy_instance() {
     return 1
   fi
   
-  echo "📦 Package name: $package_name"
+  # echo "📦 Package name: $package_name"  
   
-  # Get deployment file path based on package name
-  deploy_file=$(get_instance_file_path "$package_name")
-  repository=$(get_oci_repository_path "$package_name")
+  # Generate instance.yaml dynamically from OCI metadata
+  # echo "🔧 Generating instance deployment configuration..."  
+  local temp_instance_file=$(mktemp --suffix=.yaml)
   
-  if [ -z "$deploy_file" ] || [ ! -f "$deploy_file" ]; then
-    echo "❌ Deployment file not found for package '$package_name'"
-    echo "Expected file: $deploy_file"
+  if ! generate_instance_yaml_from_oci "$package_name" "$package_id" "$device_id" "$temp_instance_file" 2>/dev/null; then
+    # echo "❌ Failed to generate instance configuration"  
+    # echo "ℹ️  Falling back to template-based approach..."  
+    
+    # Fallback to template discovery
+    deploy_file=$(get_instance_file_path "$package_name")
+    
+    if [ $? -ne 0 ] || [ -z "$deploy_file" ] || [ ! -f "$deploy_file" ]; then
+      echo "❌ No template found and dynamic generation failed"
+      return 1
+    fi
+    
+    # Update template with values
+    repository=$(get_oci_repository_path "$package_name")
+    sed -i "s|{{DEVICE_ID}}|$device_id|g" "$deploy_file" 2>/dev/null || true
+    sed -i "s|{{PACKAGE_ID}}|$package_id|g" "$deploy_file" 2>/dev/null || true
+    sed -i "s|{{REPOSITORY}}|$repository|g" "$deploy_file" 2>/dev/null || true
+  else
+    deploy_file="$temp_instance_file"
+    # echo "✅ Instance configuration generated successfully"  
+  fi
+  
+  # ============================================
+  # SECURITY: Make file read-only and calculate checksum
+  # ============================================
+  chmod 444 "$deploy_file"  # Read-only for everyone
+  local file_checksum=$(sha256sum "$deploy_file" | awk '{print $1}')
+  
+  # echo "📄 Using deployment file: $deploy_file"  
+  # echo "🔒 File protection: Read-only mode enabled"  
+  # echo "🔐 Integrity hash: ${file_checksum:0:16}..."  
+  
+  # Show generated configuration for review
+  #echo ""
+  #echo "📋 Generated Instance Configuration:"
+  #echo "===================================="
+  #cat "$deploy_file"
+  #echo "===================================="
+  #echo ""
+  
+  # ============================================
+  # SECURITY: Verify file integrity before deployment
+  # ============================================
+  local current_checksum=$(sha256sum "$deploy_file" | awk '{print $1}')
+  if [ "$file_checksum" != "$current_checksum" ]; then
+    echo "❌ SECURITY ALERT: Configuration file was modified!"
+    echo "   Expected: ${file_checksum:0:16}..."
+    echo "   Current:  ${current_checksum:0:16}..."
+    rm -f "$temp_instance_file"
     return 1
   fi
   
-  echo "📄 Using deployment file: $deploy_file"
+										   
+  #read -p "Proceed with deployment? (y/N): " confirm
+  #if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+  #  echo "Deployment cancelled"
+  #  rm -f "$temp_instance_file"
+  #  return 0
+  #fi
 
-  # Update deployment file with device and package info if needed
-  sed -i "s|{{DEVICE_ID}}|$device_id|g" "$deploy_file" 2>/dev/null || true
-  sed -i "s|{{PACKAGE_ID}}|$package_id|g" "$deploy_file" 2>/dev/null || true
-  sed -i "s|{{REPOSITORY}}|$repository|g" "$deploy_file" 2>/dev/null || true
+  # ============================================
+  # SECURITY: Final integrity check before deployment
+  # ============================================
+  current_checksum=$(sha256sum "$deploy_file" | awk '{print $1}')
+  if [ "$file_checksum" != "$current_checksum" ]; then
+    echo "❌ SECURITY ALERT: Configuration file was modified after confirmation!"
+    echo "   Deployment aborted for security reasons."
+    rm -f "$temp_instance_file"
+    return 1
+  fi
 
+  echo "" 		 
   echo "🚀 Deploying '$package_id' to device '$device_id'..."
   if check_maestro_cli; then
     if ${MAESTRO_CLI_PATH}/maestro wfm apply -f "$deploy_file"; then
@@ -373,9 +814,14 @@ deploy_instance() {
     fi
   fi
   
+  # Cleanup temporary file
+  rm -f "$temp_instance_file"
+  
   echo ""
   read -p "Press Enter to continue..."
 }
+
+
 
 delete_instance() {
   echo "🗑️  Delete Instance"

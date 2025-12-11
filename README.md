@@ -69,7 +69,13 @@ The repository is divided into three main parts. You can find more details here 
 | Component Type | Component Name | Version |
 |---|---|---|
 | Container Registry | Harbor | v2.13.2 |
-| OCI Client | ORAS | 1.1.0
+| Container Runtime | containerd | v1.7.27-1 |
+| OCI Client | ORAS | 1.1.0 |
+| Database | Redis | 7.0.15 |
+| Plugin | docker-compose | v5.0.0 |
+| Plugin | docker-buildx | v0.23.0-1 |
+| Observability Stack | Prometheus | prometheus-27.49.0 |
+| Observability Stack | Grafana | grafana-10.3.0
 | Observability Stack | Prometheus | prometheus-27.49.0 |
 | Observability Stack | Grafana | grafana-10.3.0 |
 | Observability Stack | Jaeger | jaeger-3.4.1 |
@@ -78,10 +84,10 @@ The repository is divided into three main parts. You can find more details here 
 | Observability Stack | Promtail | 6.17.1 (helm chart for k3s device), grafana/promtail:2.9.10 (docker-image for docker device)  |
 | Security & Authentication | OpenSSL | System default |
 | Supporting Infrastructure | Helm | 3.15.1 |
-| Supporting Infrastructure | Go | 1.23.2 / 1.24.4 |
-| Supporting Infrastructure | Docker | Latest (from get.docker.com) |
-| Supporting Infrastructure | Docker Compose | V2 (latest) |
-| Supporting Infrastructure | K3s | Latest (from get.k3s.io) |
+| Supporting Infrastructure | Go | 1.24.4 |
+| Supporting Infrastructure | Docker | 29.1.2 |
+| Supporting Infrastructure | Docker Compose | v5.0.0 |
+| Supporting Infrastructure | K3s | v1.31.4+k3s1 |
 | Supporting Infrastructure | Rust | Latest (from rustup) |
 | Supporting Infrastructure | Node.js/NPM | System default |
 | System Utilities | curl | System default |

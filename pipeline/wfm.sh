@@ -46,6 +46,8 @@ LOKI_RELEASE="loki"
 CERT_DIR="$HOME/symphony/api/certificates"
 
 
+# Stable version as of December 2024
+K3S_VERSION="${K3S_VERSION:-v1.31.4+k3s1}"  
 # ----------------------------
 # Utility Functions
 # ----------------------------
@@ -75,24 +77,25 @@ install_basic_utilities() {
 install_redis() {
   echo "Installing Redis..."
   
+  local REDIS_VERSION="7.0.15"  # Stable version
+  
   if command -v redis-server >/dev/null 2>&1; then
     echo "✅ Redis is already installed."
     redis-server --version
   else
-    echo "🔄 Updating package list and installing Redis..."
+    echo "🔄 Installing Redis ${REDIS_VERSION}..."
     sudo apt update
-    sudo apt install -y redis-server
+    sudo apt install -y redis-server=${REDIS_VERSION}-* || \
+    sudo apt install -y redis-server  # Fallback to latest if specific version unavailable
 
-    echo "🔧 Configuring Redis to start on boot..."
     sudo systemctl enable redis-server
-
-    echo "🚀 Starting Redis service..."
     sudo systemctl start redis-server
 
     echo "✅ Redis installation completed."
     redis-server --version
   fi
 }
+
 
 # Helm install/uninstall
 install_helm() {
@@ -143,42 +146,112 @@ install_go() {
   fi
 }
 
-install_docker_compose() {
+install_docker_and_compose() {
   cd $HOME
+  
+  # Define pinned versions
+  local DOCKER_VERSION="29.1.2"
+  local DOCKER_COMPOSE_VERSION="5.0.0"
+  local UBUNTU_CODENAME=$(lsb_release -cs)  # Gets 'noble' for Ubuntu 24.04
+  
+  # Install Docker if not present or wrong version
   if ! command -v docker >/dev/null 2>&1; then
-    echo 'Docker not found. Installing Docker...';
-    apt-get remove -y docker docker-engine docker.io containerd runc || true;
-    curl -fsSL "https://get.docker.com" -o get-docker.sh; sh get-docker.sh;
-    usermod -aG docker $USER;
+    echo "Docker not found. Installing Docker ${DOCKER_VERSION}..."
+    
+    # Remove old Docker packages
+    apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+    
+    # Add Docker's official GPG key and repository
+    apt-get update
+    apt-get install -y ca-certificates curl
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      ${UBUNTU_CODENAME} stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    apt-get update
+    
+    # Install specific Docker version
+    apt-get install -y \
+      docker-ce=5:${DOCKER_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME} \
+      docker-ce-cli=5:${DOCKER_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME} \
+      containerd.io=1.7.27-1 \
+      docker-buildx-plugin=0.23.0-1~ubuntu.24.04~${UBUNTU_CODENAME}
+    
+    # Add user to docker group
+    usermod -aG docker $USER
+    
+    echo "✅ Docker ${DOCKER_VERSION} installed successfully"
   else
-    echo 'Docker already installed.';
-  fi;
+    echo 'Docker already installed.'
+    
+    # Check if correct version is installed
+    CURRENT_DOCKER_VERSION=$(docker version --format '{{.Server.Version}}')
+    if [ "$CURRENT_DOCKER_VERSION" != "$DOCKER_VERSION" ]; then
+      echo "⚠️  Current Docker version: $CURRENT_DOCKER_VERSION (expected: $DOCKER_VERSION)"
+      echo "ℹ️  To upgrade/downgrade, run: apt-get install docker-ce=5:${DOCKER_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME}"
+    fi
+  fi
 
-  # Docker Compose V2 is included with Docker by default now
-  if ! docker compose version >/dev/null 2>&1; then
-    echo 'Docker Compose plugin not available. Installing...';
-    # This should rarely be needed with modern Docker installations
-    curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose;
-    chmod +x /usr/local/bin/docker-compose;
+  # Install specific Docker Compose plugin version
+  if ! apt list --installed 2>/dev/null | grep -q docker-compose-plugin; then
+    echo "Installing Docker Compose plugin ${DOCKER_COMPOSE_VERSION}..."
+    apt-get update
+    apt-get install -y docker-compose-plugin=${DOCKER_COMPOSE_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME}
   else
-    echo 'Docker Compose plugin already available.';
+    echo 'Docker Compose plugin already installed.'
+    
+    # Check if correct version is installed
+    CURRENT_COMPOSE_VERSION=$(docker compose version --short 2>/dev/null | sed 's/v//')
+    if [ "$CURRENT_COMPOSE_VERSION" != "$DOCKER_COMPOSE_VERSION" ]; then
+      echo "⚠️  Current Docker Compose version: v$CURRENT_COMPOSE_VERSION (expected: v$DOCKER_COMPOSE_VERSION)"
+      echo "ℹ️  To upgrade/downgrade, run: apt-get install docker-compose-plugin=${DOCKER_COMPOSE_VERSION}-1~ubuntu.24.04~${UBUNTU_CODENAME}"
+    fi
   fi
   
-  # Start and enable Docker daemon
-  systemctl start docker
-  systemctl enable docker
+  # CRITICAL: Remove old standalone docker-compose binaries to avoid conflicts
+  echo 'Cleaning up old docker-compose binaries...'
+  rm -f /usr/local/bin/docker-compose /usr/bin/docker-compose 2>/dev/null || true
+  
+  # Verify Docker version
+  echo ""
+  echo "Docker version:"
+  docker version | grep -E "Version|API version" | head -4
+  
+  # Verify Docker Compose version
+  echo ""
+  echo "Docker Compose version:"
+  docker compose version
   
   # Wait for Docker daemon to be active (max 30s)
   for i in $(seq 1 30); do
     if systemctl is-active --quiet docker; then
-      echo 'Docker daemon is running.'
+      echo '✅ Docker daemon is running.'
       break
     else
-      echo 'Waiting for Docker daemon to start... ($i/30)'
+      echo "Waiting for Docker daemon to start... ($i/30)"
       sleep 1
     fi
   done 
+  
+  # Final verification
+  if docker compose version >/dev/null 2>&1; then
+    echo "✅ Docker ${DOCKER_VERSION} and Docker Compose v${DOCKER_COMPOSE_VERSION} ready"
+  else
+    echo "❌ Docker Compose plugin not working properly"
+    return 1
+  fi
+  
+  # Prevent automatic updates (optional)
+  echo "🔒 Holding Docker packages at current versions..."
+  apt-mark hold docker-ce docker-ce-cli docker-compose-plugin
+  echo "ℹ️  To allow updates later, run: apt-mark unhold docker-ce docker-ce-cli docker-compose-plugin"
 }
+
+
 
 
 install_oras() {
@@ -289,94 +362,6 @@ push_nextcloud_to_oci() {
     echo "📍 Location: ${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/${repository}:${tag}"
   else
     echo "❌ Failed to push Nextcloud package"
-    return 1
-  fi
-}
-
-
-
-push_nginx_to_oci() {
-  echo "📦 Pushing Nginx application package to OCI Registry..."
-  
-  local app_dir="$HOME/sandbox/poc/tests/artefacts/nginx-helm/margo-package"
-  local repository="${OCI_ORGANIZATION}/nginx-helm-app-package"
-  local tag="latest"
-  
-  cd "$app_dir" || { echo "❌ Nginx package dir missing"; return 1; }
-  
-  echo "$REGISTRY_PASS" | oras login "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}" \
-    -u "$REGISTRY_USER" --password-stdin --plain-http
-  
-  if [ ! -f "margo.yaml" ]; then
-    echo "❌ margo.yaml not found in $app_dir"
-    return 1
-  fi
-  
-  local files=("margo.yaml:application/vnd.margo.app.description.v1+yaml")
-  
-  if [ -d "resources" ] && [ "$(ls -A resources 2>/dev/null)" ]; then
-    while IFS= read -r file; do
-      if [ -f "$file" ]; then
-        files+=("$file:application/octet-stream")
-      fi
-    done < <(find resources -type f 2>/dev/null)
-  fi
-  
-  echo "Pushing files: ${files[@]}"
-  oras push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/${repository}:${tag}" \
-    --artifact-type "application/vnd.margo.app.v1+json" \
-    --plain-http \
-    "${files[@]}"
-  
-  if [ $? -eq 0 ]; then
-    echo "✅ Nginx package pushed to OCI Registry"
-    echo "📍 Location: ${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/${repository}:${tag}"
-  else
-    echo "❌ Failed to push Nginx package"
-    return 1
-  fi
-}
-
-
-
-push_otel_to_oci() {
-  echo "📦 Pushing OTEL application package to OCI Registry..."
-  
-  local app_dir="$HOME/sandbox/poc/tests/artefacts/open-telemetry-demo-helm/margo-package"
-  local repository="${OCI_ORGANIZATION}/otel-demo-app-package"
-  local tag="latest"
-  
-  cd "$app_dir" || { echo "❌ OTEL package dir missing"; return 1; }
-  
-  echo "$REGISTRY_PASS" | oras login "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}" \
-    -u "$REGISTRY_USER" --password-stdin --plain-http
-  
-  if [ ! -f "margo.yaml" ]; then
-    echo "❌ margo.yaml not found in $app_dir"
-    return 1
-  fi
-  
-  local files=("margo.yaml:application/vnd.margo.app.description.v1+yaml")
-  
-  if [ -d "resources" ] && [ "$(ls -A resources 2>/dev/null)" ]; then
-    while IFS= read -r file; do
-      if [ -f "$file" ]; then
-        files+=("$file:application/octet-stream")
-      fi
-    done < <(find resources -type f 2>/dev/null)
-  fi
-  
-  echo "Pushing files: ${files[@]}"
-  oras push "${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/${repository}:${tag}" \
-    --artifact-type "application/vnd.margo.app.v1+json" \
-    --plain-http \
-    "${files[@]}"
-  
-  if [ $? -eq 0 ]; then
-    echo "✅ OTEL package pushed to OCI Registry"
-    echo "📍 Location: ${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}/${repository}:${tag}"
-  else
-    echo "❌ Failed to push OTEL package"
     return 1
   fi
 }
@@ -1156,58 +1141,86 @@ build_custom_otel_container_images() {
 
 # Alternative simpler version without jq dependency
 add_insecure_registry_to_daemon() {
-  echo "Adding insecure registry to Docker daemon (simple version)..."
+  echo "Configuring Docker daemon with insecure registry..."
   
   local registry_url="${EXPOSED_HARBOR_IP}:${EXPOSED_HARBOR_PORT}"
   local daemon_config="/etc/docker/daemon.json"
   
-  # Create Docker directory if it doesn't exist
-  mkdir -p /etc/docker
+  # Stop Docker if running
+  sudo systemctl stop docker docker.socket 2>/dev/null || true
   
-  # Backup existing config if it exists
-  [ -f "$daemon_config" ] && cp "$daemon_config" "$daemon_config.backup.$(date +%s)"
+  # Create Docker directory
+  sudo mkdir -p /etc/docker
   
-  # Create or update daemon.json
-  tee "$daemon_config" > /dev/null <<EOF
+  # Backup existing config
+  if [ -f "$daemon_config" ]; then
+    sudo cp "$daemon_config" "$daemon_config.backup.$(date +%s)"
+    echo "✅ Backed up existing daemon.json"
+  fi
+  
+  # Create daemon.json
+  sudo tee "$daemon_config" > /dev/null <<EOF
 {
   "insecure-registries": ["$registry_url"]
 }
 EOF
   
   echo "✅ Configured insecure registry: $registry_url"
-  echo "Current daemon.json:"
-  cat "$daemon_config"
+							 
+					  
   
-  # Restart Docker daemon
-  echo "Restarting Docker daemon..."
-  systemctl restart docker
+  # Validate JSON
+  if ! jq . "$daemon_config" >/dev/null 2>&1; then
+    echo "❌ Invalid JSON in daemon.json"
+    sudo mv "$daemon_config.backup."* "$daemon_config" 2>/dev/null || true
+    return 1
+  fi
   
-  # Wait for Docker to be ready
+  # Start Docker
+  echo "Starting Docker daemon..."
+  sudo systemctl daemon-reload
+  sudo systemctl start docker
+  sudo systemctl enable docker
+  
+  # Wait for Docker
   for i in {1..30}; do
-    if systemctl is-active --quiet docker; then
-      echo "✅ Docker daemon restarted successfully"
+    if sudo systemctl is-active --quiet docker; then
+      echo "✅ Docker daemon started successfully"
+      docker version
       return 0
     fi
     echo "Waiting for Docker... ($i/30)"
-    sleep 10
+    sleep 2
   done
   
-  echo "❌ Docker daemon failed to restart properly"
+  echo "❌ Docker failed to start"
+  sudo journalctl -xeu docker.service --no-pager | tail -20
   return 1
 }
+
 
 # ----------------------------
 # K3s Installation Functions
 # ----------------------------
 check_k3s_installed() {
   if command -v k3s >/dev/null 2>&1; then
-    echo 'k3s already installed, skipping installation.'
-    k3s --version
+    echo 'k3s already installed.'
+    
+    # Check current version
+    CURRENT_K3S_VERSION=$(k3s --version | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+' | head -1)
+    echo "Current k3s version: $CURRENT_K3S_VERSION"
+    
+    if [ "$CURRENT_K3S_VERSION" != "$K3S_VERSION" ]; then
+      echo "⚠️  Expected k3s version: $K3S_VERSION"
+      echo "ℹ️  To upgrade/downgrade, uninstall current k3s and run installation again"
+    fi
+    
     return 0
   else
     return 1
   fi
 }
+
 
 install_k3s_dependencies() {
   echo 'Installing k3s dependencies...'
@@ -1217,9 +1230,13 @@ install_k3s_dependencies() {
 
 install_k3s() {
   if ! check_k3s_installed; then
-    echo 'Installing k3s...'
+    echo "Installing k3s ${K3S_VERSION}..."
     install_k3s_dependencies
-    curl -sfL https://get.k3s.io | sh -
+    
+    # Install specific k3s version
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${K3S_VERSION}" sh -
+    
+    echo "✅ k3s ${K3S_VERSION} installed successfully"
   fi
 }
 
@@ -1227,7 +1244,13 @@ verify_k3s_status() {
   echo 'Verifying k3s status...'
   sudo systemctl status k3s --no-pager || true
   sudo k3s kubectl get nodes || true
+  
+  # Show installed version
+  echo ""
+  echo "Installed k3s version:"
+  k3s --version | head -1
 }
+
 
 setup_kubeconfig() {
   echo 'Setting up kubeconfig...'
@@ -1243,6 +1266,8 @@ setup_k3s() {
   install_k3s
   verify_k3s_status
   setup_kubeconfig
+  
+  echo "✅ k3s ${K3S_VERSION} setup complete"
 }
 
 
@@ -1256,11 +1281,11 @@ install_prerequisites() {
   install_go
   install_vim
   install_and_enable_ssh
-  install_docker_compose
+  install_docker_and_compose
   add_insecure_registry_to_daemon
   setup_k3s
   install_redis
-  install_oras  # NEW: Install ORAS for OCI operations
+  install_oras  
   
   clone_symphony_repo
   clone_dev_repo
@@ -1270,11 +1295,9 @@ install_prerequisites() {
   setup_harbor
   build_custom_otel_container_images
   
-  # NEW: Push application packages to OCI Registry instead of Git
+  
   echo "📦 Pushing application packages to OCI Registry..."
   push_nextcloud_to_oci
-  push_nginx_to_oci
-  push_otel_to_oci
   push_custom_otel_to_oci
   
   echo "✅ Setup completed - Application packages now in OCI Registry!"
