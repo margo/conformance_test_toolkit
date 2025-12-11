@@ -72,7 +72,6 @@ The repository is divided into three main parts. You can find more details here 
 | Container Runtime | containerd | v1.7.27-1 |
 | OCI Client | ORAS | 1.1.0 |
 | Database | Redis | 7.0.15 |
-| Plugin | docker-compose | v5.0.0 |
 | Plugin | docker-buildx | v0.23.0-1 |
 | Observability Stack | Prometheus | prometheus-27.49.0 |
 | Observability Stack | Grafana | grafana-10.3.0
@@ -88,7 +87,6 @@ The repository is divided into three main parts. You can find more details here 
 | Supporting Infrastructure | Docker | 29.1.2 |
 | Supporting Infrastructure | Docker Compose | v5.0.0 |
 | Supporting Infrastructure | K3s | v1.31.4+k3s1 |
-| Supporting Infrastructure | Rust | Latest (from rustup) |
 | Supporting Infrastructure | Node.js/NPM | System default |
 | System Utilities | curl | System default |
 | System Utilities | git | System default |

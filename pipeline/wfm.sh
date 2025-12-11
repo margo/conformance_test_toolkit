@@ -247,7 +247,7 @@ install_docker_and_compose() {
   
   # Prevent automatic updates (optional)
   echo "🔒 Holding Docker packages at current versions..."
-  apt-mark hold docker-ce docker-ce-cli docker-compose-plugin
+  apt-mark hold docker-ce docker-ce-cli docker-compose-plugin containerd.io docker-buildx-plugin
   echo "ℹ️  To allow updates later, run: apt-mark unhold docker-ce docker-ce-cli docker-compose-plugin"
 }
 
