@@ -5,7 +5,7 @@ Scripts to set up a complete WFM environment with Symphony API, device agents, a
 
 ## 📋 Prerequisites
 
-- Version ubuntu-24.04.3-desktop-amd64 [ Ubuntu/Debian-based VM requirements](../docs/deploy.md#vm-requirements) 
+- **Version: ubuntu-24.04.3-desktop-amd64 or server** [ Ubuntu/Debian-based VM requirements](../docs/deploy.md#vm-requirements) 
 - Internet connectivity.
 - GitHub account with access to [MARGO Development Repository](https://github.com/margo/sandbox) and [Forked Symphony Repository](https://github.com/margo/symphony) under margo organization.
 - GitHub personal access token (GITHUB_TOKEN).
@@ -31,9 +31,16 @@ The setup consists of three main components:
 
 ### Step 1: Environment Variables Setup
 
-Before running any scripts, export the required environment variables:
+Before running any script, make sure to update the environment variable files according to your system setup.
+The environment files are located here:
+[Environment vairable(.env) files](./)  
 
 **For wfm.sh and wfm-cli.sh script**
+
+Environment file path:-
+[WFM Env file](./wfm.env)
+
+Update the following variables:
 ```bash
 export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-personal-access-token>
@@ -42,24 +49,42 @@ export EXPOSED_SYMPHONY_IP=<wfm-machine-ip>
 export DEVICE_NODE_IPS="<k3-device-machine-ip:port>,<docker-device-machine-ip:port>" # "172.19.59.148:30999,172.19.59.150:8899"  port:30999 is for k3s device & port:8899 is for docker device
 export SYMPHONY_BRANCH=main
 export DEV_REPO_BRANCH=main
-sudo -E bash wfm.sh
 ```
 
-**For device-agent.sh script**
+**For k3s device-agent.sh script**
+
+Environment file path:-
+[Device-Agent k3s-Env file](./device-agent_k3s.env)
+
+Update the following variables:
 ```bash
 export GITHUB_USER=<your-github-username>
 export GITHUB_TOKEN=<your-github-personal-access-token>
-export DEVICE_TYPE=<device-type> # Options: "k3s" or "docker", Use device-type carefully when running this script based on device
+export DEVICE_TYPE="k3s" #Options: "k3s" or "docker", Use device-type carefully when running this script based on device
 export DEV_REPO_BRANCH=main
 export WFM_IP=<wfm-machine-ip>
 export EXPOSED_HARBOR_IP=<wfm-machine-ip>
-sudo -E bash device-agent.sh
+```
+
+**For docker device-agent.sh script**
+
+Environment file path:-
+[Device-Agent Docker-Env file](./device-agent_docker.env)
+
+Update the following variables:
+```bash
+export GITHUB_USER=<your-github-username>
+export GITHUB_TOKEN=<your-github-personal-access-token>
+export DEVICE_TYPE="docker" #Options: "k3s" or "docker", Use device-type carefully when running this script based on device
+export DEV_REPO_BRANCH=main
+export WFM_IP=<wfm-machine-ip>
+export EXPOSED_HARBOR_IP=<wfm-machine-ip>
 ```
 
 ### Step 2: WFM Node Setup
 Execute the WFM setup script on your main server:
 ```bash
-sudo -E bash wfm.sh
+source wfm.env && sudo -E bash wfm.sh
 ```
 **Interactive Menu Options:**
 1. **PreRequisites: Setup** - Install all dependencies and services. This includes docker, docker compose, redis, rust, go, helm, git, jq, symphony, oras cli, harbor, k3s etc.    
@@ -73,7 +98,8 @@ sudo -E bash wfm.sh
 Execute the device agent script on your device node:
 
 ```bash
-sudo -E bash device-agent.sh
+source device-agent_k3s.env && sudo -E bash device-agent.sh               #For starting k3s device
+source device-agent_docker.env && sudo -E bash device-agent.sh               #For starting docker device
 ```
 
 **Interactive Menu Options:**
@@ -95,7 +121,7 @@ sudo -E bash device-agent.sh
 Interact with the WFM using the Easy CLI:
 
 ```bash
-sudo -E bash bash wfm-cli.sh
+source wfm.env && sudo -E bash wfm-cli.sh
 ```
 
 **CLI Features:**

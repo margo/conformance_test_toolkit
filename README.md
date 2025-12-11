@@ -1,4 +1,4 @@
-# MARGO Project Documentation
+# Margo Code First Sandbox Documentation
 
 ## Table of Contents
 - [Introduction](#introduction)
@@ -9,7 +9,7 @@
   - [How to Run](#how-to-run)
 - [Structure of the Repository](#structure-of-the-repository)
 - [3rd Party Components](#3rd-party-components)
-- [Design and Mapping to MARGO Architecture](#design-and-mapping-to-margo-architecture)
+- [Design and Mapping to Margo Architecture](#design-and-mapping-to-margo-architecture)
   - [Symphony WFM](#symphony-wfm)
   - [Repositories and Registry](#repositories-and-registry)
   - [Telemetry and Monitoring](#telemetry-and-monitoring)
@@ -21,24 +21,27 @@
 ---
 
 ### Introduction
-Welcome to the MARGO project's Code-first Sandbox ! 
-The [MARGO](https://margo.org/) initiative defines mechanisms for interoperable orchestration at scale of edge applications/workloads and devices. It will deliver on the interoperability promise through an open standard, a reference implementation, and a comprehensive compliance testing toolkit. MARGO unlocks barriers to innovation in complex multi-vendor environments and accelerates digital transformation for organizations of all sizes. 
+Welcome to the Margo project's Code-first Sandbox! 
+The [Margo](https://margo.org/) initiative defines mechanisms for interoperable fleet management of edge applications/workloads and devices. It will deliver on the interoperability promise through an open standard, a reference implementation, and a comprehensive compliance testing toolkit. Margo unlocks barriers to innovation in complex multi-vendor environments and accelerates digital transformation for organizations of all sizes. 
 
-This project provides an open-source, sandbox with an implementation of the MARGO specified interfaces and workflows. The objective is to allow interested users to experiment with the interfaces and APIs and provide feedback to improve the MARGO specifications. This project is by no means intended for "commercial adoption".
-
+This project provides an open-source, sandbox implementation of the Margo specified interfaces and workflows. The objective is to allow interested users to experiment with the interfaces and APIs and provide feedback to improve the Margo specifications. This project is by no means intended for "commercial adoption". The [Specification Enhancements](https://github.com/margo/specification-enhancements?tab=readme-ov-file) process relies on the Code-first sandbox to enable fully specified contributions to the specification. 
+ 
 Before you get started, please spend some time to understand the [Structure of the Repository](#structure-of-the-repository) first.
 
-The project follows a Release schedule tied with the MARGO specification releases. Please look at the [Release Notes](#release-notes) sections for specific release specific content.
-If you want to read more on the design aspects and understand how various components map to the MARGO Architecture, please read the [Design and Mapping to MARGO Architecture](#design-and-mapping-to-margo-architecture) section.
+The project follows a Release schedule tied with the Margo specification releases. Please look at the [Release Notes](#release-notes) sections for specific release specific content.
+If you want to read more on the design aspects and understand how various components map to the Margo Architecture, please read the [Design and Mapping to Margo Architecture](#design-and-mapping-to-margo-architecture) section.
 
 However, if you want to try out things first read the section [Quick Start Guide](#quick-start-guide) below to get your Sandbox Environment setup quickly.
 
-Please leave a comment as we welcome feedback, a * is always appreciated !!
+### Sandbox Feedback / Issue reporting
+We welcome your thoughts and feedback towards the Code First Sandbox! 
+
+Please navigate to the [Issues](https://github.com/margo/sandbox/issues) tab of the repository and create a new Issue using the `Feedback` template. 
 
 ---
 
 ### Quick Start Guide
-This section allows you to set up the 'Sandbox' environment for experimenting with the MARGO specifications and APIs. This includes instructions on the prerequisites for your setup, how to set up a build environment, creating a deployment on a set of virtual machines and running scenarios between the MARGO WFM and the Device-Agent using a simple CLI. 
+This section allows you to set up the 'Sandbox' environment for experimenting with the Margo specifications and APIs. This includes instructions on the prerequisites for your setup, how to set up a build environment, creating a deployment on a set of virtual machines and running scenarios between the Margo WFM and the Device-Agent using a simple CLI. 
 
 Here is [Simplified Guide](./docs/simplified-setup-guide.md) to get you started quickly. Read the detailed steps below to explore further.
 
@@ -60,8 +63,8 @@ Here is [Simplified Guide](./docs/simplified-setup-guide.md) to get you started 
 The repository is divided into three main parts. You can find more details here on [Repository Structure](./docs/repo-structure.md):
 
 - `shared-lib`: Reusable libraries and utilities (Open Source Components)
-- `standard`: Implementation of the components as per MARGO specification
-- `non-standard`: Enabling components, which are not defined by MARGO, but required for an overall implementation
+- `standard`: Implementation of the components as per Margo specification
+- `non-standard`: Enabling components, which are not defined by Margo, but required for an overall implementation
 
 ---
 
@@ -98,20 +101,20 @@ The repository is divided into three main parts. You can find more details here 
 
 ---
 
-### Design and Mapping to MARGO Architecture
-MARGO envisions a [Distributed system design](https://specification.margo.org/overview/envisioned-system-design/#overview) for Industry 4.0 applications, which chiefly includes Application Supplier infrastructure, Fleet Manager and Devices which run Applications.
+### Design and Mapping to Margo Architecture
+Margo envisions a [Distributed system design](https://specification.margo.org/overview/envisioned-system-design/#overview) for Industry 4.0 applications, which chiefly includes Application Supplier infrastructure, Fleet Manager and Devices which run Applications.
 The Fleet Manager responsible for deploying Applications as running Workloads is refered to as a 'Workload Fleet Manager' or WFM.
 
-Other MARGO definitions are avialable in [MARGO Technical Lexicon](https://specification.margo.org/personas-and-definitions/technical-lexicon/)
+Other Margo definitions are available in [Margo Technical Lexicon](https://specification.margo.org/personas-and-definitions/technical-lexicon/)
 
-This Code First Sandbox realises the MARGO system design using a set of open-source components, as well as an implementation of the 'standard' and 'non-standard' or enabling components.
-You can see a view of the MARGO system design, with an overlay of the components available in the Code First Sandbox in [this diagram of the distributed system design](./docs/overlay-architecture.png).
+This Code First Sandbox replicates the Margo system design using a set of open-source components, as well as an implementation of the 'standard' and 'non-standard' or enabling components.
+You can see a view of the Margo system design, with an overlay of the components available in the Code First Sandbox in [this diagram of the distributed system design](./docs/overlay-architecture.png).
 
 This includes the following elements - 
 
 #### Symphony WFM
 - This Code First Sandbox uses [Eclipse Symphony](https://github.com/margo/symphony) as Workload Fleet Manager.
-- As mentioned in MARGO architecture and overlay architecture WFM connects through MARGO envisioned communication mechanisms
+- As mentioned in Margo architecture and overlay architecture WFM connects through Margo envisioned communication mechanisms
 
 #### Repositories and Registry
 - Harbor provide application registry and images/helm-charts repository functionalities.
@@ -122,7 +125,7 @@ This includes the following elements -
 - The WFM Client/Device-agent pulls docker images/helm artifacts from Harbor whenever workloads are getting deployed corresponding to the application packages during instance deployment.
 
 #### Telemetry and Monitoring
-- Sandbox deploys OpenTelemetry Collector at WFM client for instrumentation as per MARGO observability specification.
+- Sandbox deploys OpenTelemetry Collector at WFM client for instrumentation as per Margo observability specification.
 - OpenTelemetry Collector sends telemetry data to observability backends from WFM client. Promtail is also deployed on WFM client for logs aggregation. Promtail agent fetches and pushes logs to Loki on WFM.
 - Observability backends should be external to WFM client. In Sandbox implementation, these backends are deployed on WFM. These include Prometheus, Jaeger, Loki and Grafana.
 - Loki is deployed for log aggregation and Grafana dashboard for visualization.
@@ -143,7 +146,7 @@ This pattern is often referred to as HB-MVP (Host-Bound MVP):
 - **Managers**: Managers implement the platform-agnostic business logic for a given capability. They receive requests from vendors and orchestrate the necessary actions, often by interacting with one or more providers. Managers are designed for reuse and encapsulate the core business logic.
 - **Providers**: Providers are responsible for interacting with specific external systems or dependencies. They abstract away the details of platform-specific interactions, containing any platform-specific knowledge within their scope. Managers utilize providers to perform actions on external resources.
 
-Code First Sandbox uses MVP pattern to implement MARGO specification.
+Code First Sandbox uses MVP pattern to implement Margo specification.
 
 ---
 
@@ -159,10 +162,3 @@ Code First Sandbox uses MVP pattern to implement MARGO specification.
 
 ### Release Notes
 Details of version updates, bug fixes, and new features.
-
----
-
-### Comments and Feedback
-We welcome your thoughts! Please open an issue or submit a pull request for suggestions or improvements.
-
----

@@ -285,7 +285,7 @@ clone_symphony_repo() {
   git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/symphony.git" "$HOME/symphony"
   cd "$HOME/symphony"
   git checkout ${SYMPHONY_BRANCH} || echo 'Branch ${SYMPHONY_BRANCH} not found'
-  echo "symphony checkout to branch ${SYMPHONY_BRANCH} done"
+  echo "symphony repo checkout to branch ${SYMPHONY_BRANCH} done"
 }
 
 clone_dev_repo() {
@@ -294,7 +294,7 @@ clone_dev_repo() {
   git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/margo/sandbox.git"
   cd "$HOME/sandbox"
   git checkout ${DEV_REPO_BRANCH} || echo 'Branch ${DEV_REPO_BRANCH} not found'
-  echo "sandbox checkout to branch ${DEV_REPO_BRANCH} done"
+  echo "sandbox repo checkout to branch ${DEV_REPO_BRANCH} done"
 }
 
 # ----------------------------
@@ -987,7 +987,7 @@ remove_cloned_repositories() {
   echo "2. Removing cloned repositories..."
   
   # Remove sandbox
-  [ -d "$HOME/sandbox" ] && sudo rm -rf "$HOME/sandbox" && echo "✅ Removed sandbox"
+  [ -d "$HOME/sandbox" ] && sudo rm -rf "$HOME/sandbox" && echo "✅ Removed sandbox repository"
   
   # Remove symphony repo
   [ -d "$HOME/symphony" ] && sudo rm -rf "$HOME/symphony" && echo "✅ Removed symphony repository"

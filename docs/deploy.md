@@ -13,8 +13,8 @@
     | VM Type                | OS            | VM Size                    |
     |------------------------|---------------|----------------------------| 
     | WFM                    | Ubuntu/Debian | (8 vCPU, 16 GB RAM, 100 GB)|
-    | K3s Device             | Ubuntu/Debian | (8 vCPU, 16 GB RAM, 50 GB) |
-    | Docker-Compose Device  | Ubuntu/Debian | (8 vCPU, 16 GB RAM, 50 GB) |
+    | K3s Device             | Ubuntu/Debian | (4 vCPU, 4-8 GB RAM, 50 GB) |
+    | Docker-Compose Device  | Ubuntu/Debian | (4 vCPU, 4-8 GB RAM, 50 GB) |
 
   **Note:** Network configuration for the VMs should use the host-network, with static IPs assigned to the VMs.
 

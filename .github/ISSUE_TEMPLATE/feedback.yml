@@ -1,16 +1,25 @@
 name: "Feedback"
-description: "An open feedback form for the MARGO community"
+description: "An open feedback form for the Margo Code First Sandbox"
 title: "[FB: ]"
-labels: ["DRAFT"]
+labels: ["DRAFT","Feedback"]
 assignees:
   - "nilanjan-samajdar"
 body:
+  - type: dropdown
+    id: feedback_type
+    attributes:
+      label: Feedback Type
+      description: Please select the relevant option
+      options:
+        - Bug/Issue 
+        - New enhancement request
+        - Documentation/Content edit request
+      default: 0
   - type: markdown
     attributes:
       value: |
-         Provide feedback in general.
-         Your feedback will be the chosen one that brings harmony to this codebase.
-         If reffering to specific files in documentation or code, please provide file-name and line-number.
+         Please provide full details regarding your feedback towards the Code First sandbox below.
+         If referring to specific files in documentation or code, please provide file-name and line-number.
   - type: textarea
     id: feedback
     attributes:

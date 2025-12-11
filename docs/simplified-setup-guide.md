@@ -3,26 +3,40 @@
 
 ## What You'll Need
 
-**Three VMs (Virtual Machines):**
-| VM Type | Processors | Memory | Storage | Purpose |
+**Three Virtual Machines:**
+| VM Type | Processors(vCPU) | Memory | Storage | Purpose |
 |---------|-----------|--------|---------|---------|
 | **Main VM (WFM)** | 8 | 16GB | 100GB | Workload Fleet Manager |
-| **Device VM 1 (K3s)** | 8 | 16GB | 50GB | Kubernetes-based device |
-| **Device VM 2 (Docker)** | 8 | 16GB | 50GB | Docker-based device |
-
+| **Device VM 1 (Standalone Cluster)** | 4 | 4-8GB | 50GB | Kubernetes-based device |
+| **Device VM 2 (Standalone Device)** | 4 | 4-8GB | 50GB | Docker-based device |
 
 **Requirements:**
-- Ubuntu or Debian operating system (**ubuntu-24.04.3-desktop-amd64**)
+- Ubuntu or Debian operating system (**ubuntu-24.04.3-desktop-amd64 or server**)
+   - Virtual Machine Manager (4.1.0 tested)
 - Internet connection
-- GitHub account with access to MARGO repository
-- GitHub access token - [How to generate](../pipeline/README.md#-prerequisites)
+- GitHub account with access to sandbox repository
+- GitHub access token - [Generate PAT](#prerequisites)
 - All VMs must be able to talk to each other (same network with static IP addresses)
+
+> Warning: If you are attempting to deploy this on corporate machines or within a corporate network, you will need to address any special networking requirements or access issues to enable internet communication (e.g, proxy configuration, certificates, firewall configuration, etc.). This falls outside the of the scope of this documentation. This warning applies to both the WFM and the Device VMs when running the setup scripts('wfm.sh' & 'device-agent.sh'). 
+---
+## Prerequisites
+
+### Generating Personal Access Token
+1. Login to Github account
+2. Select profile picture, then Settings
+3. Select 'Developer settings' (last selection in the list)
+4. Select 'Personal access tokens' then 'Tokens (classic)'
+5. Select 'Generate new token' --> 'Generate new token (classic)'
+6. Add Note to remember the token, Select all checkboxes in Select scopes section
+7. Select Generate token button at bottom.
+8. Copy and store token **Ensure you copy at this stage as it won't be displayed again**
 
 ---
 
 ## Step 1: Get the Code
 
-You need to download the MARGO code to all three VMs. Follow these steps on **each VM**:
+You need to download the sandbox code to all three VMs. Follow these steps on **each VM**:
 
 1. **Open Terminal**
    - On your WFM VM, open the terminal/command line application
@@ -44,7 +58,7 @@ You need to download the MARGO code to all three VMs. Follow these steps on **ea
    git clone https://github.com/margo/sandbox.git
    ```
    
-   When prompted, enter:
+   If prompted, enter:
    - Your GitHub username
    - Your GitHub access token (not your password)
 
@@ -97,7 +111,7 @@ On each VM, you need to configure environment variables (settings that tell the 
 
 2. **Install Basic Tools**
    ```bash
-   sudo -E bash ./wfm.sh
+   source wfm.env && sudo -E bash wfm.sh
    ```
    - A menu will appear
    - Type `1` and press Enter
@@ -112,7 +126,7 @@ On each VM, you need to configure environment variables (settings that tell the 
 
 4. **Start the Workload Fleet Manager**
    ```bash
-   sudo -E bash ./wfm.sh
+   source wfm.env && sudo -E bash wfm.sh
    ```
    - Type `3` and press Enter
    - Choose: `Option 3: Symphony Start`
@@ -121,32 +135,41 @@ On each VM, you need to configure environment variables (settings that tell the 
 
 5. **Add Monitoring Tools**
    ```bash
-   sudo -E bash ./wfm.sh
+   source wfm.env && sudo -E bash wfm.sh
    ```
    - Type `5` and press Enter
    - Choose: `Option 5: ObservabilityStack Start`
    
    This adds tools to monitor your system's performance.
 
-### On Each Device VM:
+6. **Verify the Workload Fleet Manager Is Running Correctly**
+   ```bash
+   sudo docker logs -f symphony-api-container
+   ```
+   You should see log messages indicating the service is running. Press `Ctrl+C` to exit.
 
+> Note: Any service started using these scripts need to be restarted if the VM is restarted. They will not restart automatically on boot.
+
+### On Each Device VM:
 1. **Navigate to the pipeline folder**
    ```bash
    cd $HOME/workspace/sandbox/pipeline
    ```
 
 2. **Install Basic Tools**
+   
+   Based on the device type, select **k3s** or **docker** while sourcing the environment variables. For example:
    ```bash
-   sudo -E bash ./device-agent.sh
+   source device-agent_k3s.env && sudo -E bash device-agent.sh
    ```
    - Type `1` and press Enter
    - Choose: `Option 1: Install-prerequisites`
    
    This may take 10-15 minutes.
 
-3. **Create Security Certificates**
+4. **Create Security Certificates**
    ```bash
-   sudo -E bash device-agent.sh
+   source device-agent_k3s.env && sudo -E bash device-agent.sh
    ```
    - First, type `11` and press Enter to choose: `Option 11: create_device_rsa_certs`
    - Then run the command again and type `12` and press Enter to choose: `Option 12: create_device_ecdsa_certs`
@@ -206,10 +229,24 @@ You need to copy a security file from the WFM VM to each Device VM.
 
 2. **Start the device agent**
    ```bash
-   sudo -E bash ./device-agent.sh
+   source device-agent_docker.env && sudo -E bash device-agent.sh
    ```
    - Type `3` and press Enter
    - Choose: `Option 3: Device-agent-Start(docker-compose-device)`
+
+3. **Check device status**
+   ```bash
+   source device-agent_docker.env && sudo -E bash device-agent.sh
+   ```
+   - Type `7` and press Enter
+   - Choose: `Option 7: Device-agent-Status`
+
+4. **View device logs**
+   ```bash
+   # View the logs
+   sudo docker logs -f device-agent
+   ```
+   You should see log messages indicating the service is running. Press `Ctrl+C` to exit the logs.
 
 **On K3s Device VM:**
 
@@ -220,66 +257,42 @@ You need to copy a security file from the WFM VM to each Device VM.
 
 2. **Start the device agent**
    ```bash
-   sudo -E bash ./device-agent.sh
+   source device-agent_k3s.env && sudo -E bash device-agent.sh
    ```
    - Type `5` and press Enter
    - Choose: `Option 5: Device-agent-Start(k3s-device)`
+
+3. **Check device status**
+   ```bash
+   source device-agent_k3s.env && sudo -E bash device-agent.sh
+   ```
+   - Type `7` and press Enter
+   - Choose: `Option 7: Device-agent-Status`
+
+4. **View device logs**
+   ```bash
+   # View the logs (replace <pod-name> with actual pod name from above using #7)
+   sudo kubectl logs -f <pod-name> -n default
+   ```
+   Example: `kubectl logs -f device-agent-deploy-7d8f9c5b6-xyz12 -n default`
+   
+   You should see log messages indicating the service is running. Press `Ctrl+C` to exit the logs.
+
+> Note: Any service started using these scripts need to be restarted if the VM is restarted. They will not restart automatically on boot.
 
 ### Add Monitoring to Devices
 
 On each Device VM:
 ```bash
 cd $HOME/workspace/sandbox/pipeline
-sudo -E bash ./device-agent.sh
+source device-agent_k3s.env && sudo -E bash device-agent.sh
 ```
 - Type `8` and press Enter
 - Choose: `Option 8: otel-collector-promtail-installation`
 
----
+> Note: Any service started using these script need to be restarted if the VM is restarted. They will not restart automatically on boot.
 
-## Step 5: Run and Use
-
-### Check Everything is Working
-
-**On WFM VM:**
-
-1. **Check the Workload Fleet Manager logs**
-   ```bash
-   docker logs -f symphony-api-container
-   ```
-   You should see log messages indicating the service is running. Press `Ctrl+C` to exit.
-
-**On Device VMs:**
-
-1. **Navigate to the pipeline folder**
-   ```bash
-   cd $HOME/workspace/sandbox/pipeline
-   ```
-
-2. **Check device status**
-   ```bash
-   sudo -E bash ./device-agent.sh
-   ```
-   - Type `7` and press Enter
-   - Choose: `Option 7: Device-agent-Status`
-
-3. **View device logs**
-
-   **For K3s Device VM:**
-   ```bash
-   # View the logs (replace <pod-name> with actual pod name from above using #7)
-   kubectl logs -f <pod-name> -n default
-   ```
-   Example: `kubectl logs -f device-agent-deploy-7d8f9c5b6-xyz12 -n default`
-   
-   Press `Ctrl+C` to exit the logs.
-
-   **For Docker Device VM:**
-   ```bash
-   # View the logs
-   docker logs -f device-agent
-   ```
-   Press `Ctrl+C` to exit the logs.
+## Step 4: Run and Use
 
 ### Use the EasyCLI
 
@@ -290,10 +303,9 @@ On the WFM VM:
    cd $HOME/workspace/sandbox/pipeline
    ```
 
-2. **Make the script executable and run it**
+2. **Run the Easy CLI script**
    ```bash
-   chmod +x wfm-cli.sh
-   sudo -E bash ./wfm-cli.sh
+   source wfm.env && sudo -E bash wfm-cli.sh
    ```
 
 3. **Interactive Menu Interface**
@@ -329,10 +341,13 @@ On the WFM VM:
 | **8** | Delete Instance | Prompts for deployment ID to delete | Remove deployment from device |
 | **9** | Exit | Closes the CLI | Exit the interface |
 
-#### Example Operations
+#### Sandbox WFM User Guide
 
 **Option 1: List App Packages**
 
+Select this option to display the app packages that were uploaded to the sandbox WFM. These are ready to deploy to an onboarded edge node. 
+
+> Note: Below is a example snippet showing the expected output of the selection.
 ```
 Enter choice [1-9]: 1
 📦 Listing all app packages from WFM...
@@ -361,6 +376,9 @@ Press Enter to continue...
 
 **Option 2: List Devices**
 
+Select this option to display the devices that have onboarded to the sandbox WFM.
+
+> Note: Below is a example snippet showing the expected output of the selection. 
 ```
 Enter choice [1-9]: 2
 🖥️  Listing all devices from WFM...
@@ -385,6 +403,9 @@ Press Enter to continue...
 
 **Option 3: List Deployments**
 
+Select this option to display the current app deployments configured in the sandbox WFM. 
+
+> Note: Below is a example snippet showing the expected output of the selection.
 ```
 
 Enter choice [1-9]: 3
@@ -410,27 +431,41 @@ Press Enter to continue...
 
 **Option 4: List All Resources**
 
-Shows combined view of packages, devices, and deployments (see individual examples above for format).
+Select this option to display the combined view of packages, devices, and deployments (see individual examples above for format).
 
 **Option 5: Upload App-Package**
+
+Select this option to upload an application package from the pre-configured harbor OCI registry to WFM for deployment. Also user can upload new application packges to local harbor OCI registry which can be discovered here and listed as an option to upload to WFM. Refer [upload instructions.](./upload-package.md) 
+
+> Note: Below is a example snippet showing the expected output of the selection.
 
 ```
 Enter choice [1-9]: 5
 📦 Upload App Package
 ====================
+🔍 Discovering app packages from Harbor OCI Registry...
 Select one of the packages:
-1) Custom OTEL Helm App
-2) Nextcloud Compose App
-3) Exit
+1) nginx-helm-app-package
+2) wordpress-compose-app-package
+3) custom-otel-helm-app-package
+4) nextcloud-compose-app-package
+5) Exit
 
-Enter choice [1-3]: 1
-📤 Uploading Custom OTEL Helm App to WFM...
+
+Enter choice [1-6]: 3
+📤 Uploading custom-otel-helm-app-package to WFM...
+
 ✅ Custom OTEL Helm App uploaded successfully!
 
 Press Enter to continue...
 ```
 
 **Option 6: Delete App-Package**
+
+Select this option to delete previously uploaded application packages from the sandbox WFM. 
+
+> Note: Below is a example snippet showing the expected output of the selection.
+> Note: the id of the application package needs to be copied from the output shown below 'current packages'. 
 ```
 Enter choice [1-9]: 6
 🗑️  Delete App Package
@@ -475,6 +510,13 @@ Application Pkg ae011433-28ed-4f4e-a8af-474810810746 deleted successfully
 ```
 
 **Option 7: Deploy Instance**
+
+Select this option to deploy an instance of an uploaded application package within the sandbox WFM. 
+
+Configuration Notes: 
+- Below is a example snippet showing the expected output of the selection.
+- The id of the application package needs to be copied from the output shown below 'Available packages'. 
+- The id of the device needs to be copied from the output shown below 'Available devices'. 
 
 ```
 Enter choice [1-9]: 7
@@ -541,6 +583,12 @@ Application configuration applied successfully
 ```
 
 **Option 8: Delete Instance**
+
+Select this option to delete an application instance within the sandbox WFM. 
+
+Configuration Notes: 
+- Below is a example snippet showing the expected output of the selection.
+- The id of the application instance needs to be copied from the output shown below 'Current deployments'. 
 
 ```
 
