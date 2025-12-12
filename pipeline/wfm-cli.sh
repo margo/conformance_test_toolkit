@@ -110,7 +110,6 @@ list_all() {
 # ----------------------------
 # Dynamic Instance File Generation
 # ----------------------------
-
 generate_instance_yaml_from_oci() {
   local package_name="$1"
   local package_id="$2"
@@ -122,9 +121,6 @@ generate_instance_yaml_from_oci() {
   # Pull margo.yaml from OCI to extract metadata
   local temp_dir=$(mktemp -d)
   cd "$temp_dir"
-  
-  # echo "📥 Pulling package metadata from OCI..."  
-  # echo "🔍 Package: ${harbor_url}/${OCI_ORGANIZATION}/${package_name}:latest"  
   
   # Pull entire package (suppress output)
   if ! oras pull "${harbor_url}/${OCI_ORGANIZATION}/${package_name}:latest" \
@@ -143,10 +139,22 @@ generate_instance_yaml_from_oci() {
     return 1
   fi
   
-  # echo "✅ Successfully pulled margo.yaml"  
-  
-  # Extract metadata from margo.yaml
+  # Extract BOTH id and name from margo.yaml
+  local app_id=$(grep -E "^\s*id:" margo.yaml | head -1 | sed 's/.*id:\s*//' | tr -d '"' | tr -d "'" | xargs)
   local app_name=$(grep -E "^\s*name:" margo.yaml | head -1 | sed 's/.*name:\s*//' | tr -d '"' | tr -d "'" | xargs)
+  
+  # Prefer id over name for identifiers (id is already properly formatted per Margo spec)
+  local app_identifier=""
+  if [ -n "$app_id" ]; then
+    # Use id directly (already lowercase, numbers, dashes only)
+    app_identifier="$app_id"
+  else
+    # Fallback: sanitize name if id doesn't exist
+    app_identifier=$(echo "${app_name}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -d '_.,' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+  fi
+  
+  # Truncate to safe length (max 40 chars to leave room for suffixes)
+  app_identifier=$(echo "$app_identifier" | cut -c1-40)
   
   # Try multiple patterns to find deployment type in nested structure
   local deployment_type=""
@@ -168,8 +176,6 @@ generate_instance_yaml_from_oci() {
     fi
   fi
   
-  # echo "🔍 Extracted deployment type: '$deployment_type'"  
-  
   # Determine deployment profile type
   local profile_type=""
   case "$deployment_type" in
@@ -180,31 +186,23 @@ generate_instance_yaml_from_oci() {
       profile_type="compose"
       ;;
     *)
-      # echo "⚠️  Could not determine deployment type from margo.yaml" >&2  
-      # echo "ℹ️  Inferring from package name..." >&2  
-      
       # Infer from package name as last resort
       if [[ "$package_name" =~ compose ]]; then
         profile_type="compose"
-        # echo "📋 Inferred type: compose (from package name)" >&2  
       else
         profile_type="helm.v3"
-        # echo "📋 Defaulting to: helm.v3" >&2  
       fi
       ;;
   esac
   
-  # echo "📋 Final deployment type: $profile_type"  
-  
   # Get repository path
   local repository=$(get_oci_repository_path "$package_name" "$temp_dir/margo.yaml")
-
   
   # Generate instance.yaml based on deployment type
   if [ "$profile_type" = "helm.v3" ]; then
-    generate_helm_instance "$app_name" "$package_id" "$device_id" "$repository" "$output_file" "$temp_dir/margo.yaml"
+    generate_helm_instance "$app_identifier" "$package_id" "$device_id" "$repository" "$output_file" "$temp_dir/margo.yaml"
   elif [ "$profile_type" = "compose" ]; then
-    generate_compose_instance "$app_name" "$package_id" "$device_id" "$repository" "$output_file" "$temp_dir/margo.yaml"
+    generate_compose_instance "$app_identifier" "$package_id" "$device_id" "$repository" "$output_file" "$temp_dir/margo.yaml"
   else
     echo "❌ Unsupported deployment type: $profile_type" >&2
     cd - >/dev/null
@@ -215,16 +213,13 @@ generate_instance_yaml_from_oci() {
   cd - >/dev/null
   rm -rf "$temp_dir"
   
-  # echo "✅ Generated instance file: $output_file"  
   return 0
 }
 
 
-
-
 # Generate Helm-based instance.yaml
 generate_helm_instance() {
-  local app_name="$1"
+  local app_identifier="$1"  # Receives id (pre-formatted) or sanitized name
   local package_id="$2"
   local device_id="$3"
   local repository="$4"
@@ -235,8 +230,12 @@ generate_helm_instance() {
   local chart_version=$(grep -E "^\s*version:" "$margo_file" | head -1 | sed 's/.*version:\s*//' | tr -d '"' | tr -d "'" | xargs)
   chart_version="${chart_version:-0.1.0}"
   
-  # Sanitize instance name (lowercase, no spaces)
-  local instance_name=$(echo "${app_name}-instance" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+  # Create instance name from identifier (already properly formatted)
+  # Truncate to 53 chars for Helm release name limit
+  local instance_name=$(echo "${app_identifier}-instance" | cut -c1-53)
+  
+  # Component name: truncate to 40 chars to leave room for UUID suffix
+  local component_name=$(echo "$app_identifier" | cut -c1-40)
   
   cat > "$output_file" <<EOF
 # This is an input template allowing the WFM user to modify deployment instance specific parameters(currently read-only).
@@ -254,7 +253,7 @@ spec:
   deploymentProfile:
     type: helm.v3
     components:
-      - name: ${app_name}
+      - name: ${component_name}
         properties:  
           repository: ${repository}
           revision: ${chart_version}
@@ -273,24 +272,25 @@ EOF
       value: "http://otel-collector-opentelemetry-collector.observability:4318"
       targets:
       - pointer: env.OTEL_EXPORTER_OTLP_ENDPOINT
-        components: ["${app_name}"]
+        components: ["${component_name}"]
 EOF
     fi
   fi
 }
 
+
 # Generate Compose-based instance.yaml
 generate_compose_instance() {
-  local app_name="$1"
+  local app_identifier="$1"  # Receives id (pre-formatted) or sanitized name
   local package_id="$2"
   local device_id="$3"
   local repository="$4"
   local output_file="$5"
   local margo_file="$6"
   
-  # Sanitize instance name
-  local instance_name=$(echo "${app_name}-instance" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-  local stack_name=$(echo "${app_name}-stack" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+  # Create names from identifier (already properly formatted)
+  local instance_name=$(echo "${app_identifier}-instance" | cut -c1-53)
+  local stack_name=$(echo "${app_identifier}-stack" | cut -c1-40)
   
   cat > "$output_file" <<EOF
 # This is an input template allowing the WFM user to modify deployment instance specific parameters(currently read-only).
@@ -329,6 +329,8 @@ EOF
     fi
   fi
 }
+
+
 
 
 # ----------------------------
@@ -870,14 +872,14 @@ show_menu() {
   echo "🎛️  WFM CLI Interactive Interface"
   echo "================================="
   echo "Choose an option:"
-  echo "1) 📦 list app-pkg"
-  echo "2) 🖥️  List Devices"
+  echo "1) 📦 List Application Package"
+  echo "2) 🖥️ List Devices"
   echo "3) 🚀 List Deployment"
   echo "4) 📋 List All"
-  echo "5) 📤 Upload App-Package"
-  echo "6) 🗑️  Delete App-Package"
+  echo "5) 📤 Upload Application Package"
+  echo "6) 🗑️ Delete Application Package"
   echo "7) 🚀 Deploy Instance"
-  echo "8) 🗑️  Delete Instance"
+  echo "8) 🗑️ Delete Instance"
   echo "9) 🚪 Exit"
   echo ""
   

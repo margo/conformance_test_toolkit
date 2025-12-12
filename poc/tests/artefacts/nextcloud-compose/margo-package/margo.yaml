@@ -2,7 +2,7 @@ apiVersion: margo.org/v1-alpha1
 kind: ApplicationDescription
 metadata:
   id: nextcloud-stack
-  name: nextcloud-stack
+  name: Nextcloud Stack
   description: Nextcloud with MariaDB and Redis stack
   version: 1.0.0
   catalog:

@@ -2,7 +2,7 @@ apiVersion: margo.org/v1-alpha1
 kind: ApplicationDescription
 metadata:
   id: com-go-otel-service
-  name: custom-otel-app
+  name: Go OpenTelemetry Service
   description: A lightweight observability service using OpenTelemetry
   version: 0.1.0
   catalog:

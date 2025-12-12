@@ -11,7 +11,7 @@
 | **Device VM 2 (Standalone Device)** | 4 | 4-8GB | 50GB | Docker-based device |
 
 **Requirements:**
-- Ubuntu or Debian operating system (**ubuntu-24.04.3-desktop-amd64 or server**)
+- Ubuntu or Debian operating system (**ubuntu-24.04.3-desktop-amd64 or server**) (you can check by doing ```cat /etc/os-release```)
    - Virtual Machine Manager (4.1.0 tested)
 - Internet connection
 - GitHub account with access to sandbox repository
@@ -101,6 +101,9 @@ On each VM, you need to configure environment variables (settings that tell the 
 ---
 
 ## Step 3: Build Everything
+
+> **Note:** If during setup you see any error like the following: ```ERROR:  429 Too Many Requests
+   toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit```. This is because docker allows certain number of anonymous image pulls in a day, and yours have exhausted. Please login using your dockerhub account. The command to do so is: `docker login -u <your-dockerhub-account-name>` , then it'll ask for the password once you execute this command.
 
 ### On the WFM VM:
 

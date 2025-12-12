@@ -139,7 +139,8 @@ install_go() {
     wget "https://go.dev/dl/go1.24.4.linux-amd64.tar.gz" -O go.tar.gz;
     tar -C /usr/local -xzf go.tar.gz;
     rm go.tar.gz
-    export PATH="$PATH:/usr/local/go/bin";
+    # export PATH=$PATH:/usr/local/go/bin;
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
     source ~/.bashrc
     which go;
     go version;
@@ -1053,7 +1054,7 @@ stop_harbor_service() {
   echo "6. Stopping and removing Harbor service..."
 
   # Stop Harbor container
-  if docker ps --format '{{.Names}}' | grep -q harbor; then
+  if docker ps -a --format '{{.Names}}' | grep harbor; then
     cd "$HOME/sandbox/pipeline/harbor"
     docker compose down --remove-orphans --volumes 2>/dev/null && echo "✅ Stopped Harbor containers"
     sleep 10
@@ -1295,19 +1296,41 @@ install_prerequisites() {
   setup_harbor
   build_custom_otel_container_images
   
-  
-  echo "📦 Pushing application packages to OCI Registry..."
+  echo ""
+  echo "-----------------------------------------------------------------------"
+  echo "📦 Pushing pre-existing test-bed application packages to OCI Registry(i.e. harbor)..."
   push_nextcloud_to_oci
   push_custom_otel_to_oci
   
-  echo "✅ Setup completed - Application packages now in OCI Registry!"
+  echo "✅ Setup completed - TestBed Application packages now in OCI Registry!"
+  echo "-----------------------------------------------------------------------"
+  echo ""
   echo "✅ Workload Fleet Manager pre-requisites installation finished."
 }
 
 
 start_symphony() {
   echo "Starting Symphony API server on..."
-  export PATH="$PATH:/usr/local/go/bin";
+  export PATH="$PATH:/usr/local/go/bin"; # TODO: remove this line as this is being set while installing go
+
+  export GOINSECURE='github.com/margo/*'
+  export GONOPROXY='github.com/margo/*'
+  export GONOSUMDB='github.com/margo/*'
+  export GOPRIVATE='github.com/margo/*'
+
+  # Check for required environment variables
+  if [ -z "$GITHUB_USER" ] || [ -z "$GITHUB_TOKEN" ]; then
+      echo "Error: GITHUB_USER and GITHUB_TOKEN environment variables must be set"
+      echo "Current values:"
+      echo "  GITHUB_USER: ${GITHUB_USER:-'(not set)'}"
+      echo "  GITHUB_TOKEN: ${GITHUB_TOKEN:-'(not set)'}"
+      return 1
+  fi
+  
+  git config --global url."https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/";
+  go env -w GOPRIVATE="github.com/margo/*";
+  echo "Using GitHub credentials for user: $GITHUB_USER"
+
   # Build phase
   build_maestro_cli   
   # verify_symphony_api
@@ -1319,19 +1342,6 @@ start_symphony_api_container(){
 
     cd "$HOME/symphony/api"
 	  echo "Building Symphony API container..."																			   
-    
-    # Check for required environment variables
-    if [ -z "$GITHUB_USER" ] || [ -z "$GITHUB_TOKEN" ]; then
-        echo "Error: GITHUB_USER and GITHUB_TOKEN environment variables must be set"
-        echo "Current values:"
-        echo "  GITHUB_USER: ${GITHUB_USER:-'(not set)'}"
-        echo "  GITHUB_TOKEN: ${GITHUB_TOKEN:-'(not set)'}"
-        return 1
-    fi
-    
-    git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/";
-    go env -w GOPRIVATE="github.com/margo/*";
-    echo "Using GitHub credentials for user: $GITHUB_USER"
 
     # Stop and remove existing container if present
     echo "Stopping and removing existing symphony-api-container if present..."

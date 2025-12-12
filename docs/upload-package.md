@@ -39,7 +39,7 @@ docker push 172.19.59.148:8081/library/nginx:1.25.0
 ```
 
 **Push Helm Chart**
-> Ensure your helmchart Version created below is same as the version attribute in margo.yaml file (created as part of Margo application package).
+> Ensure your helmchart Version created below is same as the **version** attribute in margo.yaml file (created as part of Margo application package).
 
 ```bash
 # To push Helm Chart (. is the current directory where all helmcharts are present navigate to the directory and run below commands)
@@ -48,6 +48,7 @@ helm push nginx-helm-1.0.0.tgz oci://172.19.59.148:8081/library --plain-http
 ```
 
 **Push Application Package**
+> Ensure to push package with tag **latest** as while pulling from the harbor the tag latest will be considered.
 ```bash
 # Login to Harbor
 echo "Harbor12345" | oras login 172.19.59.148:8081 \

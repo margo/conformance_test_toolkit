@@ -39,6 +39,11 @@ DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-5.0.0}"
 # Stable version as of December 2024
 K3S_VERSION="${K3S_VERSION:-v1.31.4+k3s1}"
 
+export GOINSECURE='github.com/margo/*'
+export GONOPROXY='github.com/margo/*'
+export GONOSUMDB='github.com/margo/*'
+export GOPRIVATE='github.com/margo/*'
+
 validate_pre_required_vars() {
   local required_vars=("GITHUB_USER" "GITHUB_TOKEN" "DEV_REPO_BRANCH" "WFM_IP" "WFM_PORT")
   for var in "${required_vars[@]}"; do
