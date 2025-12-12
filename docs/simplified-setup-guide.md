@@ -28,7 +28,7 @@
 3. Select 'Developer settings' (last selection in the list)
 4. Select 'Personal access tokens' then 'Tokens (classic)'
 5. Select 'Generate new token' --> 'Generate new token (classic)'
-6. Add Note to remember the token, Select all checkboxes in Select scopes section
+6. Add Note to remember the token and select all `repo`, `admin:org` `project` checkboxes in Select scopes section
 7. Select Generate token button at bottom.
 8. Copy and store token **Ensure you copy at this stage as it won't be displayed again**
 
