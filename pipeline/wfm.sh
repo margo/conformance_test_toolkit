@@ -139,9 +139,9 @@ install_go() {
     wget "https://go.dev/dl/go1.24.4.linux-amd64.tar.gz" -O go.tar.gz;
     tar -C /usr/local -xzf go.tar.gz;
     rm go.tar.gz
-    # export PATH=$PATH:/usr/local/go/bin;
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-    source ~/.bashrc
+    export PATH=$PATH:/usr/local/go/bin;
+    # echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+    # source ~/.bashrc
     which go;
     go version;
   fi
