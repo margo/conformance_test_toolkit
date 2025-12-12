@@ -350,7 +350,7 @@ On the WFM VM:
 
 Select this option to display the app packages that were uploaded to the sandbox WFM. These are ready to deploy to an onboarded edge node. 
 
-> Note: Below is a example snippet showing the expected output of the selection.
+> Note: Below is a example snippet showing the expected output of the selection. You will need to use option 5 (see below) to load the app packages first.
 ```
 Enter choice [1-9]: 1
 📦 Listing all app packages from WFM...
