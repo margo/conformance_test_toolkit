@@ -381,7 +381,7 @@ Press Enter to continue...
 
 Select this option to display the devices that have onboarded to the sandbox WFM.
 
-> Note: Below is a example snippet showing the expected output of the selection. 
+> Note: Below is a example snippet showing the expected output of the selection. For now, you'll need to look at the device agent's logs to identify the client ID if you have multiple devices provisioned.
 ```
 Enter choice [1-9]: 2
 🖥️  Listing all devices from WFM...
