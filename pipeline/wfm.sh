@@ -1225,7 +1225,7 @@ check_k3s_installed() {
 
 install_k3s_dependencies() {
   echo 'Installing k3s dependencies...'
-  sudo apt update && sudo apt upgrade -y
+  sudo apt update
   sudo apt install -y curl
 }
 
