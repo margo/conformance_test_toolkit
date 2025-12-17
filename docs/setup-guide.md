@@ -1,5 +1,5 @@
 ##### [Back To Main](../README.md)
-# Setting Up the Code First Sandbox - Simple Guide
+# Setting Up the Code First Sandbox
 
 ## What You'll Need
 
@@ -86,9 +86,9 @@ On each VM, you need to configure environment variables (settings that tell the 
    cd $HOME/workspace/sandbox/pipeline
    ```
 
-2. **Follow the detailed setup guide**
+2. **Set Environment Variables**
    
-   Open and follow the [Environment Variables Setup Guide](../pipeline/README.md#step-1-environment-variables-setup)
+   Open and follow the [Environment Variables Setup Guide](../docs/env-setup.md)
    
    This will help you set up:
    - GitHub credentials
@@ -230,7 +230,7 @@ You need to copy a security file from the WFM VM to each Device VM.
    cd $HOME/workspace/sandbox/pipeline
    ```
 
-2. **Start the device agent**
+2. **Start the device Workload Fleet management Client**
    ```bash
    source device-agent_docker.env && sudo -E bash device-agent.sh
    ```
@@ -247,7 +247,7 @@ You need to copy a security file from the WFM VM to each Device VM.
 4. **View device logs**
    ```bash
    # View the logs
-   sudo docker logs -f device-agent
+   sudo docker logs -f workload-fleet-management-client
    ```
    You should see log messages indicating the service is running. Press `Ctrl+C` to exit the logs.
 
@@ -258,7 +258,7 @@ You need to copy a security file from the WFM VM to each Device VM.
    cd $HOME/workspace/sandbox/pipeline
    ```
 
-2. **Start the device agent**
+2. **Start the device workload fleet management client**
    ```bash
    source device-agent_k3s.env && sudo -E bash device-agent.sh
    ```
@@ -752,7 +752,7 @@ If you want to remove everything and start over:
    sudo -E bash ./device-agent.sh  # Type 9 - otel-collector-promtail-uninstallation
    sudo -E bash ./device-agent.sh  # Type 10 - cleanup-residual
    ```
-3. **Remove Device Agent image.(Recommended - Only when you want to verify new features from Margo branch/tag, Not to be done for every clean-up)**
+3. **Remove Device Workload Fleet management Client image.(Recommended - Only when you want to verify new features from Margo branch/tag, Not to be done for every clean-up)**
    ```bash
    docker rmi margo.org/device-agent:latest
    ```

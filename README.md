@@ -4,9 +4,6 @@
 - [Introduction](#introduction)
 - [Quick Start Guide](#quick-start-guide)
   - [Development Toolset](#development-toolset)
-  - [How to Build](#how-to-build)
-  - [How to Deploy](#how-to-deploy)
-  - [How to Run](#how-to-run)
 - [Structure of the Repository](#structure-of-the-repository)
 - [3rd Party Components](#3rd-party-components)
 - [Design and Mapping to Margo Architecture](#design-and-mapping-to-margo-architecture)
@@ -41,21 +38,12 @@ Please navigate to the [Issues](https://github.com/margo/sandbox/issues) tab of 
 ---
 
 ### Quick Start Guide
-This section allows you to set up the 'Sandbox' environment for experimenting with the Margo specifications and APIs. This includes instructions on the prerequisites for your setup, how to set up a build environment, creating a deployment on a set of virtual machines and running scenarios between the Margo WFM and the Device-Agent using a simple CLI. 
+This section allows you to set up the 'Sandbox' environment for experimenting with the Margo specifications and APIs. This includes instructions on the prerequisites for your setup, how to set up a build environment, creating a deployment on a set of virtual machines and running scenarios between the WFM and the Workload Fleet management Client using a simple CLI. 
 
-Here is [Simplified Guide](./docs/simplified-setup-guide.md) to get you started quickly. Read the detailed steps below to explore further.
+Here is [Setup Guide](./docs/setup-guide.md) to get you started quickly.
 
 #### Development Toolset
 - [Development Toolset](./docs/dev-toolsets.md)
-
-#### How to Build
-- [Build the Sandbox](./docs/build.md)
-
-#### How to Deploy
-- [Deploy the Sandbox](./docs/deploy.md)
-
-#### How to Run
-- [Run the Sandbox](./docs/run.md)
 
 ---
 
@@ -122,7 +110,7 @@ This includes the following elements -
  and docker images/helm artifacts related to these applications are stored in Harbor registry.
 - Application packages are pulled/pushed/deleted from Harbor repository.
 - WFM stores application packages in its database and are used during LCM (Life Cycle Management) operation.
-- The WFM Client/Device-agent pulls docker images/helm artifacts from Harbor whenever workloads are getting deployed corresponding to the application packages during instance deployment.
+- The Workload Fleet management Client pulls docker images/helm artifacts from Harbor whenever workloads are getting deployed corresponding to the application packages during instance deployment.
 
 #### Telemetry and Monitoring
 - Sandbox deploys OpenTelemetry Collector at WFM client for instrumentation as per Margo observability specification.
