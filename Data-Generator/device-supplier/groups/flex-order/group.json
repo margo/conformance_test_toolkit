@@ -1,0 +1,11 @@
+{
+  "name": "flex-order",
+  "version": "1.0.0-rc.2",
+  "persona": "device-supplier",
+  "description": "Regenerated via CLI-1 (E2E verification pass)",
+  "FolderPath": [
+    "testcases/device-supplier-flexible-order"
+  ],
+  "flexibleOrder": true,
+  "testCases": []
+}

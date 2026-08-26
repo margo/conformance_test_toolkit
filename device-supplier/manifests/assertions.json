@@ -1,0 +1,377 @@
+{
+  "rejected_certificates": [
+    "rnd-key-7f3a91b2c4d8e6",
+    "-----BEGIN CERTIFICATE-----\nMIIDvzCCAqegAwIBAgIULI7XUGqh8u5ECDif0yPx6IVg6s4wDQYJKoZIhvcNAQEL\nBQAwbzELMAkGA1UEBhMCSU4xDDAKBgNVBAgMA0dHTjERMA8GA1UEBwwIU2VjdG9y\nNDgxFDASBgNVBAoMC1Jldm9rZWRDb3JwMRAwDgYDVQQLDAdEZXZpY2VzMRcwFQYD\nVQQDDA5kZXZpY2UtcmV2b2tlZDAeFw0yNjA0MjIwNTIyMzVaFw0yNzA0MjIwNTIy\nMzVaMG8xCzAJBgNVBAYTAklOMQwwCgYDVQQIDANHR04xETAPBgNVBAcMCFNlY3Rv\ncjQ4MRQwEgYDVQQKDAtSZXZva2VkQ29ycDEQMA4GA1UECwwHRGV2aWNlczEXMBUG\nA1UEAwwOZGV2aWNlLXJldm9rZWQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK\nAoIBAQC5CTp5ocxsAsBJsvCsEn+Sl2wWJI6TD7T6feRX7Hq+H1bYe0LBa5cRgIlq\nWZrEe1RPj7lALZd8To8KLDlWqddGxIGd6N2DqQs+ZI+z+MCM2JN5PXG/BGvYVeic\nKF/Niq5FzpMmNO1yf5XaMabZLnoNL7phcXwQ2SAtJLc1jP6lMkJhoJI4Q6LgyTxw\nuK/dMCtGd5Kimy8TURRP7ImPz5KtuLaewea6e3L/4zcOWFVBqD0KwJZmTS2mCitu\nvcThDX+bR0yUhtSKKj3tArTFnVSKe2Xkl7ceI5n2LF3u0FrDUR+ndapIOK1lE732\nzWSrKJOHk6oEe8dcqunQzMWO7lvlAgMBAAGjUzBRMB0GA1UdDgQWBBTuTa56dkya\nmm7jR4bx+gVb3q8wrTAfBgNVHSMEGDAWgBTuTa56dkyamm7jR4bx+gVb3q8wrTAP\nBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCHv7LllSB2+HR5tcm6\nEDKqVuHp5TAbxYSsJcIdikN96OFHgi3PSdkRhG4yFm1hVeu5DlbrsJxBms8I4tUj\nkyBG6BzgmDQIHRbHvApWIfbSpObJ3N7SIjzrjTFzMCWJR3juGTbhgFO0WJSWXk0s\nIxtU3/FP8oXIJKghUoTG77swNcKoUk/OiP+kTiWSlViiWgnuwEfR5Oogbi9N4Hj/\nl+HzCg3KI++i0TN3X90XMf4jIkH4act4qZYOfpt9w7AoNtagXhFDcaQ6AFe6/HR+\nzBNosmP0Rpk6oLwiFUAOEJmjlUHys5CjwehCcfTkC4CzRsyf3/U0Ea2CxKTsJzGa\nDHra\n-----END CERTIFICATE-----\n"
+  ],
+  "endpoints": {
+    "GET_onboarding_certificate": {
+      "path": "/api/v1/onboarding/certificate",
+      "method": "GET",
+      "status_code": 200,
+      "validations": [],
+      "response_structure": {
+        "matches": [
+          {
+            "description": "Response must contain Root CA certificate",
+            "json": "certificate",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "POST_onboarding": {
+      "path": "/api/v1/onboarding",
+      "method": "POST",
+      "status_code": 201,
+      "validation_error_key": "badRequest",
+      "validations": [
+        {
+          "rule_id": "onboarding-001",
+          "field": "apiVersion",
+          "type": "string",
+          "required": true,
+          "value": "onboarding.margo.org/v1alpha1",
+          "description": "apiVersion must be exactly 'onboarding.margo.org/v1alpha1'"
+        },
+        {
+          "rule_id": "onboarding-002",
+          "field": "kind",
+          "type": "string",
+          "required": true,
+          "value": "OnboardingRequest",
+          "description": "kind must be exactly 'OnboardingRequest'"
+        },
+        {
+          "rule_id": "onboarding-003",
+          "field": "certificate",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "certificate is required and must be a non-empty base64-encoded PEM string"
+        }
+      ],
+      "response_structure": {
+        "matches": [
+          {
+            "description": "Response must contain clientId",
+            "json": "clientId",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "POST_capabilities": {
+      "path": "/api/v1/clients/{clientId}/capabilities",
+      "method": "POST",
+      "status_code": 201,
+      "validation_error_key": "unprocessable",
+      "validations": [
+        {
+          "rule_id": "capabilities-001",
+          "field": "apiVersion",
+          "type": "string",
+          "required": true,
+          "value": "device.margo.org/v1alpha1",
+          "description": "apiVersion must be exactly 'device.margo.org/v1alpha1'"
+        },
+        {
+          "rule_id": "capabilities-002",
+          "field": "kind",
+          "type": "string",
+          "required": true,
+          "value": "DeviceCapabilitiesManifest",
+          "description": "kind must be exactly 'DeviceCapabilitiesManifest'"
+        },
+        {
+          "rule_id": "capabilities-003",
+          "field": "properties",
+          "type": "object",
+          "required": true,
+          "description": "properties field is required"
+        },
+        {
+          "rule_id": "capabilities-004",
+          "field": "properties.id",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "properties.id is required"
+        },
+        {
+          "rule_id": "capabilities-005",
+          "field": "properties.vendor",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "properties.vendor is required"
+        },
+        {
+          "rule_id": "capabilities-006",
+          "field": "properties.modelNumber",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "properties.modelNumber is required"
+        },
+        {
+          "rule_id": "capabilities-007",
+          "field": "properties.serialNumber",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "properties.serialNumber is required"
+        },
+        {
+          "rule_id": "capabilities-008",
+          "field": "properties.cpus",
+          "type": "array",
+          "required": true,
+          "itemsType": "object",
+          "description": "properties.cpus is required and must be an array of CPU objects"
+        },
+        {
+          "rule_id": "capabilities-009",
+          "field": "properties.cpus.*.cores",
+          "type": "number",
+          "required": true,
+          "requiredIf": "properties.cpus",
+          "description": "Each entry in properties.cpus must declare cores"
+        },
+        {
+          "rule_id": "capabilities-010",
+          "field": "properties.cpus.*.architecture",
+          "type": "string",
+          "required": false,
+          "requiredIf": "properties.cpus",
+          "enum": [
+            "amd64",
+            "arm64",
+            "arm"
+          ],
+          "description": "properties.cpus[].architecture must use a supported architecture value when present"
+        },
+        {
+          "rule_id": "capabilities-011",
+          "field": "properties.memory",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "properties.memory is required"
+        },
+        {
+          "rule_id": "capabilities-012",
+          "field": "properties.storage",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "properties.storage is required"
+        },
+        {
+          "rule_id": "capabilities-013",
+          "field": "properties.interfaces",
+          "type": "array",
+          "required": true,
+          "itemsType": "object",
+          "description": "properties.interfaces is required and must be an array of interface objects"
+        },
+        {
+          "rule_id": "capabilities-014",
+          "field": "properties.interfaces.*.type",
+          "type": "string",
+          "required": true,
+          "requiredIf": "properties.interfaces",
+          "enum": [
+            "ethernet",
+            "wifi",
+            "cellular",
+            "bluetooth",
+            "usb",
+            "canbus",
+            "rs232"
+          ],
+          "description": "Each interface must declare a supported type"
+        },
+        {
+          "rule_id": "capabilities-015",
+          "field": "properties.peripherals",
+          "type": "array",
+          "required": true,
+          "itemsType": "object",
+          "description": "properties.peripherals is required and must be an array of peripheral objects"
+        },
+        {
+          "rule_id": "capabilities-016",
+          "field": "properties.peripherals.*.type",
+          "type": "string",
+          "required": true,
+          "requiredIf": "properties.peripherals",
+          "enum": [
+            "gpu",
+            "display",
+            "camera",
+            "microphone",
+            "speaker"
+          ],
+          "description": "Each peripheral must declare a supported type"
+        },
+        {
+          "rule_id": "capabilities-017",
+          "field": "properties.otelCollector",
+          "type": "boolean",
+          "required": true,
+          "description": "properties.otelCollector is required"
+        },
+        {
+          "rule_id": "capabilities-018",
+          "field": "properties.supportedRuntimes",
+          "type": "array",
+          "required": true,
+          "minItems": 1,
+          "itemsType": "string",
+          "itemsEnum": [
+            "oci"
+          ],
+          "description": "properties.supportedRuntimes is required and must contain at least one supported runtime"
+        },
+        {
+          "rule_id": "capabilities-019",
+          "field": "properties.supportedDeploymentTypes",
+          "type": "array",
+          "required": true,
+          "minItems": 1,
+          "itemsType": "string",
+          "itemsEnum": [
+            "helm",
+            "compose"
+          ],
+          "description": "properties.supportedDeploymentTypes is required and must contain at least one supported deployment type"
+        }
+      ],
+      "response_structure": {
+        "matches": [
+          {
+            "description": "Response must indicate success",
+            "json": "status",
+            "value": "capabilities_received"
+          }
+        ]
+      }
+    },
+    "POST_status": {
+      "path": "/api/v1/clients/{clientId}/deployments/{deploymentId}/status",
+      "method": "POST",
+      "status_code": 200,
+      "validation_error_key": "unprocessable",
+      "validations": [
+        {
+          "rule_id": "status-001",
+          "field": "apiVersion",
+          "type": "string",
+          "required": true,
+          "value": "deployment.margo.org/v1alpha1",
+          "description": "apiVersion must be exactly 'deployment.margo.org/v1alpha1'"
+        },
+        {
+          "rule_id": "status-002",
+          "field": "kind",
+          "type": "string",
+          "required": true,
+          "value": "DeploymentStatusManifest",
+          "description": "kind must be exactly 'DeploymentStatusManifest'"
+        },
+        {
+          "rule_id": "status-003",
+          "field": "deploymentId",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "deploymentId is required"
+        },
+        {
+          "rule_id": "status-004",
+          "field": "status",
+          "type": "object",
+          "required": true,
+          "description": "status object is required"
+        },
+        {
+          "rule_id": "status-005",
+          "field": "status.state",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "pending",
+            "installing",
+            "installed",
+            "failed",
+            "removing",
+            "removed"
+          ],
+          "description": "status.state must be a valid deployment state"
+        },
+        {
+          "rule_id": "status-006",
+          "field": "components",
+          "type": "array",
+          "required": true,
+          "itemsType": "object",
+          "description": "components must be an array of status entries"
+        },
+        {
+          "rule_id": "status-007",
+          "field": "components.*.name",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "description": "Each component must include a name"
+        },
+        {
+          "rule_id": "status-008",
+          "field": "components.*.state",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "pending",
+            "installing",
+            "installed",
+            "failed",
+            "removing",
+            "removed"
+          ],
+          "description": "Each component must include a valid state"
+        },
+        {
+          "rule_id": "status-009",
+          "field": "deviceId",
+          "type": "string",
+          "required": false,
+          "description": "deviceId is optional; when present it must be a string identifying the reporting device"
+        }
+      ],
+      "response_structure": {
+        "matches": [
+          {
+            "description": "Response must acknowledge receipt",
+            "json": "acknowledgement",
+            "value": "received"
+          }
+        ]
+      }
+    }
+  },
+  "error_responses": {
+    "badRequest": {
+      "status_code": 400,
+      "format": "error_string"
+    },
+    "notFound": {
+      "status_code": 404,
+      "format": "error_string"
+    },
+    "unprocessable": {
+      "status_code": 422,
+      "format": "validation_errors",
+      "status": "validation_failed"
+    }
+  }
+}
