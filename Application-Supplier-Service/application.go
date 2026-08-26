@@ -1,730 +1,624 @@
 package main
 
 import (
+    "encoding/json"
     "fmt"
+    "os"
     "regexp"
+    "strings"
+    "gopkg.in/yaml.v3"
 )
+
+type Rule struct {
+    Type         string            `json:"type"`
+    Required     bool              `json:"required"`
+    Enum         []string          `json:"enum,omitempty"`
+    Regex        string            `json:"regex,omitempty"`
+    Reference    string            `json:"reference,omitempty"`
+    RequiredWhen map[string]string `json:"requiredWhen,omitempty"`
+    MinItems     int               `json:"minItems,omitempty"`
+
+    DisplayName  string            `json:"displayName,omitempty"`
+    Expected     string            `json:"expected,omitempty"`
+}
 
 func ValidateAppDescription(
     app *ApplicationDescription,
+    raw map[string]interface{},
     report *ValidationReport,
 ) error {
 
-    validateTopLevel(
-        app,
-        report,
+    rules := LoadRules()
+
+    messages, err := LoadMessages(
+        "validation-messages.yaml",
     )
 
-    validateMetadata(
-        app,
-        report,
-    )
-
-    componentNames, _ :=
-        validateDeploymentProfiles(
-            app,
-            report,
-        )
-
-    schemas, _ :=
-        validateSchemas(
-            app,
-            report,
-        )
-
-    validateConfiguration(
-        app,
-        report,
-        schemas,
-    )
-
-    validateParameterTargets(
-        app,
-        report,
-        componentNames,
-    )
-
-    return nil
-}
-
-
-func validateTopLevel(
-    app *ApplicationDescription,
-    report *ValidationReport,
-) error {
-
-    check(
-        report,
-        "apiVersion",
-        "string",
-        "Required (non-empty)",
-    )
-
-    if app.APIVersion == "" {
-
-        fail(
-            report,
-            "(missing)",
-            "API version is required but was not provided.",
-        )
-
-    } else {
-
-        pass(
-            report,
-            app.APIVersion,
-            "API version conforms to the required specification.",
-        )
+    if err != nil {
+        return err
     }
 
-    check(
-        report,
-        "kind",
-        "string",
-        "ApplicationDescription",
+    references := BuildReferences(
+        raw,
     )
 
-    if app.Kind == "" {
+    for path, rule := range rules {
 
-        fail(
-            report,
-            "(missing)",
-            "Application type is required but was not provided.",
+        values := GetValues(
+            raw,
+            path,
         )
 
-    } else if app.Kind != "ApplicationDescription" {
-
-        fail(
+        validateRule(
             report,
-            app.Kind,
-            "Application type does not conform to the required baseline. Expected 'ApplicationDescription'.",
-        )
-
-    } else {
-
-        pass(
-            report,
-            app.Kind,
-            "Application type conforms to the required baseline.",
-        )
-    }
-
-    check(
-        report,
-        "id",
-        "string",
-        "lowercase letters, numbers and dashes only, max length=200",
-    )
-
-    re := regexp.MustCompile(
-        `^[a-z0-9-]{1,200}$`,
-    )
-
-    if app.ID == "" {
-
-        fail(
-            report,
-            "(missing)",
-            "Application identifier is required but was not provided.",
-        )
-
-    } else if !re.MatchString(app.ID) {
-
-        fail(
-            report,
-            app.ID,
-            "Application identifier does not conform to the required naming convention.",
-        )
-
-    } else {
-
-        pass(
-            report,
-            app.ID,
-            "Application identifier conforms to the required naming convention.",
+            path,
+            values,
+            rule,
+            references,
+            messages,
+            raw,
         )
     }
 
     return nil
 }
 
-func validateDeploymentProfiles(
-    app *ApplicationDescription,
-    report *ValidationReport,
-) (map[string]bool, error) {
+func LoadMessages(
+    file string,
+) (
+    map[string]ValidationMessage,
+    error,
+) {
 
-    check(
-        report,
-        "deploymentProfile",
-        "array",
-        "At least one deployment profile",
+    var messages map[string]ValidationMessage
+
+    data, err := os.ReadFile(file)
+
+    if err != nil {
+        return nil, err
+    }
+
+    err = yaml.Unmarshal(
+        data,
+        &messages,
     )
 
-    if len(app.DeploymentProfile) == 0 {
+    if err != nil {
+        return nil, err
+    }
 
-        fail(
-            report,
-            "0 deployment profile(s)",
-            "At least one deployment profile is required.",
+    return messages, nil
+}
+
+func GetValues(
+    raw map[string]interface{},
+    path string,
+) []interface{} {
+
+    return walk(
+        raw,
+        strings.Split(
+            path,
+            ".",
+        ),
+    )
+}
+
+
+
+func LoadRules() map[string]Rule {
+
+	var rules map[string]Rule
+
+	data, err := os.ReadFile(
+		"application-description-spec.json",
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	err = json.Unmarshal(
+		data,
+		&rules,
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return rules
+}
+
+
+func formatActual(
+    value interface{},
+) string {
+
+    switch v := value.(type) {
+
+    case map[string]interface{}:
+
+        return fmt.Sprintf(
+            "%d propertie(s)",
+            len(v),
         )
 
-    } else {
+    case []interface{}:
 
-        pass(
-            report,
+        if len(v) == 1 {
+
+            return fmt.Sprintf(
+                "%v",
+                v[0],
+            )
+        }
+
+        return fmt.Sprintf(
+            "%d item(s)",
+            len(v),
+        )
+
+    default:
+
+        return fmt.Sprintf(
+            "%v",
+            v,
+        )
+    }
+}
+
+func BuildReferences(
+    raw map[string]interface{},
+) map[string]map[string]bool {
+
+    refs := map[string]map[string]bool{
+        "parameters": {},
+        "configuration.schema": {},
+        "deploymentProfiles.components.name": {},
+    }
+
+    // parameters
+    if parameters, ok :=
+        raw["parameters"].(map[string]interface{}); ok {
+
+        for name := range parameters {
+
+            refs["parameters"][name] = true
+        }
+    }
+
+    // configuration.schema.name
+    schemaNames := GetValues(
+        raw,
+        "configuration.schema.name",
+    )
+
+    for _, value := range schemaNames {
+
+        refs["configuration.schema"][
             fmt.Sprintf(
-                "%d deployment profile(s)",
-                len(app.DeploymentProfile),
+                "%v",
+                value,
             ),
-            "Deployment profile configuration conforms to the required baseline.",
-        )
+        ] = true
     }
 
-    componentNames := make(map[string]bool)
+    // deploymentProfiles.components.name
+    componentNames := GetValues(
+        raw,
+        "deploymentProfiles.components.name",
+    )
 
-    for _, profile := range app.DeploymentProfile {
+    for _, value := range componentNames {
 
-        check(
-            report,
-            "deploymentProfile.type",
-            "string",
-            "helm | compose",
-        )
-
-        if profile.Type == "" {
-
-            fail(
-                report,
-                "(missing)",
-                "Deployment profile type is required but was not provided.",
-            )
-
-        } else if profile.Type != "helm" &&
-            profile.Type != "compose" {
-
-            fail(
-                report,
-                profile.Type,
-                "Deployment profile type does not conform to the supported deployment specifications.",
-            )
-
-        } else {
-
-            pass(
-                report,
-                profile.Type,
-                "Deployment profile type conforms to the supported deployment specifications.",
-            )
-        }
-
-        check(
-            report,
-            "deploymentProfile.id",
-            "string",
-            "Required (non-empty)",
-        )
-
-        if profile.ID == "" {
-
-            fail(
-                report,
-                "(missing)",
-                "Deployment profile identifier is required but was not provided.",
-            )
-
-        } else {
-
-            pass(
-                report,
-                profile.ID,
-                "Deployment profile configuration conforms to the defined specification.",
-            )
-        }
-
-        if len(profile.Components) == 0 {
-
-            fail(
-                report,
-                "0 component(s)",
-                "Deployment profile does not contain any component definitions.",
-            )
-        }
-
-        for _, component := range profile.Components {
-
-            check(
-                report,
-                "component.name",
-                "string",
-                "Required (non-empty)",
-            )
-
-            if component.Name == "" {
-
-                fail(
-                    report,
-                    "(missing)",
-                    "Component name is required but was not provided.",
-                )
-
-            } else {
-
-                componentNames[component.Name] = true
-
-                pass(
-                    report,
-                    component.Name,
-                    "Component configuration conforms to the defined specification.",
-                )
-            }
-
-            if len(component.Properties) == 0 {
-
-                fail(
-                    report,
-                    "0 properties",
-                    "Component configuration properties are not defined.",
-                )
-            }
-
-            if profile.Type == "helm" {
-
-                check(
-                    report,
-                    "repository",
-                    "string",
-                    "Repository URL required",
-                )
-
-                repository, ok :=
-                    component.Properties["repository"]
-
-                if !ok {
-
-                    fail(
-                        report,
-                        "(missing)",
-                        "Repository configuration is required but was not provided.",
-                    )
-
-                } else {
-
-                    pass(
-                        report,
-                        fmt.Sprintf("%v", repository),
-                        "Repository configuration conforms to the deployment requirements.",
-                    )
-                }
-
-                check(
-                    report,
-                    "revision",
-                    "string",
-                    "Required (non-empty)",
-                )
-
-                revision, ok :=
-                    component.Properties["revision"]
-
-                if !ok {
-
-                    fail(
-                        report,
-                        "(missing)",
-                        "Revision information is required but was not provided.",
-                    )
-
-                } else {
-
-                    pass(
-                        report,
-                        fmt.Sprintf("%v", revision),
-                        "Revision information conforms to the deployment requirements.",
-                    )
-                }
-            }
-
-            if profile.Type == "compose" {
-
-                check(
-                    report,
-                    "compose.packageLocation",
-                    "string",
-                    "Required package location",
-                )
-
-                packageLocation, ok :=
-                    component.Properties["packageLocation"]
-
-                if !ok {
-
-                    fail(
-                        report,
-                        "(missing)",
-                        "Package location is required but was not provided.",
-                    )
-
-                } else {
-
-                    pass(
-                        report,
-                        fmt.Sprintf("%v", packageLocation),
-                        "Package location conforms to the deployment requirements.",
-                    )
-                }
-            }
-        }
+        refs["deploymentProfiles.components.name"][
+            fmt.Sprintf(
+                "%v",
+                value,
+            ),
+        ] = true
     }
 
-    return componentNames, nil
+    return refs
 }
 
 
-func validateSchemas(
-    app *ApplicationDescription,
-    report *ValidationReport,
-) (map[string]bool, error) {
+func walk(
+    current interface{},
+    parts []string,
+) []interface{} {
 
-    schemas := make(map[string]bool)
+    if len(parts) == 0 {
 
-    for _, schema := range app.Configuration.Schema {
-
-        check(
-            report,
-            "schema",
-            "string",
-            "name and dataType required",
-        )
-
-        if schema.Name == "" {
-
-            fail(
-                report,
-                "(missing)",
-                "Schema name is required but was not provided.",
-            )
-
-        } else if schema.DataType == "" {
-
-            fail(
-                report,
-                "(missing)",
-                fmt.Sprintf(
-                    "Schema '%s' does not define a data type.",
-                    schema.Name,
-                ),
-            )
-
-        } else {
-
-            schemas[schema.Name] = true
-
-            pass(
-                report,
-                schema.Name,
-                fmt.Sprintf(
-                    "Schema '%s' conforms to the defined specification. Data type='%s', AllowEmpty=%t.",
-                    schema.Name,
-                    schema.DataType,
-                    schema.AllowEmpty,
-                ),
-            )
+        return []interface{}{
+            current,
         }
     }
 
-    return schemas, nil
-}
+    switch value := current.(type) {
 
+    case map[string]interface{}:
 
-func validateConfiguration(
-    app *ApplicationDescription,
-    report *ValidationReport,
-    schemas map[string]bool,
-) error {
+        if next, ok := value[parts[0]]; ok {
 
-    for _, section := range app.Configuration.Sections {
-
-        check(
-            report,
-            "configuration.section",
-            "string",
-            "Required (non-empty)",
-        )
-
-        pass(
-            report,
-            section.Name,
-            "Configuration section has been successfully identified.",
-        )
-
-        for _, setting := range section.Settings {
-
-            check(
-                report,
-                fmt.Sprintf(
-                    "setting.parameter.%s",
-                    setting.Parameter,
-                ),
-                "reference",
-                "Must match a parameter definition",
+            return walk(
+                next,
+                parts[1:],
             )
-
-            if _, ok :=
-                app.Parameters[setting.Parameter]; !ok {
-
-                fail(
-                    report,
-                    setting.Parameter,
-                    fmt.Sprintf(
-                        "Referenced parameter '%s' is not defined.",
-                        setting.Parameter,
-                    ),
-                )
-
-            } else {
-
-                pass(
-                    report,
-                    setting.Parameter,
-                    fmt.Sprintf(
-                        "Parameter '%s' conforms to the defined specification.",
-                        setting.Parameter,
-                    ),
-                )
-            }
-
-            if setting.Schema != "" {
-
-                check(
-                    report,
-                    fmt.Sprintf(
-                        "setting.parameter.%s.schema",
-                        setting.Parameter,
-                    ),
-                    "reference",
-                    "Must match a schema definition",
-                )
-
-                if !schemas[setting.Schema] {
-
-                    fail(
-                        report,
-                        setting.Schema,
-                        fmt.Sprintf(
-                            "Referenced schema '%s' is not defined.",
-                            setting.Schema,
-                        ),
-                    )
-
-                } else {
-
-                    pass(
-                        report,
-                        setting.Schema,
-                        fmt.Sprintf(
-                            "Schema '%s' conforms to the defined specification.",
-                            setting.Schema,
-                        ),
-                    )
-                }
-            }
         }
+
+        var results []interface{}
+
+        for _, item := range value {
+
+            results = append(
+                results,
+                walk(
+                    item,
+                    parts,
+                )...,
+            )
+        }
+
+        return results
+
+    case []interface{}:
+
+        var results []interface{}
+
+        for _, item := range value {
+
+            results = append(
+                results,
+                walk(
+                    item,
+                    parts,
+                )...,
+            )
+        }
+
+        return results
     }
 
     return nil
 }
 
-func validateParameterTargets(
-    app *ApplicationDescription,
+func validateRule(
     report *ValidationReport,
-    componentNames map[string]bool,
-) error {
+    field string,
+    values []interface{},
+    rule Rule,
+    refs map[string]map[string]bool,
+    messages map[string]ValidationMessage,
+    raw map[string]interface{},
+) {
 
-    for parameterName, parameter :=
-        range app.Parameters {
+    msg, ok := messages[field]
 
-        for _, target :=
-            range parameter.Targets {
+    if !ok {
 
-            for _, component :=
-                range target.Components {
+        msg = ValidationMessage{
+            Check: CheckMessage{
+                Datatype: rule.Type,
+                Expected: buildExpected(rule),
+            },
+        }
+    }
 
-                    check(
-                        report,
-                        fmt.Sprintf(
-                            "parameter.%s",
-                            parameterName,
-                        ),
-                        "reference",
-                        "Must match a deployment component",
+    if len(rule.RequiredWhen) > 0 {
+
+        shouldValidate := false
+
+        for conditionPath, expected :=
+            range rule.RequiredWhen {
+
+            conditionValues := GetValues(
+                raw,
+                conditionPath,
+            )
+
+            for _, value :=
+                range conditionValues {
+
+                actual := fmt.Sprintf(
+                    "%v",
+                    value,
+                )
+
+                if actual == expected {
+
+                    shouldValidate = true
+                    break
+                }
+            }
+
+            if shouldValidate {
+                break
+            }
+        }
+
+        if !shouldValidate {
+            return
+        }
+    }
+
+    if msg.Check.Datatype == "" {
+
+        msg.Check.Datatype =
+            rule.Type
+    }
+
+    if msg.Check.Expected == "" {
+
+        msg.Check.Expected =
+            buildExpected(rule)
+    }
+
+    expected := msg.Check.Expected
+
+    if rule.Expected != "" {
+
+        expected =
+            rule.Expected
+    }
+
+    if rule.Required &&
+        len(values) == 0 {
+
+        displayField := field
+
+        if rule.DisplayName != "" {
+
+            displayField =
+                rule.DisplayName
+        }
+        check(
+    report,
+    msg.CRID,
+    displayField,
+    msg.Check.Datatype,
+    expected,
+)
+
+        fail(
+            report,
+            "(missing)",
+            msg.Fail.Missing,
+        )
+
+        return
+    }
+
+    for _, value := range values {
+
+        displayField := field
+
+        if rule.DisplayName != "" {
+
+            displayField =
+                rule.DisplayName
+        }
+
+        // Make repeated rows unique
+        if len(values) > 1 {
+
+        displayField = fmt.Sprintf(
+        "%s (%v)",
+        displayField,
+        value,
+    )
+}
+
+check(
+    report,
+    msg.CRID,
+    displayField,
+    msg.Check.Datatype,
+    expected,
+)
+
+        validateValue(
+            report,
+            field,
+            value,
+            rule,
+            refs,
+            messages,
+        )
+    }
+}
+
+
+func validateValue(
+	report *ValidationReport,
+	field string,
+	value interface{},
+	rule Rule,
+	refs map[string]map[string]bool,
+	messages map[string]ValidationMessage,
+) {
+
+	msg := messages[field]
+
+    actual := formatActual(
+    value,
+)
+	if len(rule.Enum) > 0 {
+
+		valid := false
+
+		for _, e := range rule.Enum {
+
+			if e == actual {
+				valid = true
+				break
+			}
+		}
+
+		if !valid {
+
+			fail(
+				report,
+				actual,
+				msg.Fail.Invalid,
+			)
+
+			return
+		}
+	}
+
+	if rule.Regex != "" {
+
+		re := regexp.MustCompile(
+			rule.Regex,
+		)
+
+		if !re.MatchString(actual) {
+
+			fail(
+				report,
+				actual,
+				msg.Fail.Invalid,
+			)
+
+			return
+		}
+	}
+
+    if rule.Reference != "" {
+
+    refMap := refs[rule.Reference]
+
+    switch v := value.(type) {
+
+    case []interface{}:
+
+        for _, item := range v {
+
+            switch nested := item.(type) {
+
+            case []interface{}:
+
+                for _, nestedItem := range nested {
+
+                    actual := formatActual(
+                        nestedItem,
                     )
 
-                    if !componentNames[component] {
+                    if !refMap[actual] {
 
                         fail(
                             report,
-                            component,
-                            fmt.Sprintf(
-                                "Parameter '%s' references a component that does not conform to the defined deployment configuration.",
-                                parameterName,
-                            ),
+                            actual,
+                            msg.Fail.Invalid,
                         )
 
-                    } else {
-
-                        pass(
-                            report,
-                            component,
-                            fmt.Sprintf(
-                                "Parameter '%s' conforms to the defined component mapping requirements. Pointer='%s'.",
-                                parameterName,
-                                target.Pointer,
-                            ),
-                        )
+                        return
                     }
+                }
+
+            default:
+
+                actual := formatActual(
+                    item,
+                )
+
+                if !refMap[actual] {
+
+                    fail(
+                        report,
+                        actual,
+                        msg.Fail.Invalid,
+                    )
+
+                    return
                 }
             }
         }
 
-    return nil
-}
+    default:
 
-func validateMetadata(
-    app *ApplicationDescription,
-    report *ValidationReport,
-) error {
-
-    check(
-        report,
-        "metadata.name",
-        "string",
-        "Required (non-empty)",
-    )
-
-    if app.Metadata.Name == "" {
-
-        fail(
-            report,
-            "(missing)",
-            "Application name is required but was not provided.",
+        actual := formatActual(
+            value,
         )
 
-    } else {
-
-        pass(
-            report,
-            app.Metadata.Name,
-            "Application name conforms to the required specification.",
-        )
-    }
-
-    check(
-        report,
-        "metadata.version",
-        "string",
-        "Required (non-empty)",
-    )
-
-    if app.Metadata.Version == "" {
-
-        fail(
-            report,
-            "(missing)",
-            "Application version is required but was not provided.",
-        )
-
-    } else {
-
-        pass(
-            report,
-            app.Metadata.Version,
-            "Application version conforms to the required specification.",
-        )
-    }
-
-    check(
-        report,
-        "metadata.catalog.organization",
-        "array",
-        "At least one organization",
-    )
-
-    if len(app.Metadata.Catalog.Organization) == 0 {
-
-        fail(
-            report,
-            "0 organization(s)",
-            "At least one organization definition is required.",
-        )
-
-    } else {
-
-        pass(
-            report,
-            fmt.Sprintf(
-                "%d organization(s)",
-                len(app.Metadata.Catalog.Organization),
-            ),
-            "Organization information conforms to the required specification.",
-        )
-    }
-
-    for _, org := range app.Metadata.Catalog.Organization {
-
-        check(
-            report,
-            "metadata.catalog.organization.name",
-            "string",
-            "Required (non-empty)",
-        )
-
-        if org.Name == "" {
+        if !refMap[actual] {
 
             fail(
                 report,
-                "(missing)",
-                "Organization name is required but was not provided.",
+                actual,
+                msg.Fail.Invalid,
             )
 
-        } else {
-
-            pass(
-                report,
-                org.Name,
-                "Organization information conforms to the required specification.",
-            )
+            return
         }
     }
-
-    return nil
 }
 
-// func check(report *ValidationReport, msg string) {
-//     fmt.Println("Validate", msg)
-//     report.Check(msg)
-// }
+	pass(
+		report,
+		actual,
+		msg.Pass.Description,
+	)
+}
 
-// func pass(report *ValidationReport, msg string) {
-//     fmt.Println("PASS", msg)
-//     report.Pass(msg)
-// }
 
-// func fail(report *ValidationReport, msg string) error {
-//     fmt.Println("FAIL", msg)
-//     report.Fail(msg)
-//     return fmt.Errorf(msg)
-// }
+func buildExpected(
+    rule Rule,
+) string {
+
+    if rule.Expected != "" {
+
+        return rule.Expected
+    }
+
+    if len(rule.Enum) > 0 {
+
+        return strings.Join(
+            rule.Enum,
+            ", ",
+        )
+    }
+
+    if rule.Regex != "" {
+
+        return rule.Regex
+    }
+
+    if rule.Reference != "" {
+
+        return "reference -> " +
+            rule.Reference
+    }
+
+    if rule.Required {
+
+        return "Required (non-empty)"
+    }
+
+    return ""
+}
+
+
 
 func check(
     report *ValidationReport,
+    crId string,
     field string,
     dataType string,
     expected string,
 ) {
 
-    fmt.Println("Validate", field)
+    fmt.Println(
+        "Validate",
+        field,
+        "CRID:",
+        crId,
+    )
 
     report.Check(
+        crId,
         field,
         dataType,
         expected,

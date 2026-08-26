@@ -149,6 +149,17 @@ func main() {
         &app,
     )
 
+    var raw map[string]interface{}
+
+err = yaml.Unmarshal(
+    data,
+    &raw,
+)
+
+if err != nil {
+    panic(err)
+}
+
     appName := app.Metadata.Name
 
 if appName == "" {
@@ -208,8 +219,10 @@ if report.ApplicationName == "" {
 
 err = ValidateAppDescription(
     &app,
+    raw,
     report,
 )
+
 
 if err != nil {
 
@@ -256,6 +269,7 @@ fmt.Println(
                 range profile.Components {
 
 report.Check(
+    "",
     fmt.Sprintf(
         "Validating Helm component '%s'",
         component.Name,
@@ -313,6 +327,7 @@ fmt.Println(
                     component.Properties["packageLocation"].(string)
 
                report.Check(
+                "",
     "compose.packageLocation",
     "network",
     "Package location reachable",

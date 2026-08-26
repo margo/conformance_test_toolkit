@@ -1,0 +1,267 @@
+apiVersion:
+  crId:
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: API version conforms to the required specification.
+
+  fail:
+    missing: API version is required but was not provided.
+
+kind:
+  crId:
+  check:
+    datatype: string
+    expected: ApplicationDescription
+
+  pass:
+    description: Application type conforms to the required baseline.
+
+  fail:
+    missing: Application type is required but was not provided.
+    invalid: Application type does not conform to the required baseline. Expected 'ApplicationDescription'.
+
+id:
+  crId: MARGO-APP-APPLICATIONDESCRIPTION-001, MARGO-APP-APPLICATIONDESCRIPTION-006, MARGO-APP-APPLICATIONDESCRIPTION-005
+  check:
+    datatype: string
+    expected: lowercase letters, numbers and dashes only, max length=200
+
+  pass:
+    description: Application identifier conforms to the required naming convention.
+
+  fail:
+    missing: Application identifier is required but was not provided.
+    invalid: Application identifier does not conform to the required naming convention.
+
+metadata.name:
+  crId:
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Application name conforms to the required specification.
+
+  fail:
+    missing: Application name is required but was not provided.
+    invalid: Application name does not conform to the required naming convention.
+
+metadata.version:
+  crId: MARGO-APP-APPLICATIONREGISTRY-002
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Application version conforms to the required specification.
+
+  fail:
+    missing: Application version is required but was not provided.
+
+metadata.catalog.organization:
+  crId:
+  check:
+    datatype: array
+    expected: At least one organization
+
+  pass:
+    description: Organization information conforms to the required specification.
+
+  fail:
+    missing: At least one organization definition is required.
+
+metadata.catalog.organization.name:
+  crId:
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Organization information conforms to the required specification.
+
+  fail:
+    missing: Organization name is required but was not provided.
+
+deploymentProfiles:
+  crId:
+  check:
+    datatype: array
+    expected: At least one deployment profile
+
+  pass:
+    description: Deployment profile configuration conforms to the required baseline.
+
+  fail:
+    missing: At least one deployment profile is required.
+
+deploymentProfiles.type:
+  crId:
+  check:
+    datatype: string
+    expected: helm | compose
+
+  pass:
+    description: Deployment profile type conforms to the supported deployment specifications.
+
+  fail:
+    missing: Deployment profile type is required but was not provided.
+    invalid: Deployment profile type does not conform to the supported deployment specifications.
+
+deploymentProfiles.id:
+  crId:
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Deployment profile configuration conforms to the defined specification.
+
+  fail:
+    missing: Deployment profile identifier is required but was not provided.
+
+deploymentProfiles.components:
+  crId:
+  check:
+    datatype: array
+    expected: At least one component definition
+
+  pass:
+    description: Component configuration conforms to the defined specification.
+
+  fail:
+    missing: Deployment profile does not contain any component definitions.
+
+deploymentProfiles.components.name:
+  crId: MARGO-APP-APPLICATIONDESCRIPTION-002
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Component configuration conforms to the defined specification.
+
+  fail:
+    missing: Component name is required but was not provided.
+
+deploymentProfiles.components.properties:
+  crId:
+  check:
+    datatype: map
+    expected: Component properties required
+
+  pass:
+    description: Component properties conform to the deployment requirements.
+
+  fail:
+    missing: Component configuration properties are not defined.
+
+deploymentProfiles.components.properties.repository:
+  crId:
+  check:
+    datatype: string
+    expected: Repository URL required
+
+  pass:
+    description: Repository configuration conforms to the deployment requirements.
+
+  fail:
+    missing: Repository configuration is required but was not provided.
+
+deploymentProfiles.components.properties.revision:
+  crId:
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Revision information conforms to the deployment requirements.
+
+  fail:
+    missing: Revision information is required but was not provided.
+
+deploymentProfiles.components.properties.packageLocation:
+  crId:
+  check:
+    datatype: string
+    expected: Required package location
+
+  pass:
+    description: Package location conforms to the deployment requirements.
+
+  fail:
+    missing: Package location is required but was not provided.
+
+configuration.schema.name:
+  crId:
+  check:
+    datatype: string
+    expected: Schema name required
+
+  pass:
+    description: Schema conforms to the defined specification.
+
+  fail:
+    missing: Schema name is required but was not provided.
+
+configuration.schema.dataType:
+  crId:
+  check:
+    datatype: string
+    expected: Schema data type required
+
+  pass:
+    description: Schema conforms to the defined specification.
+
+  fail:
+    missing: Schema does not define a data type.
+
+configuration.sections.settings.parameter:
+  crId:
+  check:
+    datatype: reference
+    expected: Must match a parameter definition
+
+  pass:
+    description: Parameter conforms to the defined specification.
+
+  fail:
+    invalid: Referenced parameter is not defined.
+
+configuration.sections.settings.schema:
+  crId:
+  check:
+    datatype: reference
+    expected: Must match a schema definition
+
+  pass:
+    description: Schema conforms to the defined specification.
+
+  fail:
+    invalid: Referenced schema is not defined.
+
+parameters.targets.components:
+  crId: MARGO-APP-APPLICATIONDESCRIPTION-003
+  check:
+    datatype: reference
+    expected: Must match a deployment component
+
+  pass:
+    description: Parameter conforms to the defined component mapping requirements.
+
+  fail:
+    invalid: Parameter references a component that does not conform to the defined deployment configuration.
+
+parameters.targets.pointer:
+  crId:
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Parameter target pointer conforms to the defined component mapping requirements.
+
+  fail:
+    missing: Parameter target pointer is required but was not provided.

@@ -8,6 +8,7 @@ import (
 )
 
 type ValidationEntry struct {
+    CRID        string
     Field       string
     Status      string
     Type        string
@@ -181,6 +182,7 @@ th {
 <table>
 
 <tr>
+    <th>CR-ID</th>
     <th>Application Description Attribute</th>
     <th>Status</th>
     <th>Type</th>
@@ -193,6 +195,7 @@ th {
 
 <tr>
 
+    <td>{{.CRID}}</td>
     <td>{{.Field}}</td>
 
     <td class="status-cell">
@@ -253,6 +256,7 @@ func (r *ValidationReport) Log(
 }
 
 func (r *ValidationReport) Check(
+    crId string,
     field string,
     dataType string,
     expected string,
@@ -261,9 +265,10 @@ func (r *ValidationReport) Check(
     r.Entries = append(
         r.Entries,
         ValidationEntry{
-            Field:    field,
-            Type:     dataType,
-            Rule:     expected,
+            CRID:  crId,
+            Field: field,
+            Type:  dataType,
+            Rule:  expected,
         },
     )
 }

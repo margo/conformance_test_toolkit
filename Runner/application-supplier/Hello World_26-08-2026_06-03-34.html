@@ -1,0 +1,797 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>Application Supplier Conformance Test Report</title>
+
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background: #f5f5f5;
+}
+
+.header {
+    background: #333;
+    color: white;
+    padding: 30px;
+}
+
+.header h1 {
+    margin: 0 0 30px 0;
+    font-size: 42px;
+    font-weight: bold;
+}
+
+.header p {
+    font-size: 18px;
+    margin: 10px 0;
+}
+
+.summary {
+    padding: 20px;
+    background: white;
+}
+
+.summary h2 {
+    margin-top: 0;
+}
+
+.pass {
+    color: green;
+    font-weight: bold;
+}
+
+.fail {
+    color: red;
+    font-weight: bold;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+th,
+td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    vertical-align: middle;
+}
+
+th {
+    background: #f2f2f2;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: left;
+}
+
+.status-cell {
+    text-align: center;
+    min-width: 90px;
+}
+
+.pass-icon {
+    color: green;
+    font-size: 26px;
+    line-height: 1;
+}
+
+.pass-text {
+    color: green;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.fail-icon {
+    color: red;
+    font-size: 26px;
+    line-height: 1;
+}
+
+.fail-text {
+    color: red;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+    <h1>
+        Application Supplier Conformance Test Report
+    </h1>
+
+    <p>
+        <strong>Application:</strong>
+        Hello World
+    </p>
+
+    <p>
+        <strong>Application Version:</strong>
+        1.0
+    </p>
+
+    <p>
+        <strong>Generated:</strong>
+        2026-08-26T06:03:34Z
+    </p>
+
+</div>
+
+<div class="summary">
+
+    <h2>Summary</h2>
+
+    <p>
+        Total Checks: 26
+        |
+        <span class="pass">
+            ✅ Passed: 23
+        </span>
+        |
+        <span class="fail">
+            ❌ Failed: 3
+        </span>
+    </p>
+
+    <p>
+        <strong>
+            Success Rate: 88.5%
+        </strong>
+    </p>
+
+</div>
+
+<table>
+
+<tr>
+    <th>CR-ID</th>
+    <th>Application Description Attribute</th>
+    <th>Status</th>
+    <th>Type</th>
+    <th>Validation Rule (Expected)</th>
+    <th>Actual Value</th>
+    <th>Remarks</th>
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>deploymentProfile.id</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>com-northstartida-hello-world-helm-a</td>
+    <td>Deployment profile configuration conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td>MARGO-APP-APPLICATIONDESCRIPTION-002</td>
+    <td>component.name</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>hello-world</td>
+    <td>Component configuration conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>repository</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Repository URL required</td>
+    <td>oci://northstarida.azurecr.io/charts/hello-world</td>
+    <td>Repository configuration conforms to the deployment requirements.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>revision</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>1.0.1</td>
+    <td>Revision information conforms to the deployment requirements.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>schema</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Schema name required</td>
+    <td>requireText</td>
+    <td>Schema conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>kind</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>ApplicationDescription</td>
+    <td>ApplicationDescription</td>
+    <td>Application type conforms to the required baseline.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>metadata.name</td>
+
+    <td class="status-cell">
+
+        
+            <div class="fail-icon">❌</div>
+            <div class="fail-text">FAIL</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>Hello World</td>
+    <td>Application name does not conform to the required naming convention.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td>MARGO-APP-APPLICATIONREGISTRY-002</td>
+    <td>metadata.version</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>1.0</td>
+    <td>Application version conforms to the required specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>apiVersion</td>
+
+    <td class="status-cell">
+
+        
+            <div class="fail-icon">❌</div>
+            <div class="fail-text">FAIL</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>(missing)</td>
+    <td>API version is required but was not provided.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>metadata.catalog.organization.name</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>Northstar Industrial Applications</td>
+    <td>Organization information conforms to the required specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>schema.dataType</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Schema data type required</td>
+    <td>string</td>
+    <td>Schema conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>setting.parameter (greeting)</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>reference</td>
+    <td>Must match a parameter definition</td>
+    <td>greeting</td>
+    <td>Parameter conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>setting.parameter (greetingAddressee)</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>reference</td>
+    <td>Must match a parameter definition</td>
+    <td>greetingAddressee</td>
+    <td>Parameter conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>setting.schema (requireText)</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>reference</td>
+    <td>Must match a schema definition</td>
+    <td>requireText</td>
+    <td>Schema conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>setting.schema (requireText)</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>reference</td>
+    <td>Must match a schema definition</td>
+    <td>requireText</td>
+    <td>Schema conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>parameter.target.pointer (global.config.appGreeting)</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>global.config.appGreeting</td>
+    <td>Parameter target pointer conforms to the defined component mapping requirements.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>parameter.target.pointer (global.config.appGreetingAddressee)</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>Required (non-empty)</td>
+    <td>global.config.appGreetingAddressee</td>
+    <td>Parameter target pointer conforms to the defined component mapping requirements.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>deploymentProfile</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>array</td>
+    <td>At least one deployment profile</td>
+    <td>map[components:[map[name:hello-world properties:map[repository:oci://northstarida.azurecr.io/charts/hello-world revision:1.0.1 wait:true]]] id:com-northstartida-hello-world-helm-a type:helm]</td>
+    <td>Deployment profile configuration conforms to the required baseline.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>component</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>array</td>
+    <td>At least one component definition</td>
+    <td>map[name:hello-world properties:map[repository:oci://northstarida.azurecr.io/charts/hello-world revision:1.0.1 wait:true]]</td>
+    <td>Component configuration conforms to the defined specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>properties</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>map</td>
+    <td>Component properties required</td>
+    <td>3 propertie(s)</td>
+    <td>Component properties conform to the deployment requirements.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td>MARGO-APP-APPLICATIONDESCRIPTION-003</td>
+    <td>parameter.target.component ([hello-world])</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>reference</td>
+    <td>Must match a deployment component</td>
+    <td>hello-world</td>
+    <td>Parameter conforms to the defined component mapping requirements.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td>MARGO-APP-APPLICATIONDESCRIPTION-003</td>
+    <td>parameter.target.component ([hello-world])</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>reference</td>
+    <td>Must match a deployment component</td>
+    <td>hello-world</td>
+    <td>Parameter conforms to the defined component mapping requirements.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td>MARGO-APP-APPLICATIONDESCRIPTION-001, MARGO-APP-APPLICATIONDESCRIPTION-006, MARGO-APP-APPLICATIONDESCRIPTION-005</td>
+    <td>id</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>lowercase letters, numbers and dashes only, max length=200</td>
+    <td>com-northstartida-hello-world</td>
+    <td>Application identifier conforms to the required naming convention.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>metadata.catalog.organization</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>array</td>
+    <td>At least one organization</td>
+    <td>map[name:Northstar Industrial Applications site:http://northstar-ida.com]</td>
+    <td>Organization information conforms to the required specification.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>deploymentProfile.type</td>
+
+    <td class="status-cell">
+
+        
+            <div class="pass-icon">✅</div>
+            <div class="pass-text">PASS</div>
+
+        
+
+    </td>
+
+    <td>string</td>
+    <td>helm | compose</td>
+    <td>helm</td>
+    <td>Deployment profile type conforms to the supported deployment specifications.</td>
+
+</tr>
+
+
+
+<tr>
+
+    <td></td>
+    <td>Validating Helm component &#39;hello-world&#39;</td>
+
+    <td class="status-cell">
+
+        
+            <div class="fail-icon">❌</div>
+            <div class="fail-text">FAIL</div>
+
+        
+
+    </td>
+
+    <td>network</td>
+    <td>Helm repository reachable</td>
+    <td>unreachable</td>
+    <td>Helm validation failed for component &#39;hello-world&#39; : oci unreachable: Error: invalid reference: invalid repository
+</td>
+
+</tr>
+
+
+
+</table>
+
+</body>
+</html>

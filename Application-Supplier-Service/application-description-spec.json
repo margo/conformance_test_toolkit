@@ -1,0 +1,175 @@
+{
+  "apiVersion": {
+    "type": "string",
+    "required": true,
+    "displayName": "apiVersion",
+    "expected": "Required (non-empty)"
+  },
+
+  "kind": {
+    "type": "string",
+    "required": true,
+    "enum": [
+      "ApplicationDescription"
+    ],
+    "displayName": "kind",
+    "expected": "ApplicationDescription"
+  },
+
+  "id": {
+    "type": "string",
+    "required": true,
+    "regex": "^[a-z0-9-]{1,200}$",
+    "displayName": "id",
+    "expected": "lowercase letters, numbers and dashes only, max length=200"
+  },
+
+  "metadata.name": {
+    "type": "string",
+    "required": true,
+    "displayName": "metadata.name",
+    "expected": "Required (non-empty)",
+    "regex": "^[a-z0-9-]{1,200}$"
+
+  },
+
+  "metadata.version": {
+    "type": "string",
+    "required": true,
+    "displayName": "metadata.version",
+    "expected": "Required (non-empty)"
+  },
+
+  "metadata.catalog.organization": {
+    "type": "array",
+    "required": true,
+    "minItems": 1,
+    "displayName": "metadata.catalog.organization",
+    "expected": "At least one organization"
+  },
+
+  "metadata.catalog.organization.name": {
+    "type": "string",
+    "required": true,
+    "displayName": "metadata.catalog.organization.name",
+    "expected": "Required (non-empty)"
+  },
+
+  "deploymentProfiles": {
+    "type": "array",
+    "required": true,
+    "minItems": 1,
+    "displayName": "deploymentProfile",
+    "expected": "At least one deployment profile"
+  },
+
+  "deploymentProfiles.type": {
+    "type": "string",
+    "required": true,
+    "enum": [
+      "helm",
+      "compose"
+    ],
+    "displayName": "deploymentProfile.type",
+    "expected": "helm | compose"
+  },
+
+  "deploymentProfiles.id": {
+    "type": "string",
+    "required": true,
+    "displayName": "deploymentProfile.id",
+    "expected": "Required (non-empty)"
+  },
+
+  "deploymentProfiles.components": {
+    "type": "array",
+    "required": true,
+    "minItems": 1,
+    "displayName": "component",
+    "expected": "At least one component definition"
+  },
+
+  "deploymentProfiles.components.name": {
+    "type": "string",
+    "required": true,
+    "regex": "^[a-z0-9-]{1,200}$",
+    "displayName": "component.name",
+    "expected": "Required (non-empty)"
+  },
+
+  "deploymentProfiles.components.properties": {
+    "type": "map",
+    "required": true,
+    "displayName": "properties",
+    "expected": "Component properties required"
+  },
+
+  "deploymentProfiles.components.properties.repository": {
+    "type": "string",
+    "requiredWhen": {
+      "deploymentProfiles.type": "helm"
+    },
+    "displayName": "repository",
+    "expected": "Repository URL required"
+  },
+
+  "deploymentProfiles.components.properties.revision": {
+    "type": "string",
+    "requiredWhen": {
+      "deploymentProfiles.type": "helm"
+    },
+    "displayName": "revision",
+    "expected": "Required (non-empty)"
+  },
+
+  "deploymentProfiles.components.properties.packageLocation": {
+    "type": "string",
+    "requiredWhen": {
+      "deploymentProfiles.type": "compose"
+    },
+    "displayName": "compose.packageLocation",
+    "expected": "Required package location"
+  },
+
+  "configuration.schema.name": {
+    "type": "string",
+    "required": true,
+    "displayName": "schema",
+    "expected": "Schema name required"
+  },
+
+  "configuration.schema.dataType": {
+    "type": "string",
+    "required": true,
+    "displayName": "schema.dataType",
+    "expected": "Schema data type required"
+  },
+
+  "configuration.sections.settings.parameter": {
+    "type": "reference",
+    "reference": "parameters",
+    "displayName": "setting.parameter",
+    "expected": "Must match a parameter definition"
+  },
+
+  "configuration.sections.settings.schema": {
+    "type": "reference",
+    "reference": "configuration.schema",
+    "displayName": "setting.schema",
+    "expected": "Must match a schema definition"
+  },
+
+  "parameters.targets.components": {
+    "type": "reference",
+    "reference": "deploymentProfiles.components.name",
+    "displayName": "parameter.target.component",
+    "expected": "Must match a deployment component"
+  },
+
+  "parameters.targets.pointer": {
+    "type": "string",
+    "required": true,
+    "displayName": "parameter.target.pointer",
+    "expected": "Required (non-empty)"
+  }
+}
