@@ -27,28 +27,30 @@
 
 ---
 
-## 1. What Is This Conformance Suite?
+## 1. What Is This Conformance Test Suite?
 
 The Margo Conformance Suite is built for **Margo specification authors and members** to verify that a real WFM (Workload Fleet Manager) or a real Device Agent correctly implements the [Margo Management Interface specification](https://raw.githubusercontent.com/margo/specification/pre-draft/system-design/specification/margo-management-interface/workload-management-api-1.0.0.yaml).
+
+The overall usage and architecture of the Margo Conformance Test Tool (CTT) is described here - [docs/MARGO_Conformance _Approach.md]
 
 **The use case:** A Margo member brings their WFM implementation (e.g., Symphony) or their device-agent implementation and runs the conformance suite against it. At the end, they get a signed test report showing which parts of the Margo spec their implementation conforms to.
 
 The system has two CLIs:
 
 ```
-conformance.sh   →  Prepare: create test groups, configure data, select test IDs
-run-tests.sh     →  Execute: run tests against real WFM or device, generate reports
+conformance.sh   →  For Margo Specification Contributors: create test groups, configure data, select test IDs
+run-tests.sh     →  For Margo User Personas: Run tests against real Application Description, WFM or device, generates conformance reports
 ```
 
 **Important:** The test scenarios (what to test and how) are created by the Margo user — typically exported from Postman as a collection. The conformance infrastructure handles running them, signing requests with RFC 9421, and generating a group-based report. See [Section 15](#15-design-notes--postman-vs-custom-format) for why there is also a custom JSON format.
 
 ---
 
-## 2. System Architecture Overview
+## 2. CTT Structure Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                     MARGO CONFORMANCE SYSTEM                          │
+│                     MARGO CONFORMANCE TEST TOOL                          │
 │                                                                       │
 │  conformance.sh (CLI #1)          run-tests.sh (CLI #2)              │
 │  ┌──────────────────────┐         ┌──────────────────────────────┐   │
