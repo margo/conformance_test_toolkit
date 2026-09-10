@@ -9,7 +9,7 @@
 ## Table of Contents
 
 1. [What Is This Conformance Suite?](#1-what-is-this-conformance-suite)
-2. [System Architecture Overview](#2-system-architecture-overview)
+2. [CTT Structure Overview](#2-system-architecture-overview)
 3. [Two Personas Explained](#3-two-personas-explained)
 4. [Directory Structure](#4-directory-structure)
 5. [How to Run Tests](#5-how-to-run-tests)
@@ -31,7 +31,7 @@
 
 The Margo Conformance Suite is built for **Margo specification authors and members** to verify that a real WFM (Workload Fleet Manager) or a real Device Agent correctly implements the [Margo Management Interface specification](https://raw.githubusercontent.com/margo/specification/pre-draft/system-design/specification/margo-management-interface/workload-management-api-1.0.0.yaml).
 
-The overall usage and architecture of the Margo Conformance Test Tool (CTT) is described here - [docs/MARGO_Conformance _Approach.md]
+The overall usage and architecture of the [Margo Conformance Test Tool (CTT)]<docs/MARGO_Conformance _Approach.md> gives a high level view of the tool and its intended usage.
 
 **The use case:** A Margo member brings their WFM implementation (e.g., Symphony) or their device-agent implementation and runs the conformance suite against it. At the end, they get a signed test report showing which parts of the Margo spec their implementation conforms to.
 
