@@ -24,7 +24,7 @@ type Rule struct {
 
 func ValidateAppDescription(
     app *ApplicationDescription,
-    raw map[string]interface{},
+    raw map[string]any,
     report *ValidationReport,
 ) error {
 
@@ -91,9 +91,9 @@ func LoadMessages(
 }
 
 func GetValues(
-    raw map[string]interface{},
+    raw map[string]any,
     path string,
-) []interface{} {
+) []any {
 
     return walk(
         raw,
@@ -132,19 +132,19 @@ func LoadRules() map[string]Rule {
 
 
 func formatActual(
-    value interface{},
+    value any,
 ) string {
 
     switch v := value.(type) {
 
-    case map[string]interface{}:
+    case map[string]any:
 
         return fmt.Sprintf(
             "%d propertie(s)",
             len(v),
         )
 
-    case []interface{}:
+    case []any:
 
         if len(v) == 1 {
 
@@ -169,7 +169,7 @@ func formatActual(
 }
 
 func BuildReferences(
-    raw map[string]interface{},
+    raw map[string]any,
 ) map[string]map[string]bool {
 
     refs := map[string]map[string]bool{
@@ -180,7 +180,7 @@ func BuildReferences(
 
     // parameters
     if parameters, ok :=
-        raw["parameters"].(map[string]interface{}); ok {
+        raw["parameters"].(map[string]any); ok {
 
         for name := range parameters {
 
@@ -225,20 +225,20 @@ func BuildReferences(
 
 
 func walk(
-    current interface{},
+    current any,
     parts []string,
-) []interface{} {
+) []any {
 
     if len(parts) == 0 {
 
-        return []interface{}{
+        return []any{
             current,
         }
     }
 
     switch value := current.(type) {
 
-    case map[string]interface{}:
+    case map[string]any:
 
         if next, ok := value[parts[0]]; ok {
 
@@ -248,7 +248,7 @@ func walk(
             )
         }
 
-        var results []interface{}
+        var results []any
 
         for _, item := range value {
 
@@ -263,9 +263,9 @@ func walk(
 
         return results
 
-    case []interface{}:
+    case []any:
 
-        var results []interface{}
+        var results []any
 
         for _, item := range value {
 
@@ -287,11 +287,11 @@ func walk(
 func validateRule(
     report *ValidationReport,
     field string,
-    values []interface{},
+    values []any,
     rule Rule,
     refs map[string]map[string]bool,
     messages map[string]ValidationMessage,
-    raw map[string]interface{},
+    raw map[string]any,
 ) {
 
     msg, ok := messages[field]
@@ -433,7 +433,7 @@ check(
 func validateValue(
 	report *ValidationReport,
 	field string,
-	value interface{},
+	value any,
 	rule Rule,
 	refs map[string]map[string]bool,
 	messages map[string]ValidationMessage,
@@ -441,9 +441,8 @@ func validateValue(
 
 	msg := messages[field]
 
-    actual := formatActual(
-    value,
-)
+	actual := formatActual(value)
+
 	if len(rule.Enum) > 0 {
 
 		valid := false
@@ -457,110 +456,74 @@ func validateValue(
 		}
 
 		if !valid {
-
-			fail(
-				report,
-				actual,
-				msg.Fail.Invalid,
-			)
-
+			failInvalid(report, actual, msg)
 			return
 		}
 	}
 
 	if rule.Regex != "" {
 
-		re := regexp.MustCompile(
-			rule.Regex,
-		)
+		re := regexp.MustCompile(rule.Regex)
 
 		if !re.MatchString(actual) {
-
-			fail(
-				report,
-				actual,
-				msg.Fail.Invalid,
-			)
-
+			failInvalid(report, actual, msg)
 			return
 		}
 	}
 
-    if rule.Reference != "" {
+	if rule.Reference != "" {
 
-    refMap := refs[rule.Reference]
+		refMap := refs[rule.Reference]
 
-    switch v := value.(type) {
+		if items, ok := value.([]any); ok {
 
-    case []interface{}:
+			for _, item := range items {
 
-        for _, item := range v {
-
-            switch nested := item.(type) {
-
-            case []interface{}:
-
-                for _, nestedItem := range nested {
-
-                    actual := formatActual(
-                        nestedItem,
-                    )
-
-                    if !refMap[actual] {
-
-                        fail(
-                            report,
-                            actual,
-                            msg.Fail.Invalid,
-                        )
-
-                        return
-                    }
-                }
-
-            default:
-
-                actual := formatActual(
-                    item,
-                )
-
-                if !refMap[actual] {
-
-                    fail(
-                        report,
-                        actual,
-                        msg.Fail.Invalid,
-                    )
-
-                    return
-                }
-            }
-        }
-
-    default:
-
-        actual := formatActual(
-            value,
-        )
-
-        if !refMap[actual] {
-
-            fail(
-                report,
-                actual,
-                msg.Fail.Invalid,
-            )
-
-            return
-        }
-    }
-}
+				if badActual, ok := firstUnreferencedItem(item, refMap); ok {
+					failInvalid(report, badActual, msg)
+					return
+				}
+			}
+		} else if !refMap[actual] {
+			failInvalid(report, actual, msg)
+			return
+		}
+	}
 
 	pass(
 		report,
 		actual,
 		msg.Pass.Description,
 	)
+}
+
+// firstUnreferencedItem checks one entry from a rule.Reference-validated
+// array (or, if the entry is itself a nested array, each of its items)
+// against refMap. It returns the offending value's formatted representation
+// and ok=true on the first item NOT found in refMap, or ok=false if every
+// item is valid — replacing what was three near-identical inline
+// fail-and-return blocks in validateValue.
+func firstUnreferencedItem(item any, refMap map[string]bool) (string, bool) {
+
+	nested, isNested := item.([]any)
+	if !isNested {
+
+		actual := formatActual(item)
+		if !refMap[actual] {
+			return actual, true
+		}
+		return "", false
+	}
+
+	for _, nestedItem := range nested {
+
+		actual := formatActual(nestedItem)
+		if !refMap[actual] {
+			return actual, true
+		}
+	}
+
+	return "", false
 }
 
 
@@ -650,5 +613,21 @@ func fail(
     report.Fail(
         actual,
         details,
+    )
+}
+
+// failInvalid reports the common "value didn't match the rule" failure —
+// replaces the repeated `fail(report, actual, msg.Fail.Invalid)` blocks that
+// used to appear at every validateValue check site.
+func failInvalid(
+    report *ValidationReport,
+    actual string,
+    msg ValidationMessage,
+) {
+
+    fail(
+        report,
+        actual,
+        msg.Fail.Invalid,
     )
 }

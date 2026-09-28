@@ -7,6 +7,13 @@ import (
     "strings"
 )
 
+// Repository/location URL schemes Margo application packages may use.
+const (
+    schemeHTTPS = "https://"
+    schemeHTTP  = "http://"
+    schemeOCI   = "oci://"
+)
+
 func CheckHTTPS(url string) error {
 
     resp, err := http.Head(url)
@@ -51,26 +58,13 @@ func CheckPackageLocation(
     location string,
 ) error {
 
-    if strings.HasPrefix(
-        location,
-        "https://",
-    ) {
+    if strings.HasPrefix(location, schemeHTTPS) ||
+        strings.HasPrefix(location, schemeHTTP) {
 
         return CheckHTTPS(location)
     }
 
-    if strings.HasPrefix(
-        location,
-        "http://",
-    ) {
-
-        return CheckHTTPS(location)
-    }
-
-    if strings.HasPrefix(
-        location,
-        "oci://",
-    ) {
+    if strings.HasPrefix(location, schemeOCI) {
 
         return CheckOCI(location)
     }
