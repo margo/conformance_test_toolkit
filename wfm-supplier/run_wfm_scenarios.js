@@ -4,17 +4,52 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 
 function usage() {
   console.error(
-    'Usage: node run_wfm_scenarios.js <base-url> <scenarios.json> <report.html> <cert-dir> [group-name] [group-version]'
+    'Usage: node run_wfm_scenarios.js <base-url> <scenarios.json> <report.html> <cert-dir> [group-name] [group-version]\n' +
+    '   or: node run_wfm_scenarios.js --curl <METHOD> <endpoint> --base-url <url> --cert-dir <dir> ' +
+    '[--body <json>] [--header "Name: value"]... [--unsigned]\n' +
+    '   or: node run_wfm_scenarios.js --fetch-trust-bundle <mis-base-url> <output-ca.pem>'
   );
   process.exit(2);
 }
 
-const [baseUrlArg, scenariosFile, reportFile, certDir, groupName, groupVersion] =
-  process.argv.slice(2);
-if (!baseUrlArg || !scenariosFile || !reportFile || !certDir) usage();
+// --fetch-trust-bundle: the MIAF "one-time, at suite startup" step — fetch the
+// WFM supplier's published trust bundle from their MIS and write it out as a CA
+// PEM file, once, before any scenario runs. Not a per-test-case operation and not
+// wired into the scenario loop at all: run this once (e.g. in CI setup, or by
+// hand), then point a cert dir's svid-ca.pem at the output for every later run.
+// No identity of our own is needed for this — MIS's discovery/bundle endpoints
+// are unauthenticated by design (MIAF spec) — so this branches out before any
+// cert loading happens below, unlike --curl mode.
+const isTrustBundleMode = process.argv[2] === '--fetch-trust-bundle';
+if (isTrustBundleMode) {
+  fetchTrustBundleMode(process.argv.slice(3))
+    .then((ok) => process.exit(ok ? 0 : 1))
+    .catch((err) => { console.error(err.stack || err); process.exit(1); });
+  return;
+}
+
+// --curl debug mode: sign and fire ONE ad-hoc request, print the equivalent curl
+// command plus the raw response — for manually poking at a requirement on the CLI,
+// the way you'd use Postman. Reuses signRequest/prepareContentDigest/request/
+// injectCertificate below (hoisted function declarations) instead of a second,
+// separate signing implementation. See runCurlMode() further down.
+const isCurlMode = process.argv[2] === '--curl';
+
+let baseUrlArg, scenariosFile, reportFile, certDir, groupName, groupVersion, curlArgs;
+if (isCurlMode) {
+  curlArgs = parseCurlArgs(process.argv.slice(3));
+  baseUrlArg = curlArgs.baseUrl;
+  certDir = curlArgs.certDir;
+  if (!baseUrlArg || !certDir || !curlArgs.method || !curlArgs.endpoint) usage();
+} else {
+  [baseUrlArg, scenariosFile, reportFile, certDir, groupName, groupVersion] =
+    process.argv.slice(2);
+  if (!baseUrlArg || !scenariosFile || !reportFile || !certDir) usage();
+}
 
 const baseUrl = baseUrlArg.replace(/\/+$/, '');
 const privateKeyPath = path.join(certDir, 'device.key');
@@ -51,6 +86,32 @@ let deviceCertificateBase64 = Buffer.from(deviceCertificate).toString('base64');
 const caCertificate = fs.existsSync(caCertPath) ? fs.readFileSync(caCertPath) : undefined;
 
 let keyid = computeKeyId(privateKey);
+
+// MIAF (mTLS) identity — loaded only if present, so scenarios/environments that
+// don't have one yet are completely unaffected. Same certDir as the RFC 9421
+// identity above; separate files because it's a different credential (an
+// X.509-SVID with a SPIFFE URI SAN), not a replacement for the old one.
+// See wfm-supplier/fixtures/miaf/README.md for how to generate/replace it.
+const svidCertPath = path.join(certDir, 'svid-cert.pem');
+const svidKeyPath  = path.join(certDir, 'svid-key.pem');
+const svidCaPath   = path.join(certDir, 'svid-ca.pem');
+const miafIdentity = (fs.existsSync(svidCertPath) && fs.existsSync(svidKeyPath))
+  ? {
+      cert: fs.readFileSync(svidCertPath, 'utf8'),
+      key: fs.readFileSync(svidKeyPath, 'utf8'),
+      ca: fs.existsSync(svidCaPath) ? fs.readFileSync(svidCaPath, 'utf8') : caCertificate,
+    }
+  : null;
+
+// Identity/certs are loaded above exactly as the normal run does — curl mode exits
+// here, before anything below that depends on a scenarios file (a bare top-level
+// `return` is valid because Node wraps this file in a function).
+if (isCurlMode) {
+  runCurlMode(curlArgs)
+    .then((failed) => process.exit(failed ? 1 : 0))
+    .catch((err) => { console.error(err.stack || err); process.exit(1); });
+  return;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Postman collection format detection and conversion
@@ -140,13 +201,35 @@ const POSTMAN_ENDPOINT_RULES = {
   'PUT /api/v1/clients/{clientId}/capabilities/{deviceId}': {
     body: DEVICE_CAPABILITIES_BODY,
   },
+  // Same endpoint without the {deviceId} segment — the shape the baseline
+  // (user1) Postman collection uses. Without this, capability items fall back to
+  // the Portman placeholder body and get a spurious 400 "invalid API version".
+  'POST /api/v1/clients/{clientId}/capabilities': {
+    body: DEVICE_CAPABILITIES_BODY,
+  },
+  'PUT /api/v1/clients/{clientId}/capabilities': {
+    body: DEVICE_CAPABILITIES_BODY,
+  },
   'GET /api/v1/clients/{clientId}/deployments': {
     extract_context: {
       deploymentId: 'deployments.0.deploymentId',
       bundleDigest: 'bundle.digest',
       deploymentDigest: 'deployments.0.digest',
     },
-    validations: [{ field: 'manifestVersion', operation: 'is_number' }],
+    validations: [
+      { field: 'manifestVersion', operation: 'is_number' },
+      // MI-009: bundle present & null when deployments is empty.
+      { operation: 'bundle_null_when_no_deployments' },
+      // MI-031: correct bundle media type when a bundle is present.
+      { operation: 'bundle_media_type' },
+      // MI-034: the ETag digest must be bare — quoted per HTTP ETag syntax and
+      // nothing else (no weak prefix, no whitespace, no extra characters).
+      { field: '_headers.etag', operation: 'matches_regex', value: '^"sha256:[0-9a-f]{64}"$' },
+      // MI-035: a manifest response MUST NOT be marked immutable.
+      { field: '_headers.cache-control', operation: 'not_contains', value: 'immutable' },
+      // MI-015: the ETag MUST be a strong validator = sha256 of the exact body.
+      { operation: 'etag_is_body_digest' },
+    ],
   },
   'GET /api/v1/clients/{clientId}/bundles/{bundleDigest}': {
     // Bundle endpoint: passes when a bundle exists (200); 404 is expected when no deployments configured
@@ -166,6 +249,29 @@ const POSTMAN_ENDPOINT_RULES = {
     accepted_statuses: [200, 400, 404],
   },
 };
+
+// semanticErrorBody returns a structurally valid current-schema request body for
+// `endpoint` with exactly one deliberate semantic violation (a bad enum value),
+// so a 422 test reaches the server's semantic-validation layer instead of being
+// rejected earlier as a malformed payload. Returns null for endpoints we don't
+// have a known-good body shape for (caller falls back to the Postman body).
+function semanticErrorBody(endpoint) {
+  if (endpoint.includes('/capabilities')) {
+    const b = JSON.parse(JSON.stringify(DEVICE_CAPABILITIES_BODY));
+    b.properties.supportedDeploymentTypes = ['__invalid_deployment_type__'];
+    return b;
+  }
+  if (endpoint.endsWith('/status')) {
+    return {
+      apiVersion: 'deployment.margo.org/v1alpha1',
+      kind: 'DeploymentStatusManifest',
+      deploymentId: '{deploymentId}',
+      status: { state: '__invalid_state__' },
+      components: [{ name: 'component-1', state: 'installed' }],
+    };
+  }
+  return null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Error-triggering rules for each response-example sub-test
@@ -206,9 +312,12 @@ function deriveErrorBehavior(resp) {
     return { skip_content_digest: true };
   }
   if (/signature.*fail|signature.*verif/i.test(name) || code === 401) {
-    // "Signature verification failed" — skip signing.
-    // Spec documents 401 for this specific case; 400 belongs to content-digest, a different test.
-    return { skip_signing: true };
+    // "Signature verification failed" — send a fully-formed request (valid
+    // Signature-Input + Content-Digest) whose Signature bytes are wrong, so the
+    // server's verifier runs and rejects it. `skip_signing` would instead omit
+    // the headers entirely, which is "missing signature" — a different case that
+    // a strict server answers with 400, not the 401 this test documents.
+    return { tamper_signature: true };
   }
   if (/invalid.*cert.*format|cert.*format.*invalid|cert.*format.*struct/i.test(name)) {
     // skip_signing: prevents 409 "already registered" when the device keyid is already onboarded.
@@ -216,12 +325,22 @@ function deriveErrorBehavior(resp) {
     return { bad_certificate: true, skip_signing: true };
   }
   if (/not.*trusted|revoked|rejected/i.test(name) || code === 403) {
-    // "Certificate not trusted" — use fresh unregistered cert. Spec documents 403 for this case.
-    return { fresh_cert: true };
+    // "Certificate not trusted / revoked" — sign with a fresh, never-onboarded
+    // certificate so the WFM sees an identity it has no trust relationship with.
+    // A conformant WFM may answer 403 (recognised but not trusted) or 401 (could
+    // not authenticate the caller) here — the strict 403-vs-revoked distinction
+    // needs server-side revocation state this client-only test can't create — so
+    // both codes are accepted. Anything else (400, 2xx) is still a failure.
+    return { fresh_cert: true, accepted_statuses: [401, 403] };
   }
   if (/semantic.*error|body.*semantic|request body includes/i.test(name) || code === 422) {
     // Spec documents 422 for a semantic body error; 400 belongs to content-digest, a different test.
-    return { use_placeholder_body: true };
+    // We send a STRUCTURALLY VALID current-schema body with exactly one semantic
+    // violation (a bad enum value) — the Portman placeholder body has an invalid
+    // apiVersion and old-schema fields, so a strict server rejects it with 400
+    // ("invalid API version …") before it ever reaches semantic validation, which
+    // is not what this test is checking.
+    return { semantic_error: true };
   }
   // Any other documented error (404 CONTEXT_FALLBACKS, or anything else): hold it to its
   // own documented code — no blanket fallback (e.g. 301 isn't documented anywhere in spec).
@@ -254,6 +373,7 @@ function deriveStepFromResponse(parentItem, resp) {
   const skip_signing = errorBehavior.skip_signing ?? (rules.skip_signing ?? false);
   const skip_content_digest = errorBehavior.skip_content_digest ?? false;
   const fresh_cert   = errorBehavior.fresh_cert ?? false;
+  const tamper_signature = errorBehavior.tamper_signature ?? false;
 
   // Derive the request body
   let request_body = null;
@@ -278,9 +398,9 @@ function deriveStepFromResponse(parentItem, resp) {
       ...(rules.body || {}),
       certificate: `INVALID_NOT_A_PEM_CERTIFICATE-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     };
-  } else if (errorBehavior.use_placeholder_body) {
-    // 422 "Semantic error" — keep the Postman Lorem-Ipsum body (bad apiVersion, invalid values)
-    // Don't apply bodyMerge/bodyNested — the placeholder body IS the bad payload
+  } else if (errorBehavior.semantic_error) {
+    // 422 "Semantic error" — a valid current-schema body with one bad enum value.
+    request_body = semanticErrorBody(endpoint) || request_body;
   } else if (errorBehavior.wrong_accept) {
     headers['Accept'] = 'text/plain';
   } else if (errorBehavior.add_if_none_match) {
@@ -316,9 +436,14 @@ function deriveStepFromResponse(parentItem, resp) {
     ? (rules.accepted_statuses || undefined)
     : errorBehavior.accepted_statuses;
 
+  // Conformance-requirement IDs: a response example may narrow them (e.g. only the
+  // error example maps to a "must be rejected" CR-ID); otherwise inherit the item's.
+  const crIds = resp.crIds || resp.crids || parentItem.crIds || parentItem.crids || [];
+
   return {
     id: resp.id,
     name: `${parentItem.name} — ${resp.name || resp.status}`,
+    crIds,
     method,
     endpoint,
     headers,
@@ -330,6 +455,7 @@ function deriveStepFromResponse(parentItem, resp) {
     skip_signing,
     skip_content_digest,
     fresh_cert,
+    tamper_signature,
   };
 }
 
@@ -415,6 +541,7 @@ function convertPostmanItem(item) {
   return {
     id: item.id,
     name: item.name,
+    crIds: item.crIds || item.crids || [],
     method,
     endpoint,
     headers,
@@ -584,7 +711,10 @@ function prepareContentDigest(headers, bodyText) {
   headers['Content-Digest'] = `sha-256=:${digest}:`;
 }
 
-function request(method, url, headers, bodyText) {
+// `mtls` is optional: { cert, key, ca } to present a client certificate for MIAF's
+// mutual-TLS handshake. Omitted for every existing (RFC 9421 / server-TLS-only)
+// call site — this only changes behavior for callers that opt in.
+function request(method, url, headers, bodyText, mtls) {
   return new Promise((resolve) => {
     const parsedUrl = new URL(url);
     const options = {
@@ -593,10 +723,14 @@ function request(method, url, headers, bodyText) {
       port: parsedUrl.port || 443,
       path: parsedUrl.pathname + parsedUrl.search,
       headers,
-      ca: caCertificate,
+      ca: (mtls && mtls.ca) || caCertificate,
       rejectUnauthorized: false,
       timeout: 30000,
     };
+    if (mtls) {
+      options.cert = mtls.cert;
+      options.key = mtls.key;
+    }
 
     const req = https.request(options, (res) => {
       const chunks = [];
@@ -619,8 +753,185 @@ function request(method, url, headers, bodyText) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// --curl debug mode
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Parses: --curl <METHOD> <endpoint> --base-url <url> --cert-dir <dir>
+//         [--body <json>] [--header "Name: value"]... [--unsigned]
+function parseCurlArgs(argv) {
+  const out = { method: argv[0], endpoint: argv[1], headers: {}, unsigned: false };
+  for (let i = 2; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--base-url') out.baseUrl = argv[++i];
+    else if (a === '--cert-dir') out.certDir = argv[++i];
+    else if (a === '--body') out.body = argv[++i];
+    else if (a === '--header') {
+      const [name, ...rest] = (argv[++i] || '').split(':');
+      if (name) out.headers[name.trim()] = rest.join(':').trim();
+    } else if (a === '--unsigned') out.unsigned = true;
+  }
+  return out;
+}
+
+// Prints a curl command equivalent to the request this process is about to make,
+// then makes that exact request and prints the raw response — signing it with
+// the SAME signRequest()/prepareContentDigest() the scenario runner uses, so what
+// you see here always matches real runner behaviour (no second signing path to
+// keep in sync). Returns true if the request failed at the transport level.
+async function runCurlMode(args) {
+  const url = `${baseUrl}${args.endpoint}`;
+  const headers = { ...args.headers };
+  let bodyText = '';
+  if (args.body !== undefined) {
+    // Reuse injectCertificate's "./certs/device-cert.pem" marker when the body is
+    // valid JSON; an intentionally-malformed body (negative testing) is sent as-is.
+    try {
+      const parsed = injectCertificate(JSON.parse(args.body), {});
+      bodyText = JSON.stringify(parsed);
+    } catch {
+      bodyText = args.body;
+    }
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  }
+
+  if (bodyText) prepareContentDigest(headers, bodyText);
+  if (!args.unsigned) signRequest(args.method, url, headers, bodyText);
+
+  const quote = (s) => `'${String(s).replace(/'/g, `'"'"'`)}'`;
+  const curlLines = [`curl -sS -k -i -X ${args.method.toUpperCase()} ${quote(url)}`];
+  for (const [k, v] of Object.entries(headers)) curlLines.push(`  -H ${quote(`${k}: ${v}`)}`);
+  if (bodyText) curlLines.push(`  --data ${quote(bodyText)}`);
+  console.log('\n── Equivalent curl command ──────────────────────────────────');
+  console.log(curlLines.join(' \\\n'));
+
+  console.log('\n── Sending request ──────────────────────────────────────────');
+  const response = await request(args.method.toUpperCase(), url, headers, bodyText);
+  if (response.transportError) {
+    console.log(`✗ transport error: ${response.transportError}`);
+    return true;
+  }
+  console.log(`HTTP ${response.status}`);
+  for (const [k, v] of Object.entries(response.headers)) console.log(`${k}: ${v}`);
+  console.log('');
+  try {
+    console.log(JSON.stringify(JSON.parse(response.body), null, 2));
+  } catch {
+    console.log(response.body);
+  }
+  console.log('');
+  return false;
+}
+
+// Plain unauthenticated GET — no client cert, no signing. Used only by
+// fetchTrustBundleMode below, which by design runs before any identity is
+// loaded (MIS's discovery/bundle endpoints don't need one).
+function simpleGet(url) {
+  return new Promise((resolve) => {
+    const u = new URL(url);
+    const req = https.request(
+      {
+        method: 'GET',
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        headers: { Accept: 'application/json' },
+        rejectUnauthorized: false,
+        timeout: 15000,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+      }
+    );
+    req.on('timeout', () => req.destroy(new Error('request timed out after 15s')));
+    req.on('error', (err) => resolve({ status: 0, body: '', transportError: err.message }));
+    req.end();
+  });
+}
+
+// Base64 DER (as carried in a JWK's "x5c") -> PEM.
+function derToPem(b64der) {
+  const lines = b64der.match(/.{1,64}/g).join('\n');
+  return `-----BEGIN CERTIFICATE-----\n${lines}\n-----END CERTIFICATE-----`;
+}
+
+// The MIAF "fetch the trust bundle once, at suite startup" step (Part 5.3
+// Phase 2 / Part 7.1-B of CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md): discovery
+// doc -> trust bundle -> write out the X.509 anchors as a CA PEM file that a
+// later `svid-ca.pem` in a cert dir can just be a copy of. Deliberately a
+// standalone one-shot command, not a scenario step — this is setup, run once,
+// not repeated per test case.
+async function fetchTrustBundleMode(argv) {
+  const [misBaseUrl, outCaPath] = argv;
+  if (!misBaseUrl || !outCaPath) {
+    console.error('Usage: node run_wfm_scenarios.js --fetch-trust-bundle <mis-base-url> <output-ca.pem>');
+    return false;
+  }
+
+  const discoveryUrl = `${misBaseUrl.replace(/\/+$/, '')}/.well-known/margo`;
+  console.log(`Fetching discovery document: ${discoveryUrl}`);
+  const discoveryResp = await simpleGet(discoveryUrl);
+  if (discoveryResp.status !== 200) {
+    console.error(`✗ discovery fetch failed: HTTP ${discoveryResp.status} ${discoveryResp.transportError || ''}`.trim());
+    return false;
+  }
+  let discovery;
+  try {
+    discovery = JSON.parse(discoveryResp.body);
+  } catch (err) {
+    console.error(`✗ discovery document is not valid JSON: ${err.message}`);
+    return false;
+  }
+  const { trustDomain, trustBundleUri } = discovery;
+  if (!trustDomain || !trustBundleUri) {
+    console.error(`✗ discovery document missing trustDomain/trustBundleUri: ${discoveryResp.body}`);
+    return false;
+  }
+  if (!/^https:\/\//i.test(trustBundleUri)) {
+    console.error(`✗ trustBundleUri MUST be https per MIAF spec, got: ${trustBundleUri}`);
+    return false;
+  }
+  console.log(`  trustDomain:    ${trustDomain}`);
+  console.log(`  trustBundleUri: ${trustBundleUri}`);
+
+  console.log(`Fetching trust bundle: ${trustBundleUri}`);
+  const bundleResp = await simpleGet(trustBundleUri);
+  if (bundleResp.status !== 200) {
+    console.error(`✗ trust bundle fetch failed: HTTP ${bundleResp.status} ${bundleResp.transportError || ''}`.trim());
+    return false;
+  }
+  let bundle;
+  try {
+    bundle = JSON.parse(bundleResp.body);
+  } catch (err) {
+    console.error(`✗ trust bundle is not valid JSON: ${err.message}`);
+    return false;
+  }
+
+  // Fail closed on zero anchors — required by the MIAF spec (Part 5.3, step 6).
+  const anchors = (bundle.keys || []).filter(
+    (k) => k.use === 'x509-svid' && Array.isArray(k.x5c) && k.x5c.length > 0
+  );
+  if (anchors.length === 0) {
+    console.error('✗ trust bundle has zero x509-svid anchors — refusing to write a CA file (fail closed per MIAF spec)');
+    return false;
+  }
+
+  const pem = anchors.map((k) => k.x5c.map(derToPem).join('\n')).join('\n');
+  fs.writeFileSync(outCaPath, pem);
+  console.log(`✓ wrote ${anchors.length} trust anchor(s) to ${outCaPath}`);
+  console.log(`✓ trust domain: ${trustDomain}`);
+  if (bundle.spiffe_sequence !== undefined) console.log(`  spiffe_sequence: ${bundle.spiffe_sequence}`);
+  if (bundle.spiffe_refresh_hint !== undefined) console.log(`  spiffe_refresh_hint: ${bundle.spiffe_refresh_hint}`);
+  return true;
+}
+
 function validate(responseSource, validation) {
-  const actual = getField(responseSource, validation.field);
+  // Field-less validations (the bundle_* semantic checks below) carry no `field`.
+  const actual =
+    validation.field == null ? undefined : getField(responseSource, validation.field);
   const expected = substitute(validation.value);
 
   switch (validation.operation) {
@@ -656,6 +967,95 @@ function validate(responseSource, validation) {
       return Array.isArray(expected) && expected.includes(actual)
         ? ''
         : `${validation.field} expected one of ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`;
+    case 'matches_regex':
+      // Uses the raw pattern, not the {context}-substituted `expected` — a
+      // regex quantifier like {64} would otherwise be mistaken for a
+      // context-variable placeholder by substitute() and silently stripped.
+      return new RegExp(validation.value).test(String(actual ?? ''))
+        ? ''
+        : `${validation.field} value ${JSON.stringify(actual)} does not match pattern ${validation.value}`;
+    case 'greater_than':
+      return Number(actual) > Number(expected)
+        ? ''
+        : `${validation.field} expected > ${expected}, got ${actual}`;
+    case 'not_contains':
+      // Passes when the value is absent or does not include the substring.
+      return !String(actual ?? '').includes(String(expected))
+        ? ''
+        : `${validation.field} must not contain ${JSON.stringify(expected)} (got ${JSON.stringify(actual)})`;
+    case 'etag_is_body_digest': {
+      // MI-015: the State Manifest ETag MUST be a strong validator computed as
+      // sha256 of the exact serialized JSON response body.
+      const rawEtag = getField(responseSource, '_headers.etag');
+      if (rawEtag == null) return 'ETag header is missing';
+      const body = responseSource._body ?? '';
+      const bodyDigest = 'sha256:' + crypto.createHash('sha256').update(body, 'utf8').digest('hex');
+      const normalised = String(rawEtag).replace(/^W\//, '').replace(/^"|"$/g, '');
+      return normalised === bodyDigest
+        ? ''
+        : `ETag ${JSON.stringify(rawEtag)} is not sha256 of the response body (expected ${bodyDigest}) (MI-015)`;
+    }
+    case 'body_sha256_equals': {
+      // MI-025: the deployment/bundle digest advertised in the desired-state
+      // manifest MUST be sha256 of the exact bytes served at the content-addressed
+      // URL. `validation.value` is the expected digest (usually a {context} var
+      // such as {deploymentDigest}); compared hex-to-hex, ignoring an optional
+      // "sha256:" prefix on either side.
+      const body = responseSource._body ?? '';
+      const actualHex = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
+      const expectedHex = String(expected ?? '').replace(/^sha256:/, '').toLowerCase();
+      if (!expectedHex) return `${validation.field ?? 'digest'} expected value is empty`;
+      return actualHex === expectedHex
+        ? ''
+        : `served body sha256 (${actualHex}) does not match the manifest digest (${expectedHex}) (MI-025)`;
+    }
+    case 'has_application_description_layer': {
+      // AR-002 (the one part every package MUST have, regardless of vendor):
+      // a layer with the fixed Application Description media type MUST exist.
+      // Ref-agnostic — doesn't need to know the vendor's file name.
+      const layers = getField(responseSource, 'layers') || [];
+      const found = layers.some((l) => l.mediaType === 'application/vnd.margo.app.description.v1+yaml');
+      return found
+        ? ''
+        : 'no layer has mediaType "application/vnd.margo.app.description.v1+yaml" for the Application Description';
+    }
+    case 'layer_media_types_are_margo_specific': {
+      // AR-004/011: every layer a package DOES ship MUST carry a Margo-specific
+      // vendor media type, never a generic one (application/octet-stream etc.).
+      // Ref-agnostic by design — doesn't assume which resource files a given
+      // vendor's package includes or what they're named, only that whatever is
+      // present is correctly typed.
+      const layers = getField(responseSource, 'layers') || [];
+      const generic = layers
+        .filter((l) => !String(l.mediaType || '').startsWith('application/vnd.margo.app.'))
+        .map((l) => `${(l.annotations && l.annotations['org.opencontainers.image.title']) || l.digest}: "${l.mediaType}"`);
+      return generic.length === 0
+        ? ''
+        : `layer(s) with a non-Margo-specific mediaType: ${generic.join(', ')}`;
+    }
+    case 'bundle_null_when_no_deployments': {
+      // MI-009: when there are zero deployments the `bundle` field MUST be
+      // present with the value null (not omitted). JSON.parse keeps the key, so
+      // `bundle === null` is true only for an explicit null; `undefined` (the
+      // field absent) fails the check as it should.
+      const deployments = getField(responseSource, 'deployments');
+      const bundle = getField(responseSource, 'bundle');
+      if (Array.isArray(deployments) && deployments.length === 0) {
+        return bundle === null
+          ? ''
+          : 'bundle must be present and null when the deployments array is empty (MI-009)';
+      }
+      return '';
+    }
+    case 'bundle_media_type': {
+      // MI-031: bundle.mediaType MUST be application/vnd.margo.bundle.v1+tar+gzip.
+      // Skipped on a zero-deployment manifest, where bundle is null.
+      const bundle = getField(responseSource, 'bundle');
+      if (bundle == null) return '';
+      return bundle.mediaType === 'application/vnd.margo.bundle.v1+tar+gzip'
+        ? ''
+        : `bundle.mediaType expected "application/vnd.margo.bundle.v1+tar+gzip", got ${JSON.stringify(bundle.mediaType)} (MI-031)`;
+    }
     default:
       return `unsupported validation operation: ${validation.operation}`;
   }
@@ -753,8 +1153,11 @@ function printScenarioHeader(scenario, index, total) {
 }
 
 function signingLabel(step, bodyText) {
-  if (step.skip_signing) return '[unsigned]';
-  if (step.fresh_cert)   return '[fresh-cert · signed]';
+  if (step.oras)              return '[oras / registry — no signing]';
+  if (step.mtls)              return '[mTLS · X.509-SVID]';
+  if (step.skip_signing)      return '[unsigned]';
+  if (step.tamper_signature)  return '[bad-signature]';
+  if (step.fresh_cert)        return '[fresh-cert · signed]';
   if (bodyText) return '[signed · content-digest]';
   return '[signed]';
 }
@@ -768,6 +1171,7 @@ function printStepResult(step, result, newContext, bodyText) {
   console.log('');
   console.log(`  [${step.id}]  ${step.name}`);
   console.log(`   ▶  ${result.method.padEnd(6)} ${result.endpoint}  ${sig}`);
+  if (result.crIds && result.crIds.length) console.log(`   ⚙  ${result.crIds.join(', ')}`);
 
   if (pass) {
     console.log(`   ${icon}  ${tag}  ${httpLabel(result.actual)}`);
@@ -869,6 +1273,22 @@ async function performHTTPStep(step) {
 
   if (bodyText) headers['Content-Type'] = headers['Content-Type'] || 'application/json';
 
+  // step.mtls: true → MIAF transport (mutual TLS with an X.509-SVID) instead of
+  // RFC 9421 request signing. The old flow's signature/digest headers don't exist
+  // in MIAF at all, so this branch skips them entirely rather than layering on top.
+  if (step.mtls) {
+    if (!miafIdentity) {
+      throw new Error(
+        `step "${step.id}" has mtls:true but no SVID cert/key found at ${svidCertPath} / ${svidKeyPath} — ` +
+        `see wfm-supplier/fixtures/miaf/README.md`
+      );
+    }
+    const response = await request(method, url, headers, bodyText, miafIdentity);
+    const parsed = parseBody(response.body);
+    const responseSource = { ...parsed, _headers: response.headers, _body: response.body };
+    return { method, endpoint, bodyText, response, responseSource };
+  }
+
   // Prepare Content-Digest for body requests so the WFM doesn't reject due to missing
   // digest before it has a chance to check for the signature — unless the step is
   // specifically testing a missing/invalid Content-Digest, in which case it must be omitted.
@@ -876,10 +1296,73 @@ async function performHTTPStep(step) {
 
   if (!step.skip_signing) signRequest(method, url, headers, bodyText);
 
+  // "Signature verification failed" test: keep Signature-Input intact but flip one
+  // character of the Signature value so the bytes no longer verify.
+  if (step.tamper_signature && headers.Signature) {
+    headers.Signature = headers.Signature.replace(/:([A-Za-z0-9+/=]+):/, (_m, b64) => {
+      const chars = b64.split('');
+      const i = Math.max(0, Math.floor(chars.length / 2));
+      chars[i] = chars[i] === 'A' ? 'B' : 'A';
+      return ':' + chars.join('') + ':';
+    });
+  }
+
   const response = await request(method, url, headers, bodyText);
   const parsed = parseBody(response.body);
   const responseSource = { ...parsed, _headers: response.headers, _body: response.body };
   return { method, endpoint, bodyText, response, responseSource };
+}
+
+// Application Registry checks: `oras` (or a plain HTTP GET for the raw tags-list
+// endpoint) instead of an HTTP call to the WFM. Shaped exactly like
+// performHTTPStep's return value so the rest of runStep (poll/validations/
+// extract_context/report) needs no changes at all.
+//   step.oras = { cmd: 'manifest' | 'tags' | 'blobs' | 'tags_raw', ref? }
+// `ref` defaults to the REGISTRY_REF environment variable (falling back to our
+// own spec-conformant fixture package) so the same test-case file works for
+// any vendor's registry without editing JSON, but also runs out-of-the-box.
+const DEFAULT_REGISTRY_REF = 'harbor.machine:8443/library/margo-ctt-hello-world:1.0.0';
+async function performOrasStep(step) {
+  const ref = step.oras.ref ? substitute(step.oras.ref) : process.env.REGISTRY_REF || DEFAULT_REGISTRY_REF;
+  const repo = ref.replace(/(:[^/]*)?$/, ''); // strip a trailing ":tag", keep any port's colon (comes before the last "/")
+  let status = 200;
+  let body = '';
+  let transportError;
+
+  try {
+    if (step.oras.cmd === 'manifest') {
+      body = execFileSync('oras', ['manifest', 'fetch', ref], { encoding: 'utf8' });
+    } else if (step.oras.cmd === 'tags') {
+      const out = execFileSync('oras', ['repo', 'tags', ref], { encoding: 'utf8' });
+      body = JSON.stringify({ tags: out.split('\n').map((s) => s.trim()).filter(Boolean) });
+    } else if (step.oras.cmd === 'blobs') {
+      const manifest = JSON.parse(execFileSync('oras', ['manifest', 'fetch', ref], { encoding: 'utf8' }));
+      const failedDigests = [];
+      for (const layer of manifest.layers || []) {
+        try {
+          execFileSync('oras', ['blob', 'fetch', '--output', '/dev/null', `${repo}@${layer.digest}`]);
+        } catch {
+          failedDigests.push(layer.digest);
+        }
+      }
+      body = JSON.stringify({ layerCount: (manifest.layers || []).length, failedDigests });
+    }
+  } catch (err) {
+    transportError = (err.stderr && err.stderr.toString().trim()) || err.message;
+  }
+
+  if (step.oras.cmd === 'tags_raw') {
+    // Raw OCI Distribution "Listing Tags" endpoint — AR-010 checks the exact
+    // {name, tags[]} JSON shape, which `oras repo tags` re-formats away.
+    const [host, ...rest] = repo.split('/');
+    const response = await request('GET', `https://${host}/v2/${rest.join('/')}/tags/list`, {}, '');
+    const responseSource = { ...parseBody(response.body), _headers: response.headers, _body: response.body };
+    return { method: 'GET', endpoint: ref, bodyText: '', response, responseSource };
+  }
+
+  const response = { status: transportError ? 0 : status, headers: {}, body, transportError };
+  const responseSource = { ...parseBody(body), _headers: {}, _body: body };
+  return { method: 'ORAS', endpoint: ref, bodyText: '', response, responseSource };
 }
 
 // Runs a list of validations against a response, returning an array of failure messages.
@@ -921,6 +1404,11 @@ async function runStep(scenario, step) {
     let method, endpoint, bodyText, response, responseSource;
     let pollTimedOut = false;
     let pollAttempts = 0;
+    // A step with `oras: {...}` instead of `method`/`endpoint` checks the
+    // Application Registry via the `oras` CLI (or a plain HTTP GET) rather than
+    // the WFM's HTTP API — see performOrasStep(). Everything else (poll,
+    // validations, extract_context, reporting) is unchanged.
+    const performStep = step.oras ? performOrasStep : performHTTPStep;
 
     // step.poll = { interval_seconds, timeout_seconds, until: [validations] }
     // Re-issues this step's request on an interval until every validation in
@@ -937,7 +1425,7 @@ async function runStep(scenario, step) {
 
       for (;;) {
         pollAttempts++;
-        ({ method, endpoint, bodyText, response, responseSource } = await performHTTPStep(step));
+        ({ method, endpoint, bodyText, response, responseSource } = await performStep(step));
 
         const primaryMatchNow = response.status === step.expected_status;
         const pollFailures = primaryMatchNow
@@ -957,7 +1445,7 @@ async function runStep(scenario, step) {
         await sleep(intervalSeconds * 1000);
       }
     } else {
-      ({ method, endpoint, bodyText, response, responseSource } = await performHTTPStep(step));
+      ({ method, endpoint, bodyText, response, responseSource } = await performStep(step));
     }
 
     const assertionFailures = [];
@@ -996,6 +1484,7 @@ async function runStep(scenario, step) {
       scenarioName: scenario.name,
       step: step.id,
       name: step.name,
+      crIds: (step.crIds && step.crIds.length ? step.crIds : scenario.crIds) || [],
       method,
       endpoint,
       expected: step.expected_status,
@@ -1043,6 +1532,7 @@ function writeReport() {
       <td>${htmlEscape(r.scenarioName || r.scenario)}</td>
       <td>${htmlEscape(r.step)}</td>
       <td>${htmlEscape(r.name)}</td>
+      <td>${htmlEscape((r.crIds || []).join(', '))}</td>
       <td>${htmlEscape(r.method)}</td>
       <td>${htmlEscape(r.endpoint)}</td>
       <td>${htmlEscape(r.expected)}</td>
@@ -1107,6 +1597,22 @@ function writeReport() {
     ${failed === 0 ? '✅' : '❌'} ${passed} passed, ${failed} failed, ${results.length} total
   </div>
 
+  ${(() => {
+    const all = new Set();
+    const covered = new Set();
+    for (const r of results) {
+      for (const c of r.crIds || []) {
+        all.add(c);
+        if (r.passed) covered.add(c);
+      }
+    }
+    if (all.size === 0) return '';
+    const list = [...all].sort().map((c) =>
+      `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 6px;border-radius:3px;font-size:12px;background:${covered.has(c) ? '#dcfce7' : '#fee2e2'};color:${covered.has(c) ? '#166534' : '#b91c1c'}">${htmlEscape(c)}</span>`
+    ).join('');
+    return `<div class="meta">Conformance requirements exercised: <strong>${covered.size} / ${all.size}</strong> passing</div><div style="margin-bottom:18px">${list}</div>`;
+  })()}
+
   <h2>Scenario Summary</h2>
   <table>
     <thead>
@@ -1119,7 +1625,7 @@ function writeReport() {
   <table>
     <thead>
       <tr>
-        <th>Status</th><th>Scenario</th><th>Step</th><th>Name</th>
+        <th>Status</th><th>Scenario</th><th>Step</th><th>Name</th><th>CR-IDs</th>
         <th>Method</th><th>Endpoint</th><th>Expected</th><th>Actual</th><th>Failure Reason</th>
       </tr>
     </thead>
