@@ -1,27 +1,3 @@
-apiVersion:
-  crId:
-  check:
-    datatype: string
-    expected: Required (non-empty)
-
-  pass:
-    description: API version conforms to the required specification.
-
-  fail:
-    missing: API version is required but was not provided.
-
-kind:
-  crId:
-  check:
-    datatype: string
-    expected: ApplicationDescription
-
-  pass:
-    description: Application type conforms to the required baseline.
-
-  fail:
-    missing: Application type is required but was not provided.
-    invalid: Application type does not conform to the required baseline. Expected 'ApplicationDescription'.
 
 id:
   crId: MARGO-APP-APPLICATIONDESCRIPTION-001, MARGO-APP-APPLICATIONDESCRIPTION-006, MARGO-APP-APPLICATIONDESCRIPTION-005

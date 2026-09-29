@@ -4,7 +4,6 @@ import (
     "fmt"
     "net/http"
     "os/exec"
-    "strings"
 )
 
 // Repository/location URL schemes Margo application packages may use.
@@ -52,25 +51,4 @@ func CheckOCI(location string) error {
     }
 
     return nil
-}
-
-func CheckPackageLocation(
-    location string,
-) error {
-
-    if strings.HasPrefix(location, schemeHTTPS) ||
-        strings.HasPrefix(location, schemeHTTP) {
-
-        return CheckHTTPS(location)
-    }
-
-    if strings.HasPrefix(location, schemeOCI) {
-
-        return CheckOCI(location)
-    }
-
-    return fmt.Errorf(
-        "unsupported packageLocation: %s",
-        location,
-    )
 }

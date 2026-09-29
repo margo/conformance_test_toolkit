@@ -5,44 +5,39 @@ import (
     "strings"
 )
 
+const ociPrefix = "oci://"
+
 func ValidateHelmComponent(
     c Component,
 ) error {
 
-    repo, ok :=
-        c.Properties["repository"]
+    repo, ok := c.Properties["repository"]
 
     if !ok {
-
         return fmt.Errorf(
             "repository missing",
         )
     }
 
-    repository :=
-        repo.(string)
+    repository, ok := repo.(string)
 
-    if strings.HasPrefix(
-        repository,
-        "https://",
-    ) || strings.HasPrefix(
-        repository,
-        "http://",
-    ) {
-
-        return CheckHTTPS(repository)
+    if !ok || repository == "" {
+        return fmt.Errorf(
+            "repository must be a non-empty string",
+        )
     }
 
-    if strings.HasPrefix(
+    if !strings.HasPrefix(
         repository,
-        "oci://",
+        ociPrefix,
     ) {
-
-        return CheckOCI(repository)
+        return fmt.Errorf(
+            "unsupported repository: %s",
+            repository,
+        )
     }
 
-    return fmt.Errorf(
-        "unsupported repository: %s",
+    return CheckOCI(
         repository,
     )
 }

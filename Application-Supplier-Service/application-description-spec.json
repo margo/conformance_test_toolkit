@@ -1,21 +1,4 @@
 {
-  "apiVersion": {
-    "type": "string",
-    "required": true,
-    "displayName": "apiVersion",
-    "expected": "Required (non-empty)"
-  },
-
-  "kind": {
-    "type": "string",
-    "required": true,
-    "enum": [
-      "ApplicationDescription"
-    ],
-    "displayName": "kind",
-    "expected": "ApplicationDescription"
-  },
-
   "id": {
     "type": "string",
     "required": true,
@@ -104,32 +87,19 @@
     "expected": "Component properties required"
   },
 
-  "deploymentProfiles.components.properties.repository": {
-    "type": "string",
-    "requiredWhen": {
-      "deploymentProfiles.type": "helm"
-    },
-    "displayName": "repository",
-    "expected": "Repository URL required"
-  },
+"deploymentProfiles.components.properties.repository": {
+  "type": "string",
+  "required": true,
+  "displayName": "repository",
+  "expected": "Repository URL required"
+},
 
-  "deploymentProfiles.components.properties.revision": {
-    "type": "string",
-    "requiredWhen": {
-      "deploymentProfiles.type": "helm"
-    },
-    "displayName": "revision",
-    "expected": "Required (non-empty)"
-  },
-
-  "deploymentProfiles.components.properties.packageLocation": {
-    "type": "string",
-    "requiredWhen": {
-      "deploymentProfiles.type": "compose"
-    },
-    "displayName": "compose.packageLocation",
-    "expected": "Required package location"
-  },
+"deploymentProfiles.components.properties.revision": {
+  "type": "string",
+  "required": true,
+  "displayName": "revision",
+  "expected": "Required (non-empty)"
+},
 
   "configuration.schema.name": {
     "type": "string",

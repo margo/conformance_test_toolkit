@@ -140,19 +140,11 @@ func formatActual(
     case map[string]any:
 
         return fmt.Sprintf(
-            "%d propertie(s)",
+            "%d properties",
             len(v),
         )
 
     case []any:
-
-        if len(v) == 1 {
-
-            return fmt.Sprintf(
-                "%v",
-                v[0],
-            )
-        }
 
         return fmt.Sprintf(
             "%d item(s)",
@@ -303,43 +295,6 @@ func validateRule(
                 Datatype: rule.Type,
                 Expected: buildExpected(rule),
             },
-        }
-    }
-
-    if len(rule.RequiredWhen) > 0 {
-
-        shouldValidate := false
-
-        for conditionPath, expected :=
-            range rule.RequiredWhen {
-
-            conditionValues := GetValues(
-                raw,
-                conditionPath,
-            )
-
-            for _, value :=
-                range conditionValues {
-
-                actual := fmt.Sprintf(
-                    "%v",
-                    value,
-                )
-
-                if actual == expected {
-
-                    shouldValidate = true
-                    break
-                }
-            }
-
-            if shouldValidate {
-                break
-            }
-        }
-
-        if !shouldValidate {
-            return
         }
     }
 
@@ -497,12 +452,6 @@ func validateValue(
 	)
 }
 
-// firstUnreferencedItem checks one entry from a rule.Reference-validated
-// array (or, if the entry is itself a nested array, each of its items)
-// against refMap. It returns the offending value's formatted representation
-// and ok=true on the first item NOT found in refMap, or ok=false if every
-// item is valid — replacing what was three near-identical inline
-// fail-and-return blocks in validateValue.
 func firstUnreferencedItem(item any, refMap map[string]bool) (string, bool) {
 
 	nested, isNested := item.([]any)
@@ -616,9 +565,6 @@ func fail(
     )
 }
 
-// failInvalid reports the common "value didn't match the rule" failure —
-// replaces the repeated `fail(report, actual, msg.Fail.Invalid)` blocks that
-// used to appear at every validateValue check site.
 func failInvalid(
     report *ValidationReport,
     actual string,
