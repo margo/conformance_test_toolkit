@@ -347,6 +347,37 @@ func runFlexibleOrder(scenarios []TestScenario, scenarioFilter, stepFilter strin
 
 // ===== TEST EXECUTION =====
 
+// executeStep runs exactly one step of one scenario against the WFM under
+// test and returns a filled-in TestResult (pass/fail plus everything needed
+// to print and report it). It's the device-supplier persona's equivalent of
+// run_wfm_scenarios.js's runStep() on the wfm-supplier side — same overall
+// job, just simulating a device/WFM-Client here instead of a WFM. It's one
+// long function because it's a single linear pipeline with an early-return
+// on the first failure at each stage, in this order:
+//
+//  1. Build the request: substitute {context} placeholders into the step's
+//     endpoint and body (interpolateContext/interpolateContextInObject), and
+//     — unless the step opts out via skip_certificate_injection, which
+//     negative tests use to send a bad value on purpose — resolve any
+//     "certificate" field from a file path into actual PEM content.
+//  2. Authenticate the request: RFC 9421-sign it (Content-Digest +
+//     Signature/Signature-Input headers) unless the step sets skip_signing
+//     or mtls — MIAF steps skip signing entirely and instead present a
+//     client SVID at the TLS layer (see mtlsClient() in signing.go), so the
+//     two auth modes are mutually exclusive per step.
+//  3. Pick the right HTTP client: plain TLS-skipping by default, an
+//     mTLS-presenting client for MIAF steps, or a CA-verifying client for
+//     the MI-018 "does this device trust the real server cert" checks.
+//  4. Send it and read back the response (or, for expect_transport_error
+//     steps, confirm the connection failed rather than getting a response —
+//     e.g. proving an mTLS peer without a valid cert is rejected before any
+//     HTTP semantics are reached at all).
+//  5. Decide pass/fail: status code against step.ExpectedStatus, then run
+//     every entry in step.Validations, then (if the step names a desired-
+//     state manifest in its response) check it against evaluateManifest()'s
+//     spec-conformance rules via ExpectManifestRejected/ExpectManifestAccepted.
+//  6. Pull values out of the response into `ctx` via step.ExtractContext, so
+//     a later step in the same scenario can reference them.
 func executeStep(step TestStep, ctx *TestContext) TestResult {
 	result := TestResult{
 		StepID:     step.ID,
@@ -866,6 +897,29 @@ type scenarioTally struct {
 	total, passed, faild int
 }
 
+// generateHTMLReport builds one self-contained HTML page (inline CSS, no
+// external assets) summarizing a full test run, and returns it as a string
+// for the caller to write to disk. It's the device-supplier persona's
+// equivalent of run_wfm_scenarios.js's writeReport() on the wfm-supplier
+// side. It works in three passes over the same `results` slice (one
+// TestResult per step that ran):
+//
+//  1. A simple pass/fail count across every result, for the headline summary.
+//  2. A per-scenario rollup (scenarioTally): how many of each scenario's
+//     steps passed, keeping scenarios in the order they first appear rather
+//     than sorting them, so the report reads in the same order the run
+//     printed to the console.
+//  3. CR-ID coverage, via crIDCoverage() (see below) — which CR-IDs got
+//     "verified" (at least one step referencing them passed) vs. just
+//     "referenced" (mentioned by at least one step, whether it passed or
+//     not) — rendered as a chip list, green for verified. Note this means a
+//     CR-ID can show as verified even if some OTHER step referencing it
+//     failed — it only takes one passing step to count.
+//
+// The rest of the function is template-string HTML/CSS assembly via a
+// strings.Builder — there's no separate templating engine, each section
+// (summary line, scenario table, CR-ID chips, per-step detail table) is just
+// a loop over one of the pieces of data computed above.
 func generateHTMLReport(results []TestResult) string {
 	passCount, failCount := 0, 0
 	for _, r := range results {

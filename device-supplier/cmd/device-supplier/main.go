@@ -152,6 +152,35 @@ func validateRequest(endpointKey string, body map[string]interface{}) []Validati
 	return errors
 }
 
+// applyRule checks ONE data-driven rule (loaded from manifests/assertions.json,
+// via the ValidationRule struct) against one parsed request body, and returns
+// either nil (the body satisfies this rule) or a *ValidationError describing
+// what's wrong. It's called once per rule, for every rule an endpoint has, by
+// validateRequest() — so the mock WFM's entire request-validation behavior
+// for capabilities/status/etc. is just "loop over the endpoint's rules,
+// collect whichever applyRule() calls return non-nil". This is what lets the
+// assertions.json file change validation behavior (add a required field,
+// tighten an enum, ...) without touching any Go code at all.
+//
+// The logic has three stages, each an early-return:
+//  1. RequiredIf: if this rule only applies when some OTHER field is present
+//     (e.g. "cpus[].cores is required, but only if cpus[] exists at all"),
+//     and that field is missing, this rule doesn't apply — pass silently.
+//  2. Required: if the rule's own field is missing and the rule says it must
+//     be present, that's the failure. If the field is simply missing and
+//     wasn't required, there's nothing further to check — pass.
+//  3. Type/shape checking: if the field IS present, walk every value found at
+//     that path (there can be more than one if the field lives inside an
+//     array — see getFieldValues) and check it against whichever of
+//     Type/MinLength/Value/Enum/MinItems the rule specifies. Each Type case
+//     (string/array/object/number/boolean) is a self-contained block; the
+//     "array" case additionally calls validateArrayItem() for each element to
+//     check ItemsType/ItemsEnum (e.g. "every entry in supportedRuntimes[]
+//     must be a string, and one of oci/custom"). A per-item nested field
+//     requirement like "every cpus[] entry needs its own cores field" is NOT
+//     handled here — that's a separate rule in assertions.json with a
+//     wildcard path (e.g. "properties.cpus.*.cores"), resolved by
+//     getFieldValues and checked by its own, independent applyRule() call.
 func applyRule(rule ValidationRule, body map[string]interface{}) *ValidationError {
 	if rule.RequiredIf != "" {
 		if _, parentExists := getFieldValues(body, rule.RequiredIf); !parentExists {
@@ -315,6 +344,15 @@ func collectFieldValues(data interface{}, parts []string) ([]interface{}, bool) 
 	}
 }
 
+// validateArrayItem checks ONE element of an array-typed field (called once
+// per element, from applyRule's "array" case) against the rule's ItemsType
+// (every element must be a string/object/number) and ItemsEnum (every
+// element must be one of a fixed set of allowed strings, e.g.
+// supportedRuntimes[] entries must each be "oci" or "custom"). It does not
+// look at nested fields inside object items — a requirement like "every
+// cpus[] entry needs its own cores field" is a separate, independent rule
+// with a wildcard path (see applyRule's comment), not something this
+// function is responsible for.
 func validateArrayItem(rule ValidationRule, item interface{}) *ValidationError {
 	if rule.ItemsType != "" {
 		switch rule.ItemsType {
@@ -424,6 +462,15 @@ func loadServerCACertificate() (string, error) {
 	return string(data), nil
 }
 
+// normalizeCertificateString strips everything from a PEM certificate string
+// that doesn't affect its actual identity — the "-----BEGIN/END
+// CERTIFICATE-----" markers, line breaks, and surrounding whitespace —
+// leaving just the base64 payload as one unbroken string. It exists so two
+// PEM certs can be compared for "is this the same certificate" with a plain
+// string equality check, even if one came with Windows line endings, extra
+// blank lines, or different line-wrapping than the other (its one caller
+// uses it to check whether a client-supplied CA cert matches the server's
+// own known CA cert).
 func normalizeCertificateString(cert string) string {
 	cert = strings.TrimSpace(cert)
 	if strings.Contains(cert, "-----BEGIN CERTIFICATE-----") {
@@ -775,6 +822,23 @@ func buildBundleArchive(clientID string, deploymentIDs []string, baseURL string)
 	return archive.Bytes(), nil
 }
 
+// buildStateManifest builds the desired-state manifest body this mock WFM
+// serves from GET /clients/{clientId}/deployments (the legacy, RFC-9421-flow
+// shape — see buildStateManifestMIAF in miaf_server.go for the MIAF-shaped
+// sibling with clientId-free URLs). It returns three things: the manifest as
+// a map ready to JSON-encode, the manifest's own ETag (its sha256, per
+// MI-015 — computed by re-marshaling and hashing the exact bytes that will
+// be sent), and an error if anything failed along the way.
+//
+// If there are zero deploymentIDs, `bundle` is left as an explicit nil (MI-009
+// requires the field be present-but-null, not omitted, in that case — the
+// zero value of the `interface{}` below already serializes to JSON `null`).
+// Otherwise it builds one tar.gz bundle containing every deployment's YAML
+// (buildBundleArchive), hashes it for bundle.digest, and separately hashes
+// each individual deployment's YAML for that deployment's own digest — both
+// digests are content-addresses: the URL a client fetches by is literally
+// "/.../sha256:<digest>", so whatever bytes get served at that URL MUST hash
+// to the digest named here, or the client is required to reject them.
 func buildStateManifest(clientID string, deploymentIDs []string, manifestVersion int, baseURL string) (map[string]interface{}, string, error) {
 	refs := make([]interface{}, 0, len(deploymentIDs))
 	bundle := interface{}(nil)

@@ -143,6 +143,13 @@ function postmanSegToContextVar(seg, precedingPath) {
   return `{${varName}}`;
 }
 
+// postmanPathToEndpoint rebuilds a usable "/api/v1/..." endpoint string from a
+// Postman request's url.path array (Postman stores a path as a list of
+// segments, e.g. ["api","v1","clients",":clientId","capabilities"] instead of
+// one string). Each segment is passed through postmanSegToContextVar, which
+// turns a literal placeholder segment like ":clientId" into our own "{clientId}"
+// template syntax so the rest of the runner (which only understands "{var}",
+// not Postman's ":var") can substitute it the same way as a native scenario step.
 function postmanPathToEndpoint(pathArr) {
   return '/' + pathArr.map((seg, i) => postmanSegToContextVar(seg, pathArr.slice(0, i))).join('/');
 }
@@ -928,6 +935,37 @@ async function fetchTrustBundleMode(argv) {
   return true;
 }
 
+// validate() is the runner's whole pass/fail rule engine: every single
+// assertion in every scenario JSON file (an { field, operation, value } entry
+// under a step's "validations" array) ends up as exactly one call here.
+//
+// Contract: return '' (empty string) when the check PASSES, or a short,
+// human-readable failure message string when it FAILS. runStep() collects
+// these messages and prints/reports whichever ones came back non-empty — so
+// the return value doubles as both a boolean (falsy = pass) and the report
+// text, which is why every branch below ends in a ternary rather than
+// throwing or logging directly.
+//
+// `responseSource` is the parsed HTTP response for this step (body fields
+// merged with `_headers`/`_body` for header/raw-body checks — see
+// performHTTPStep/performOrasStep). `validation.field` is a dot-path into it
+// (e.g. "bundle.digest" or "_headers.etag"), resolved via getField(); it may
+// be absent for the "operation"-only semantic checks near the bottom of this
+// switch (those inspect the whole response, not one field).
+//
+// Most `case` blocks are a single spec rule from the Margo Management
+// Interface API (MI-xxx) or Application Registry (AR-xxx) requirements — the
+// comment on each one names which requirement it's checking and why the
+// check is shaped the way it is. Generic checks (exists/is_string/equals/...)
+// are reusable building blocks any scenario step can combine; the named
+// semantic ones (etag_is_body_digest, bundle_null_when_no_deployments, ...)
+// encode a specific multi-field spec rule that a single field/value pair
+// can't express on its own.
+//
+// To add a new kind of assertion: add a case here, then reference its
+// operation name from any scenario JSON's "validations" array — no other
+// code needs to change, since runStep() already loops over "validations" and
+// calls this function generically for each entry.
 function validate(responseSource, validation) {
   // Field-less validations (the bundle_* semantic checks below) carry no `field`.
   const actual =
@@ -1375,6 +1413,36 @@ function runValidations(responseSource, validations) {
   return failures;
 }
 
+// runStep() executes exactly one step of one scenario, end to end, and
+// returns true/false for pass/fail. It's called once per step, in order,
+// from the main scenario loop further down this file. At a high level it
+// does five things, in this order:
+//
+//   1. (optional) swap in a "fresh_cert" identity for this one step only,
+//      restored in the `finally` block no matter how the step ends —
+//      used by negative tests that need an unrecognized signer.
+//   2. send the actual request — either once, or repeatedly on an interval
+//      if step.poll is set (waiting for some condition to become true,
+//      e.g. an operator assigning a deployment via the WFM's own console
+//      mid-test). This is delegated to performStep(), which is either
+//      performHTTPStep (a normal signed/mTLS HTTP call) or performOrasStep
+//      (an `oras` CLI call against an OCI registry) depending on whether
+//      the step has an `oras` key — runStep() itself doesn't care which.
+//   3. decide pass/fail on the HTTP status code, allowing for
+//      step.accepted_statuses (a step can say "200 is what I really want,
+//      but 404 is also fine here") in addition to step.expected_status.
+//   4. if the status matched, run every entry in step.validations through
+//      validate() and collect whatever failure messages come back.
+//   5. if everything passed, pull values out of the response into the
+//      shared `context` object (via step.extract_context) so that later
+//      steps in the same scenario can reference them as {likeThis} in
+//      their own endpoint/body/headers — this is how e.g. a GET step's
+//      returned deploymentId gets threaded into a later POST step's URL.
+//
+// Whatever happened gets pushed onto the module-level `results` array (used
+// for the final summary + HTML report) and printed immediately via
+// printStepResult(), so failures are visible in the console output as soon
+// as they happen rather than only in a report generated at the very end.
 async function runStep(scenario, step) {
   // fresh_cert: temporarily replace the global signing identity with a brand-new,
   // never-onboarded certificate so the WFM sees an unregistered signer.
@@ -1519,6 +1587,21 @@ function htmlEscape(value) {
     .replace(/"/g, '&quot;');
 }
 
+// writeReport() builds one self-contained HTML file (inline CSS, no external
+// assets) summarizing the whole run, and writes it to `reportFile`. It reads
+// from two module-level arrays that runStep()/the main loop have been
+// appending to throughout the run:
+//   - `results`: one entry per step (pass/fail, method, endpoint, CR-IDs, …)
+//   - `scenarioResults`: one entry per scenario (how many of its steps passed)
+// There's no separate "build a data model, then render it" split — the HTML
+// is assembled directly as a handful of template-literal strings (`rows`,
+// `scenarioRows`, then the page itself), each just `.map()`-ing one of those
+// arrays into a row of a table. The only non-trivial piece is the CR-ID
+// coverage section: it walks every result once to build two sets — every
+// CR-ID seen at all (`all`) and every CR-ID seen on a step that PASSED
+// (`covered`) — then colors each CR-ID chip green/red depending on whether
+// it made it into `covered`. A CR-ID counts as "exercised" the moment any
+// step tags it, but only counts as "passing" if every such step passed.
 function writeReport() {
   const passed = results.filter((r) => r.passed).length;
   const failed = results.length - passed;
