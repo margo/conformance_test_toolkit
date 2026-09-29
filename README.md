@@ -24,7 +24,7 @@ X.509-SVID (a SPIFFE-based certificate) provisioned out of band by an
 operator, and every WFM Management Interface call is authenticated via
 **mutual TLS**, not the earlier per-request HTTP Message Signatures (RFC 9421)
 scheme. If you're new to this change, **start with
-[`CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`](CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md)**
+[`docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`](docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md)**
 — it explains the full flow, every term (SPIFFE ID, Trust Bundle, SVID, digest,
 manifest, ...), and exactly what changed and why, in plain language.
 
@@ -68,7 +68,7 @@ conformance_test_toolkit/
 ├── Data-Generator/            # Test-case authoring + group management (conformance.sh)
 ├── Runner/                    # Generated HTML reports land here, grouped by persona
 ├── scripts/                   # One-off setup helpers (e.g. MIS identity provisioning)
-├── docs/                      # Supplementary docs
+├── docs/                      # Architecture, MIAF migration guide, client-facing brief
 └── manual-test-cases/         # Test cases not yet automated
 ```
 
@@ -122,10 +122,9 @@ its own already-provisioned identity instead.
 
 | Document | What it's for |
 |---|---|
-| [`CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`](CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md) | **Start here.** Every conformance flow explained end to end, full terminology glossary, and the complete old-flow → MIAF migration analysis with CR-ID mapping. |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Implementation-level architecture and troubleshooting detail (predates the MIAF migration — cross-check against the migration doc for anything transport-related). |
-| [`SYMPHONY_WFM_CONFORMANCE_GAPS.md`](SYMPHONY_WFM_CONFORMANCE_GAPS.md) | Known, reproduced conformance gaps found in the Eclipse Symphony WFM reference implementation, both pre- and post-MIAF. |
-| [`client-demo-brief.md`](client-demo-brief.md) | One-page summary for explaining the suite to a vendor or stakeholder. |
+| [`docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`](docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md) | **Start here.** Every conformance flow explained end to end, full terminology glossary, and the complete old-flow → MIAF migration analysis with CR-ID mapping. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture: what the toolkit is, how the three personas and two CLIs fit together, the test data model, and how reports trace back to spec requirements. |
+| [`docs/client-demo-brief.md`](docs/client-demo-brief.md) | One-page summary for explaining the suite to a vendor or stakeholder. |
 
 ---
 
@@ -134,9 +133,7 @@ its own already-provisioned identity instead.
 This suite is under active development alongside the Margo spec itself. Some
 scenario groups still use the pre-MIAF RFC 9421 transport pending real-world
 WFM/device migrations; new work should default to the mTLS transport
-(`"mtls": true` on a step) per `CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`.
-Known gaps in the reference WFM implementation are tracked in
-`SYMPHONY_WFM_CONFORMANCE_GAPS.md` rather than treated as suite bugs.
+(`"mtls": true` on a step) per `docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`.
 
 ## License
 

@@ -4,7 +4,7 @@
 **Author:** conformance team (nitparihar)
 **Spec baseline:** `1.0.0-rc.2`→`rc.3` (SBI spec bumped, see Part 5.8) / `pre-draft` branch of `github.com/margo/specification`
 **Reference implementation cross‑checked:** `feature/miaf` branch of `github.com/margo/sandbox` (the project's own code‑first sandbox — see Parts 5.7 and 5.8)
-**Companion docs:** [ARCHITECTURE.md](ARCHITECTURE.md) (current implementation detail), [SYMPHONY_WFM_CONFORMANCE_GAPS.md](SYMPHONY_WFM_CONFORMANCE_GAPS.md)
+**Companion docs:** [ARCHITECTURE.md](ARCHITECTURE.md) (system architecture overview)
 
 **2026‑09‑17 update:** Parts 5.7, 7, and 8 revised after reading the actual
 `feature/miaf` reference code (not just the spec pages) and after a decision
@@ -157,7 +157,6 @@ hits both runners.
 
 > This is the `pre-draft` state the suite was built against — RFC 9421 signing,
 > `POST /onboarding`, `clientId` in the path. Kept here as the "before" picture.
-> Full detail in [ARCHITECTURE.md](ARCHITECTURE.md) §6–§7.
 
 ### 4.1 WFM‑supplier — current end‑to‑end
 
@@ -193,8 +192,7 @@ unknown client → 404; conditional GET → 304; ETag digest grammar `^"sha256:[
 (MI‑034); manifest not `immutable` (MI‑035); ETag == sha256(body) (MI‑015);
 `bundle: null` when zero deployments (MI‑009); `bundle.mediaType` (MI‑031).
 
-**Known real‑WFM (Symphony) gaps** — see
-[SYMPHONY_WFM_CONFORMANCE_GAPS.md](SYMPHONY_WFM_CONFORMANCE_GAPS.md): no body
+**Known real‑WFM (Symphony) gaps** (tracked internally): no body
 validation (bad input → 201), wrong status codes (400 instead of 401/403/422),
 content negotiation → 500 instead of 406, no `304`, manifest marked `immutable`.
 
@@ -392,8 +390,8 @@ manifest, which gets plain `Cache-Control: private`); `Accept-Encoding` /
 `Vary: Accept-Encoding` now in scope (gzip/br MAY). **Corrected 2026‑09‑28:**
 confirmed against `standard/snapshot.spec.yaml` on `feature/miaf` — the directive
 is `private`, not `public` (an earlier draft of this doc had this backwards; our
-own `device-supplier` mock had the same bug, fixed the same day — see
-`SYMPHONY_WFM_CONFORMANCE_GAPS.md` for whether Symphony itself gets this right).
+own `device-supplier` mock had the same bug, fixed the same day — whether
+Symphony itself gets this right is tracked internally, separately from this repo).
 
 **What is *gone*:** `POST /onboarding`, `GET /onboarding/certificate`,
 `/clients/{clientId}/…` prefix, `Signature`, `Signature-Input`, `Content-Digest`
