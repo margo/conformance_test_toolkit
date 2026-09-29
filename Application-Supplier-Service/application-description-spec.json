@@ -1,4 +1,10 @@
 {
+  "apiVersion": {
+    "type": "string",
+    "required": true,
+    "displayName": "apiVersion",
+    "expected": "API version required"
+  },
   "id": {
     "type": "string",
     "required": true,
