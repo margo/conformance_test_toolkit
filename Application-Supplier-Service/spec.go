@@ -1,5 +1,5 @@
 package main	
-
+// SpecAttribute represents the validation rules and constraints for a specific attribute in a Margo application description.
 type SpecAttribute struct {
 	Type         string            `json:"type"`
 	Required     bool              `json:"required"`
@@ -10,4 +10,5 @@ type SpecAttribute struct {
 	MinItems     int               `json:"minItems,omitempty"`
 }
 
+// ValidationSpec represents the validation specification for a Margo application description.
 type ValidationSpec map[string]SpecAttribute

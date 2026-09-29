@@ -9,6 +9,7 @@ import (
     "gopkg.in/yaml.v3"
 )
 
+// Rule defines the configurable constraints and report metadata for validating an application description field.
 type Rule struct {
     Type         string            `json:"type"`
     Required     bool              `json:"required"`
@@ -22,6 +23,7 @@ type Rule struct {
     Expected     string            `json:"expected,omitempty"`
 }
 
+// ValidateAppDescription validates the application description against configured rules and messages
 func ValidateAppDescription(
     app *ApplicationDescription,
     raw map[string]any,
@@ -63,14 +65,14 @@ func ValidateAppDescription(
     return nil
 }
 
+// LoadMessages loads validation messages and CR-ID mappings from the YAML configuration file.
 func LoadMessages(
     file string,
 ) (
     map[string]ValidationMessage,
     error,
 ) {
-
-    var messages map[string]ValidationMessage
+    messages := make(map[string]ValidationMessage)
 
     data, err := os.ReadFile(file)
 
@@ -105,10 +107,10 @@ func GetValues(
 }
 
 
-
+// LoadRules loads application description validation rules from the JSON specification file.
 func LoadRules() map[string]Rule {
-
-	var rules map[string]Rule
+    rules := make(map[string]Rule)
+    
 
 	data, err := os.ReadFile(
 		"application-description-spec.json",
@@ -130,7 +132,7 @@ func LoadRules() map[string]Rule {
 	return rules
 }
 
-
+// formatActual converts a validation value into a readable format for the validation report.
 func formatActual(
     value any,
 ) string {
@@ -160,6 +162,7 @@ func formatActual(
     }
 }
 
+// BuildReferences builds lookup sets used to validate references between application description fields.
 func BuildReferences(
     raw map[string]any,
 ) map[string]map[string]bool {
@@ -215,7 +218,7 @@ func BuildReferences(
     return refs
 }
 
-
+// walk recursively traverses maps and slices to resolve values for a dot-separated field path.
 func walk(
     current any,
     parts []string,
@@ -240,7 +243,7 @@ func walk(
             )
         }
 
-        var results []any
+        results := make([]any, 0)
 
         for _, item := range value {
 
@@ -257,7 +260,7 @@ func walk(
 
     case []any:
 
-        var results []any
+        results := make([]any, 0)
 
         for _, item := range value {
 
@@ -276,6 +279,7 @@ func walk(
     return nil
 }
 
+// validateValue validates a single field value against enum, regex, and reference constraints.
 func validateRule(
     report *ValidationReport,
     field string,
@@ -384,7 +388,7 @@ check(
     }
 }
 
-
+// validateValue validates a single field value against enum, regex, and reference constraints.
 func validateValue(
 	report *ValidationReport,
 	field string,
@@ -475,7 +479,7 @@ func firstUnreferencedItem(item any, refMap map[string]bool) (string, bool) {
 	return "", false
 }
 
-
+// buildExpected returns the expected validation value or derives it from the configured rule.
 func buildExpected(
     rule Rule,
 ) string {
@@ -513,7 +517,7 @@ func buildExpected(
 }
 
 
-
+// check adds a validation check with its CR-ID, field, type, and expected value to the report.
 func check(
     report *ValidationReport,
     crId string,
@@ -536,7 +540,7 @@ func check(
         expected,
     )
 }
-
+// pass marks the current validation check as passed and records the actual value and details.
 func pass(
     report *ValidationReport,
     actual string,
@@ -550,7 +554,7 @@ func pass(
         details,
     )
 }
-
+// fail marks the current validation check as failed and records the actual value and failure details.
 func fail(
     report *ValidationReport,
     actual string,
@@ -565,6 +569,7 @@ func fail(
     )
 }
 
+// failInvalid reports a validation failure when a value does not satisfy the configured rule.
 func failInvalid(
     report *ValidationReport,
     actual string,

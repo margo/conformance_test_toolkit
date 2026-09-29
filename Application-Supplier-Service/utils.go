@@ -10,7 +10,7 @@ import (
     "gopkg.in/yaml.v3"
 )
 
-
+// FindApplicationDescription searches the given directory for a YAML file with kind ApplicationDescription.
 func FindApplicationDescription(root string) (string, error) {
 
     var found string

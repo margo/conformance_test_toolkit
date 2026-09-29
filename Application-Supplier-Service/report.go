@@ -6,7 +6,7 @@ import (
     "os"
     "time"
 )
-
+// ValidationEntry represents a single validation result displayed in the conformance report.
 type ValidationEntry struct {
     CRID        string
     Field       string
@@ -17,14 +17,14 @@ type ValidationEntry struct {
     Remarks     string
 }
 
-
+// ValidationReport contains application details, validation entries, and the overall validation status.
 type ValidationReport struct {
     Entries            []ValidationEntry
     Status             string
     ApplicationName    string
     ApplicationVersion string
 }
-
+// reportTemplate defines the HTML template used to generate the application conformance report.
 const reportTemplate = `
 <!DOCTYPE html>
 <html>
@@ -228,13 +228,13 @@ th {
 </body>
 </html>
 `
-
+// NewValidationReport creates a validation report with the initial status set to PASSED.
 func NewValidationReport() *ValidationReport {
     return &ValidationReport{
         Status: "PASSED",
     }
 }
-
+// Log adds a validation entry to the report and updates the overall status on failure.
 func (r *ValidationReport) Log(
     validate string,
     details string,
@@ -255,6 +255,7 @@ func (r *ValidationReport) Log(
     }
 }
 
+// Check adds a validation check entry to the report.
 func (r *ValidationReport) Check(
     crId string,
     field string,
@@ -274,6 +275,7 @@ func (r *ValidationReport) Check(
 }
 
 
+// Pass updates the last validation entry as passed with the actual value and remarks.
 func (r *ValidationReport) Pass(
     actual string,
     details string,
@@ -291,6 +293,7 @@ func (r *ValidationReport) Pass(
     last.Remarks = details
 }
 
+// Fail updates the last validation entry as failed with the actual value and remarks, and sets the overall report status to FAILED.
 func (r *ValidationReport) Fail(
     actual string,
     details string,
@@ -312,6 +315,7 @@ func (r *ValidationReport) Fail(
 
 
 
+// GenerateHTMLReport generates an HTML report for the validation results and writes it to the specified file.
 func (r ValidationReport) GenerateHTMLReport(
     file string,
 ) error {

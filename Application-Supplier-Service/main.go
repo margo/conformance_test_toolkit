@@ -22,8 +22,7 @@ func main() {
 	}
 
 	inputPath := os.Args[1]
-
-	var workDir string
+	workDir := ""
 
 	info, err := os.Stat(inputPath)
 
@@ -144,7 +143,6 @@ func main() {
 	//--------------------------------------------------
 
 	var app ApplicationDescription
-
 	err = yaml.Unmarshal(
 		data,
 		&app,
@@ -176,7 +174,7 @@ func main() {
 	// this raw map instead of relying on Go model paths.
 	//--------------------------------------------------
 
-	var raw map[string]interface{}
+	raw := make(map[string]interface{})
 
 	err = yaml.Unmarshal(
 		data,
@@ -298,93 +296,58 @@ for _, profile := range app.DeploymentProfile {
     )
 
     switch profile.Type {
+		case "helm", "compose":
 
-    //--------------------------------------------------
-    // HELM
-    //--------------------------------------------------
+    for _, component :=
+        range profile.Components {
 
-    case "helm":
+        report.Check(
+            "",
+            fmt.Sprintf(
+                "Validating %s component '%s'",
+                profile.Type,
+                component.Name,
+            ),
+            "network",
+            "OCI repository reachable",
+        )
 
-        for _, component := range profile.Components {
-
-            report.Check(
-                "",
-                fmt.Sprintf(
-                    "Validating Helm component '%s'",
-                    component.Name,
-                ),
-                "network",
-                "Helm repository reachable",
-            )
-
-            err := ValidateHelmComponent(
+        err :=
+            ValidateOCIComponent(
                 component,
             )
 
-            if err != nil {
+        if err != nil {
 
-                report.Fail(
-                    "unreachable",
-                    fmt.Sprintf(
-                        "Helm validation failed for component '%s' : %v",
-                        component.Name,
-                        err,
-                    ),
-                )
-
-                fmt.Println(
-                    "FAIL:",
-                    err,
-                )
-
-                continue
-            }
-
-            report.Pass(
-                "reachable",
+            report.Fail(
+                "unreachable",
                 fmt.Sprintf(
-                    "Helm repository reachable for component '%s'",
+                    "OCI validation failed for component '%s' : %v",
                     component.Name,
+                    err,
                 ),
             )
 
             fmt.Println(
-                "PASS: Helm Repository Reachable",
+                "FAIL:",
+                err,
             )
+
+            continue
         }
 
-    //--------------------------------------------------
-    // COMPOSE
-    //--------------------------------------------------
-
-    case "compose":
-
-        for _, component := range profile.Components {
-
-            repository, repositoryOK :=
-                component.Properties["repository"]
-
-            revision, revisionOK :=
-                component.Properties["revision"]
-
-            if !repositoryOK ||
-                !revisionOK {
-
-                fmt.Printf(
-                    "Compose component '%s' does not contain repository/revision\n",
-                    component.Name,
-                )
-
-                continue
-            }
-
-            fmt.Printf(
-                "Compose component: %s, repository: %v, revision: %v\n",
+        report.Pass(
+            "reachable",
+            fmt.Sprintf(
+                "OCI repository reachable for component '%s'",
                 component.Name,
-                repository,
-                revision,
-            )
-        }
+            ),
+        )
+
+        fmt.Println(
+            "PASS: OCI Repository Reachable",
+        )
+    }
 
     default:
 

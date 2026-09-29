@@ -9,6 +9,7 @@ import (
     "path/filepath"
 )
 
+// ExtractZip extracts all files and directories from a ZIP archive into the specified destination.
 func ExtractZip(src, dest string) error {
 
     r, err := zip.OpenReader(src)
@@ -40,7 +41,7 @@ func ExtractZip(src, dest string) error {
 
     return nil
 }
-
+// ExtractTarGz extracts all files and directories from a TAR.GZ archive into the specified destination.
 func ExtractTarGz(src, dest string) error {
 
     file, err := os.Open(src)
