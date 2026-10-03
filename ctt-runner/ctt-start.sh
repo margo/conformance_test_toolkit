@@ -18,7 +18,7 @@
 #      - Update vendor, modelNumber, serialNumber in JSON payloads
 #   2. Customize collection: Data-Generator/wfm-supplier/postman_collection.json
 #      - Or use group-based collections for curated test subsets
-#   3. Run tests: ./run-tests.sh and select persona, group, and WFM URL
+#   3. Run tests: ../ctt-runner/ctt-start.sh and select persona, group, and WFM URL
 #
 ################################################################################
 
@@ -30,12 +30,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFORMANCE_DIR="$SCRIPT_DIR"  # run-tests.sh is already IN the conformance directory
-DATA_GEN_DIR="$CONFORMANCE_DIR/Data-Generator"
-RUNNER_DIR="$CONFORMANCE_DIR/Runner"  # Output directory for test results
-WFM_GROUP_DIR="$DATA_GEN_DIR/wfm-supplier/groups"
-DEVICE_GROUP_DIR="$DATA_GEN_DIR/device-supplier/groups"
-APPLICATION_DIR="$CONFORMANCE_DIR/Application-Supplier"
-APPLICATION_SERVICE_DIR="$CONFORMANCE_DIR/Application-Supplier-Service"
+DATA_GEN_DIR="$SCRIPT_DIR/../ctt-creator"
+RUNNER_DIR="$CONFORMANCE_DIR/reports"  # Output directory for test results
+WFM_GROUP_DIR="$SCRIPT_DIR/../test-suites/wfm-supplier"
+DEVICE_GROUP_DIR="$SCRIPT_DIR/../test-suites/device-supplier"
+APPLICATION_DIR="$CONFORMANCE_DIR/app-supplier/utils/sample-package"
+APPLICATION_SERVICE_DIR="$CONFORMANCE_DIR/app-supplier/scripts"
 
 # Create output directories
 RUNNER_WFM="$RUNNER_DIR/wfm-supplier"
@@ -657,7 +657,7 @@ create_temp_scenarios_file() {
 }
 
 get_ctt_margo_version() {
-    local spec_file="$CONFORMANCE_DIR/wfm-supplier/spec.yaml"
+    local spec_file="$(dirname "$CONFORMANCE_DIR")/_archive/wfm-supplier/spec.yaml"
     [[ -f "$spec_file" ]] || { echo "unknown"; return; }
     grep -m1 -E '^\s*version:' "$spec_file" | sed -E 's/^\s*version:\s*//' | tr -d '\r'
 }
@@ -681,8 +681,8 @@ run_wfm_scenario_group() {
     local group_name="$3"
     local scenario_file
     local report_file
-    local scenario_runner="$CONFORMANCE_DIR/wfm-supplier/run_wfm_scenarios.js"
-    local cert_dir="$CONFORMANCE_DIR/wfm-supplier/newman-data/certs"
+    local scenario_runner="$CONFORMANCE_DIR/wfm-supplier/scripts/run_wfm_scenarios.js"
+    local cert_dir="$CONFORMANCE_DIR/wfm-supplier/utils/certs"
     local claimed_app_version
     claimed_app_version=$(jq -r '.version // ""' "$group_path/group.json" 2>/dev/null)
 
@@ -890,11 +890,11 @@ execute_wfm_tests_with_group() {
             info "Synced $new_count test IDs to group.json (was $current_count)"
     fi
 
-    local scenario_runner="$CONFORMANCE_DIR/wfm-supplier/run_wfm_scenarios.js"
+    local scenario_runner="$CONFORMANCE_DIR/wfm-supplier/scripts/run_wfm_scenarios.js"
     command -v node >/dev/null 2>&1 || error "Node.js not found. Install Node.js before running WFM tests."
     [[ -f "$scenario_runner" ]] || error "WFM scenario runner not found: $scenario_runner"
 
-    local cert_dir="$CONFORMANCE_DIR/wfm-supplier/newman-data/certs"
+    local cert_dir="$CONFORMANCE_DIR/wfm-supplier/utils/certs"
     local temp_device_id="device-$(date +%s)"
     mkdir -p "$cert_dir"
     openssl ecparam -name prime256v1 -genkey -noout -out "$cert_dir/device.key" >/dev/null 2>&1
@@ -1023,7 +1023,7 @@ execute_device_tests() {
     # rest of the scenarios in a random relative order) via a "flexibleOrder"
     # key in their group.json — same check used by the interactive device flow,
     # duplicated here because this function is also reached directly via
-    # `./run-tests.sh device <group>`.
+    # `../ctt-runner/ctt-start.sh device <group>`.
     local extra_flags=()
     if [[ -n "$group_path" && "$(jq -r '.flexibleOrder // false' "$group_path/group.json" 2>/dev/null)" == "true" ]]; then
         extra_flags+=("-flexible-order")
@@ -1056,7 +1056,7 @@ execute_device_tests() {
     # Build mock server if not already built
     if [[ ! -f "bin/server" ]]; then
         log "📦 Building mock WFM server..."
-        go build -o bin/server ./cmd/device-supplier || error "Failed to build mock server"
+        go build -o bin/server ./scripts/cmd/device-supplier || error "Failed to build mock server"
     fi
     
     # Build test runner if not already built
@@ -1254,10 +1254,10 @@ DESCRIPTION:
   - Generates signed conformance reports
 
 USAGE:
-  ./run-tests.sh                         # Interactive menu
-  ./run-tests.sh wfm [GROUP] [WFM_URL]    # Run WFM tests
-  ./run-tests.sh device [GROUP|SCENARIOS] # Run Device tests
-  ./run-tests.sh help                    # Show this help
+  ../ctt-runner/ctt-start.sh                         # Interactive menu
+  ../ctt-runner/ctt-start.sh wfm [GROUP] [WFM_URL]    # Run WFM tests
+  ../ctt-runner/ctt-start.sh device [GROUP|SCENARIOS] # Run Device tests
+  ../ctt-runner/ctt-start.sh help                    # Show this help
 
 PERSONAS:
 
@@ -1287,7 +1287,7 @@ WORKFLOW:
      → Test cases prepared and grouped in Data-Generator/
 
   2. Run run-tests.sh (CLI #2) to execute tests
-     ./run-tests.sh
+     ../ctt-runner/ctt-start.sh
      → Select persona
      → WFM Supplier: Select test group and provide WFM URL
      → Device Supplier: Select group-based scenarios
@@ -1355,7 +1355,7 @@ EXAMPLE WORKFLOW:
 
   # Step 2: Run tests with CLI #2
   cd conformance
-  ./run-tests.sh
+  ../ctt-runner/ctt-start.sh
   → Select: 1 (WFM Supplier)
   → Enter WFM URL
   → Tests execute
@@ -1546,7 +1546,7 @@ device_start_server() {
     # Build mock server if needed
     if [[ ! -f "bin/server" ]]; then
         log "📦 Building mock WFM server..."
-        go build -o bin/server ./cmd/device-supplier || error "Failed to build mock server"
+        go build -o bin/server ./scripts/cmd/device-supplier || error "Failed to build mock server"
     fi
 
     # Stop any stale server on port 3001
@@ -1898,9 +1898,9 @@ EOF
         *)
             error "Unknown command: $command
 
-Usage: ./run-tests.sh [wfm|device|application|help]
+Usage: ../ctt-runner/ctt-start.sh [wfm|device|application|help]
 
-Run './run-tests.sh help' for detailed instructions."
+Run '../ctt-runner/ctt-start.sh help' for detailed instructions."
             ;;
     esac
 }

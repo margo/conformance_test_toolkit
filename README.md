@@ -54,22 +54,24 @@ always reads as *expected vs. actual*, not just pass/fail.
 
 ```
 conformance_test_toolkit/
-├── wfm-supplier/              # WFM Supplier persona
-│   ├── run_wfm_scenarios.js   #   declarative scenario runner (mTLS + RFC 9421)
-│   ├── postman_collection.json#   legacy Postman/Newman collection (pre-MIAF)
-│   └── fixtures/              #   MIAF SVID + trust-bundle fixtures, sample app packages
-├── device-supplier/           # Device Supplier persona (Go)
-│   ├── run_tests.go           #   simulated-device scenario runner
-│   ├── cmd/device-supplier/   #   the mock WFM server (RFC 9421 + MIAF listeners)
-│   └── manifests/             #   data-driven request validation rules
-├── Application-Supplier-Service/  # Application Package structural validator (Go)
-├── Application-Supplier/      # Sample/reference Application Package
-├── testcases/                 # Declarative scenario JSON, one folder per test group
-├── Data-Generator/            # Test-case authoring + group management (conformance.sh)
-├── Runner/                    # Generated HTML reports land here, grouped by persona
-├── scripts/                   # One-off setup helpers (e.g. MIS identity provisioning)
+├── ctt-creator/               # Test-case authoring and group management
+│   ├── ctt-start.sh           #   entry point: create/edit test groups
+│   ├── common/scripts/        #   shared helpers (e.g. provision-mis-identity.sh)
+│   ├── wfm-supplier/          #   WFM group authoring scripts + utils/groups/
+│   ├── device-supplier/       #   Device group authoring scripts + utils/groups/
+│   └── app-supplier/          #   App Package group authoring
+├── ctt-runner/                # Test execution and report generation
+│   ├── ctt-start.sh           #   entry point: run tests against a real system
+│   ├── reports/               #   generated HTML reports, organized by persona + group
+│   ├── wfm-supplier/          #   run_wfm_scenarios.js + utils/fixtures/ + utils/certs/
+│   ├── device-supplier/       #   Go runner (run_tests.go, mock WFM server) + utils/
+│   └── app-supplier/          #   Application Package structural validator (Go)
+├── test-suites/               # Declarative test cases, one folder per persona + group
+│   ├── wfm-supplier/core/test-cases/wfm-supplier.json   # 8 scenarios, 29 steps
+│   ├── device-supplier/core/test-cases/device-supplier.json  # 23 scenarios, 104 steps
+│   └── app-supplier/
 ├── docs/                      # Architecture, MIAF migration guide, client-facing brief
-└── manual-test-cases/         # Test cases not yet automated
+└── _archive/                  # Deprecated files preserved for reference (see _archive/README.md)
 ```
 
 ---
@@ -79,8 +81,8 @@ conformance_test_toolkit/
 | Tool | Needed for |
 |---|---|
 | **Node.js** (any recent LTS) | `run_wfm_scenarios.js` — no `npm install` required, uses only Node built-ins |
-| **Go 1.22+** | `device-supplier` and `Application-Supplier-Service` |
-| **`npm install -g newman`** | Only if running the legacy `wfm-supplier/postman_collection.json` path |
+| **Go 1.24+** | `ctt-runner/device-supplier/` and `ctt-runner/app-supplier/` |
+| **`npm install -g newman`** | Only if running the legacy Postman collection path (archived) |
 | **`oras` CLI** | Application Registry (OCI) conformance checks |
 | **OpenSSL** | Certificate/SVID generation used throughout test setup |
 
@@ -92,23 +94,23 @@ The suite is driven by two top-level CLIs:
 
 ```bash
 # 1) Prepare test data — pick a persona, select/create a test group
-./conformance.sh
+./ctt-creator/ctt-start.sh
 
 # 2) Execute tests against a real system under test, generate the HTML report
-./run-tests.sh wfm <group> <WFM_URL>          # WFM Supplier
-./run-tests.sh device <group-or-scenarios>    # Device Supplier
-./run-tests.sh application                    # Application Supplier (prompts to select a package)
-./run-tests.sh help                           # full usage, all options
+./ctt-runner/ctt-start.sh wfm <group> <WFM_URL>          # WFM Supplier
+./ctt-runner/ctt-start.sh device <group-or-scenarios>    # Device Supplier
+./ctt-runner/ctt-start.sh application                    # Application Supplier
+./ctt-runner/ctt-start.sh help                           # full usage, all options
 ```
 
-Reports land in `Runner/<persona>/`, organized by test group.
+Reports land in `ctt-runner/reports/<persona>/`, organized by test group.
 
-For an MIAF (mTLS) scenario group specifically, `run-tests.sh` detects the
+For an MIAF (mTLS) scenario group specifically, `ctt-runner/ctt-start.sh` detects the
 declarative JSON format automatically and drives it through
 `run_wfm_scenarios.js` directly (no Newman involved) — see
 `run_wfm_scenario_group()` in `run-tests.sh` if you need to see exactly how.
 
-**Provisioning an identity for MIAF testing:** `scripts/provision-mis-identity.sh`
+**Provisioning an identity for MIAF testing:** `ctt-creator/common/scripts/provision-mis-identity.sh`
 mints a client X.509-SVID from a real Margo Identity Service (MIS), registers
 it with the WFM's accepted-client policy, and fetches the trust bundle — the
 three one-time setup steps MIAF requires before any mTLS scenario can run.

@@ -454,7 +454,7 @@ func validateContentDigest(body []byte, headerValue string) bool {
 }
 
 func loadServerCACertificate() (string, error) {
-	caCertPath := filepath.Join("certs", "ca-cert.pem")
+	caCertPath := filepath.Join("utils", "certs", "ca-cert.pem")
 	data, err := os.ReadFile(caCertPath)
 	if err != nil {
 		return "", err
@@ -1861,8 +1861,8 @@ func main() {
 const UntrustedTLSPort = ":3002"
 
 func serveUntrustedTLS(router http.Handler) {
-	cert := filepath.Join("certs", "untrusted-server-cert.pem")
-	key := filepath.Join("certs", "untrusted-server-key.pem")
+	cert := filepath.Join("utils", "certs", "untrusted-server-cert.pem")
+	key := filepath.Join("utils", "certs", "untrusted-server-key.pem")
 	if _, err := os.Stat(cert); err != nil {
 		log.Printf("[MI-018] untrusted-CA listener disabled (%s not found)", cert)
 		return

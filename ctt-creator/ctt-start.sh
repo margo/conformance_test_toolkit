@@ -11,7 +11,7 @@ set -euo pipefail
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFORMANCE_DIR="$SCRIPT_DIR"
-DATA_GEN_DIR="$CONFORMANCE_DIR/Data-Generator"
+DATA_GEN_DIR="$SCRIPT_DIR"
 
 ################################################################################
 # Logging Functions
@@ -118,12 +118,12 @@ generate_wfm_tests() {
     log "📋 Copying postman_collection.json to Data-Generator..."
     
     # Copy to Data-Generator
-    cp postman_collection.json "$DATA_GEN_DIR/wfm-supplier/"
+    cp postman_collection.json "$DATA_GEN_DIR/wfm-supplier/utils/"
     
     # Copy newman data if exists
     if [[ -d "newman-data" ]]; then
         log "📦 Copying newman data files..."
-        cp -r newman-data "$DATA_GEN_DIR/wfm-supplier/" 2>/dev/null || true
+        cp -r newman-data "$DATA_GEN_DIR/wfm-supplier/utils/" 2>/dev/null || true
     fi
     
     # Clean up temp file if it was downloaded
@@ -136,7 +136,7 @@ generate_wfm_tests() {
     
     # Show summary
     info "Generated files:"
-    ls -lh "$DATA_GEN_DIR/wfm-supplier/" | tail -n +2 | awk '{print "  - " $9 " (" $5 ")"}'
+    ls -lh "$DATA_GEN_DIR/wfm-supplier/utils/" | tail -n +2 | awk '{print "  - " $9 " (" $5 ")"}'
 }
 
 ################################################################################
@@ -596,9 +596,9 @@ WHAT GETS GENERATED:
 NEXT STEPS:
 
   After generating tests, use the execution CLI to run them:
-    ./run-tests.sh
-    ./run-tests.sh wfm <group-name> <wfm-url>
-    ./run-tests.sh device <group-name>
+    "$SCRIPT_DIR/../ctt-runner/ctt-start.sh"
+    "$SCRIPT_DIR/../ctt-runner/ctt-start.sh" wfm <group-name> <wfm-url>
+    "$SCRIPT_DIR/../ctt-runner/ctt-start.sh" device <group-name>
 
 REQUIREMENTS:
 
@@ -621,7 +621,7 @@ EOF
 
 set_supplier_context() {
     SUPPLIER="$1"
-    GROUP_DIR="$DATA_GEN_DIR/$SUPPLIER/groups"
+    GROUP_DIR="$DATA_GEN_DIR/$SUPPLIER/utils/groups"
 }
 
 create_test_group() {
