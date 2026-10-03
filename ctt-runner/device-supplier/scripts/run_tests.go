@@ -75,6 +75,7 @@ type TestStep struct {
 	SkipSigning               bool                   `json:"skip_signing,omitempty"`
 	SkipCertificateInjection  bool                   `json:"skip_certificate_injection,omitempty"`
 	ExpectedStatus            int                    `json:"expected_status"`
+	AcceptedStatuses          []int                  `json:"accepted_statuses,omitempty"`
 	Validations               []StepValidation       `json:"validations"`
 	ExtractContext            map[string]string      `json:"extract_context,omitempty"`
 	// ExpectManifestRejected / ExpectManifestAccepted assert the verdict a
@@ -517,7 +518,16 @@ func executeStep(step TestStep, ctx *TestContext) TestResult {
 	}
 
 	// Validate status code
-	if resp.StatusCode != step.ExpectedStatus {
+	statusOK := resp.StatusCode == step.ExpectedStatus
+	if !statusOK {
+		for _, s := range step.AcceptedStatuses {
+			if resp.StatusCode == s {
+				statusOK = true
+				break
+			}
+		}
+	}
+	if !statusOK {
 		result.Status = "fail"
 		result.Reason = fmt.Sprintf("Expected HTTP %d, got %d", step.ExpectedStatus, resp.StatusCode)
 		return result

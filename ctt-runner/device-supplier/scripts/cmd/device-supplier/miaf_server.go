@@ -435,9 +435,14 @@ func handleMIAFTestSetDeployments(w http.ResponseWriter, r *http.Request) {
 		// itself, regardless of what earlier scenarios did to this suite's
 		// single shared identity under MIAF (which has no per-run onboarding
 		// to naturally reset state at).
-		client.ManifestVersion = 1
-	}
-	if !stringSetsEqual(client.DeploymentsData, newIDs) {
+		// Always set to 2: 1 (base) + 1 (for the deployment change), so callers
+		// get a deterministic starting version regardless of prior state.
+		client.ManifestVersion = 2
+		client.DeploymentsData = newIDs
+		for _, id := range newIDs {
+			ensureDeployment(spiffeID, id)
+		}
+	} else if !stringSetsEqual(client.DeploymentsData, newIDs) {
 		client.ManifestVersion++
 		client.DeploymentsData = newIDs
 		for _, id := range newIDs {

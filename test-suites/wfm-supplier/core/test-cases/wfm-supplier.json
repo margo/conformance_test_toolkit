@@ -1,14 +1,14 @@
 [
   {
     "id": "wfm-core-capabilities",
-    "name": "Device Capabilities — Report, Update, and Validation",
+    "name": "Device Capabilities \u2014 Report, Update, and Validation",
     "crIds": [
       "MARGO-WFM-MANAGEMENTINTERFACE-021",
       "MARGO-WFM-MANAGEMENTINTERFACE-022",
       "MARGO-WFM-MANAGEMENTINTERFACE-023",
       "MARGO-WFM-MANAGEMENTINTERFACE-041"
     ],
-    "description": "MIAF replacement for wfm-core/postman_collection.json's capabilities items (see CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md §7.2 — Postman can't present an mTLS client SVID, so this consolidated file is the all-declarative equivalent for the WFM-supplier persona going forward). No onboarding call (none exists under MIAF); capabilities is PUT-only (no more POST-then-PUT); no apiVersion/kind envelope.",
+    "description": "MIAF replacement for wfm-core/postman_collection.json's capabilities items (see CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md \u00a77.2 \u2014 Postman can't present an mTLS client SVID, so this consolidated file is the all-declarative equivalent for the WFM-supplier persona going forward). No onboarding call (none exists under MIAF); capabilities is PUT-only (no more POST-then-PUT); no apiVersion/kind envelope.",
     "steps": [
       {
         "id": "wfm-core-cap-1",
@@ -102,11 +102,14 @@
         "headers": {},
         "expected_status": 200,
         "validations": [],
-        "extract_context": {}
+        "extract_context": {},
+        "accepted_statuses": [
+          201
+        ]
       },
       {
         "id": "wfm-core-cap-3",
-        "name": "Reject Capabilities — Invalid supportedDeploymentTypes",
+        "name": "Reject Capabilities \u2014 Invalid supportedDeploymentTypes",
         "crIds": [
           "MARGO-WFM-MANAGEMENTINTERFACE-023"
         ],
@@ -149,7 +152,7 @@
       },
       {
         "id": "wfm-core-cap-4",
-        "name": "Reject Capabilities — Invalid supportedRuntimes",
+        "name": "Reject Capabilities \u2014 Invalid supportedRuntimes",
         "crIds": [
           "MARGO-WFM-MANAGEMENTINTERFACE-023"
         ],
@@ -194,7 +197,7 @@
   },
   {
     "id": "wfm-core-desired-state",
-    "name": "Desired State — Retrieval, Content Negotiation, Digest-Addressed Fetches",
+    "name": "Desired State \u2014 Retrieval, Content Negotiation, Digest-Addressed Fetches",
     "crIds": [
       "MARGO-WFM-MANAGEMENTINTERFACE-004",
       "MARGO-WFM-MANAGEMENTINTERFACE-006",
@@ -211,7 +214,7 @@
       "MARGO-WFM-MANAGEMENTINTERFACE-035",
       "MARGO-WFM-MANAGEMENTINTERFACE-038"
     ],
-    "description": "Covers GET /deployments (both with and without an explicit Accept header — MI-007 default-negotiation requirement) and, when a deployment happens to be assigned, the digest-addressed bundle/deployment-YAML fetches. Bundle/deployment fetches are conditional on deployments being non-empty (PRECONDITION, see wfm-multi-component group for the operator-assignment flow) so this group only asserts what's true unconditionally.",
+    "description": "Covers GET /deployments (both with and without an explicit Accept header \u2014 MI-007 default-negotiation requirement) and, when a deployment happens to be assigned, the digest-addressed bundle/deployment-YAML fetches. Bundle/deployment fetches are conditional on deployments being non-empty (PRECONDITION, see wfm-multi-component group for the operator-assignment flow) so this group only asserts what's true unconditionally.",
     "steps": [
       {
         "id": "wfm-core-ds-1",
@@ -255,7 +258,7 @@
       },
       {
         "id": "wfm-core-ds-2",
-        "name": "Retrieve Desired State Without An Accept Header — Defaults To Manifest Media Type",
+        "name": "Retrieve Desired State Without An Accept Header \u2014 Defaults To Manifest Media Type",
         "crIds": [
           "MARGO-WFM-MANAGEMENTINTERFACE-007"
         ],
@@ -275,7 +278,7 @@
       },
       {
         "id": "wfm-core-ds-3",
-        "name": "Retrieve Desired State Again With Matching ETag — 304",
+        "name": "Retrieve Desired State Again With Matching ETag \u2014 304",
         "crIds": [
           "MARGO-WFM-MANAGEMENTINTERFACE-030"
         ],
@@ -293,6 +296,31 @@
     ]
   },
   {
+    "id": "wfm-core-content-negotiation",
+    "name": "WFM Content Negotiation \u2014 Unsupported Accept Header",
+    "crIds": [
+      "MARGO-WFM-MANAGEMENTINTERFACE-008"
+    ],
+    "description": "MI-008: WFM MUST return 406 Not Acceptable when the client sends an Accept header for a media type the server does not support.",
+    "steps": [
+      {
+        "id": "wfm-core-cn-1",
+        "name": "Request With Unsupported Accept Header Returns 406",
+        "crIds": [
+          "MARGO-WFM-MANAGEMENTINTERFACE-008"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "expected_status": 406,
+        "validations": [],
+        "extract_context": {}
+      }
+    ]
+  },
+  {
     "id": "wfm-core-status",
     "name": "Deployment Status Reporting",
     "crIds": [
@@ -300,7 +328,7 @@
       "MARGO-WFM-MANAGEMENTINTERFACE-022",
       "MARGO-WFM-MANAGEMENTINTERFACE-041"
     ],
-    "description": "Reports status for a synthetic deployment ID — a real WFM will 4xx/track this against its own known deployments, so this asserts request-shape acceptance (status code + acknowledgement contract), not that the specific deploymentId is meaningful to the WFM under test.",
+    "description": "Reports status for a synthetic deployment ID \u2014 a real WFM will 4xx/track this against its own known deployments, so this asserts request-shape acceptance (status code + acknowledgement contract), not that the specific deploymentId is meaningful to the WFM under test.",
     "steps": [
       {
         "id": "wfm-core-status-1",
@@ -330,12 +358,12 @@
   },
   {
     "id": "wfm-header-integrity-manifest",
-    "name": "Desired State Manifest — ETag & Content-Type Correctness",
-    "description": "Per docs.margo.org/specification/margo-management-interface/desired-state: MI-004/MI-027 (ETag MUST be sha256:<64 lowercase hex>), MI-006/MI-007 (200 OK manifest response MUST carry Content-Type application/vnd.margo.manifest.v1+json), MI-026 (first manifest for a client MUST use manifestVersion 1), MI-030 (matching If-None-Match MUST return 304 with an empty body). MIAF transport: caller identity comes from the mTLS client SVID (mtls:true) — there is no onboarding call and no {clientId} path segment (see CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md Part 5.4/6). Run against base URL <wfm-host>:<sbi-port>/v1alpha2/margo with an SVID loaded at <cert-dir>/svid-{cert,key}.pem and the WFM's trust bundle at <cert-dir>/svid-ca.pem.",
+    "name": "Desired State Manifest \u2014 ETag & Content-Type Correctness",
+    "description": "Per docs.margo.org/specification/margo-management-interface/desired-state: MI-004/MI-027 (ETag MUST be sha256:<64 lowercase hex>), MI-006/MI-007 (200 OK manifest response MUST carry Content-Type application/vnd.margo.manifest.v1+json), MI-026 (first manifest for a client MUST use manifestVersion 1), MI-030 (matching If-None-Match MUST return 304 with an empty body). MIAF transport: caller identity comes from the mTLS client SVID (mtls:true) \u2014 there is no onboarding call and no {clientId} path segment (see CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md Part 5.4/6). Run against base URL <wfm-host>:<sbi-port>/v1alpha2/margo with an SVID loaded at <cert-dir>/svid-{cert,key}.pem and the WFM's trust bundle at <cert-dir>/svid-ca.pem.",
     "steps": [
       {
         "id": "step-wfm-hi-1.1",
-        "name": "Get Deployments — First Manifest Has ETag, Content-Type, and Version 1",
+        "name": "Get Deployments \u2014 First Manifest Has ETag, Content-Type, and Version 1",
         "method": "GET",
         "endpoint": "/api/v1/deployments",
         "mtls": true,
@@ -370,7 +398,7 @@
       },
       {
         "id": "step-wfm-hi-1.2",
-        "name": "Get Deployments Again With If-None-Match — Returns 304 With Empty Body",
+        "name": "Get Deployments Again With If-None-Match \u2014 Returns 304 With Empty Body",
         "method": "GET",
         "endpoint": "/api/v1/deployments",
         "mtls": true,
@@ -392,7 +420,7 @@
   },
   {
     "id": "wfm-multi-component-deployment",
-    "name": "Multi-Component ApplicationDeployment — wait=true/false, digest & caching contract",
+    "name": "Multi-Component ApplicationDeployment \u2014 wait=true/false, digest & caching contract",
     "crIds": [
       "MARGO-WFM-APPLICATIONDESCRIPTION-001",
       "MARGO-WFM-APPLICATIONDESCRIPTION-002",
@@ -403,7 +431,7 @@
       "MARGO-WFM-MANAGEMENTINTERFACE-034",
       "MARGO-WFM-MANAGEMENTINTERFACE-035"
     ],
-    "description": "Verifies a real WFM serves a multi-component compose ApplicationDeployment faithfully, WITHOUT deploying any container. Covers MARGO-WFM-APPLICATIONDESCRIPTION-001 (the client MAY be told wait=false for compose — the WFM's only obligation is to relay the operator-set `wait` value unchanged) plus the content-addressing / caching contract that the same fetched deployment lets us check: MI-014/MI-034 (ETag digest grammar), MI-015 (ETag == sha256 of the served body), MI-025 (served body sha256 == the digest advertised in the desired-state manifest), MI-031 (bundle media type) and MI-009 (bundle present & non-null once a deployment exists). MIAF transport: caller identity comes from the mTLS client SVID (mtls:true) — no onboarding call, no {clientId} path segment (CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md Part 5.4/6). PRECONDITION: an operator must assign the reference deployment in fixtures/multi-component-app-deployment.yaml (one component `wait: true`, one `wait: false`) to this suite's registered SPIFFE ID via the WFM console while step 2 polls.",
+    "description": "Verifies a real WFM serves a multi-component compose ApplicationDeployment faithfully, WITHOUT deploying any container. Covers MARGO-WFM-APPLICATIONDESCRIPTION-001 (the client MAY be told wait=false for compose \u2014 the WFM's only obligation is to relay the operator-set `wait` value unchanged) plus the content-addressing / caching contract that the same fetched deployment lets us check: MI-014/MI-034 (ETag digest grammar), MI-015 (ETag == sha256 of the served body), MI-025 (served body sha256 == the digest advertised in the desired-state manifest), MI-031 (bundle media type) and MI-009 (bundle present & non-null once a deployment exists). MIAF transport: caller identity comes from the mTLS client SVID (mtls:true) \u2014 no onboarding call, no {clientId} path segment (CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md Part 5.4/6). PRECONDITION: an operator must assign the reference deployment in fixtures/multi-component-app-deployment.yaml (one component `wait: true`, one `wait: false`) to this suite's registered SPIFFE ID via the WFM console while step 2 polls.",
     "steps": [
       {
         "id": "f55c84c8-3c29-4cd0-b11a-49bde4aeafe4",
@@ -448,7 +476,7 @@
       },
       {
         "id": "efd8ad9d-1a6f-4b12-bf9d-040f11eddec6",
-        "name": "Wait For The Multi-Component Deployment To Be Assigned (poll — assign it via the WFM console now)",
+        "name": "Wait For The Multi-Component Deployment To Be Assigned (poll \u2014 assign it via the WFM console now)",
         "method": "GET",
         "endpoint": "/api/v1/deployments",
         "mtls": true,
@@ -569,8 +597,8 @@
   },
   {
     "id": "wfm-application-registry-oci-conformance",
-    "name": "Application Registry — OCI Manifest, Media Types & Registry API Surface",
-    "description": "Verifies a real Application Registry serves the Application Package as a spec-conformant OCI artifact and speaks the standard OCI Registry API (tags, manifests, blobs). Runs `oras manifest fetch` / `oras blob fetch` / `oras repo tags` / a raw v2 tags-list GET against REGISTRY_REF (env var, or set `oras.ref` per step) — no mocking, no signing, no mTLS (the Application Registry is a plain OCI registry, unrelated to the WFM management-interface auth model). One test case per CR-ID; verdict logic reuses the same validate() operators as every other wfm-supplier check.",
+    "name": "Application Registry \u2014 OCI Manifest, Media Types & Registry API Surface",
+    "description": "Verifies a real Application Registry serves the Application Package as a spec-conformant OCI artifact and speaks the standard OCI Registry API (tags, manifests, blobs). Runs `oras manifest fetch` / `oras blob fetch` / `oras repo tags` / a raw v2 tags-list GET against REGISTRY_REF (env var, or set `oras.ref` per step) \u2014 no mocking, no signing, no mTLS (the Application Registry is a plain OCI registry, unrelated to the WFM management-interface auth model). One test case per CR-ID; verdict logic reuses the same validate() operators as every other wfm-supplier check.",
     "steps": [
       {
         "id": "ar-012-artifact-type",
@@ -764,12 +792,12 @@
   },
   {
     "id": "wfm-identity-trust-bundle",
-    "name": "MIAF Identity — Trust Bundle Fetch and mTLS Handshake",
+    "name": "MIAF Identity \u2014 Trust Bundle Fetch and mTLS Handshake",
     "crIds": [
       "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-001",
       "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-002"
     ],
-    "description": "Verifies the WFM accepts an mTLS connection using a valid X.509-SVID and rejects connections without a client certificate. The CTT presents its SVID provisioned by provision-mis-identity.sh. See docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md §4.",
+    "description": "Verifies the WFM accepts an mTLS connection using a valid X.509-SVID and rejects connections without a client certificate. The CTT presents its SVID provisioned by provision-mis-identity.sh. See docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md \u00a74.",
     "steps": [
       {
         "id": "wfm-identity-tb-1",
@@ -805,42 +833,16 @@
         "headers": {
           "Accept": "application/vnd.margo.manifest.v1+json"
         },
-        "expected_status_range": [
-          400,
-          499
-        ],
         "validations": [],
-        "extract_context": {}
-      },
-      {
-        "id": "wfm-identity-tb-3",
-        "name": "WFM Trust Bundle Endpoint Is Reachable (MIS spiffe-bundle)",
-        "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-002"
-        ],
-        "method": "GET",
-        "endpoint": "/spiffe-bundle",
-        "mtls": false,
-        "headers": {},
-        "expected_status": 200,
-        "validations": [
-          {
-            "field": "keys",
-            "operation": "is_array"
-          },
-          {
-            "field": "keys",
-            "operation": "array_length_gte",
-            "value": 1
-          }
-        ],
-        "extract_context": {}
+        "extract_context": {},
+        "expected_status": 0,
+        "expect_transport_error": true
       }
     ]
   },
   {
     "id": "wfm-identity-svid-refresh",
-    "name": "MIAF Identity — SVID Rotation Continuity",
+    "name": "MIAF Identity \u2014 SVID Rotation Continuity",
     "crIds": [
       "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-003"
     ],

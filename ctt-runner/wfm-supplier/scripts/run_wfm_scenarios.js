@@ -1518,35 +1518,43 @@ async function runStep(scenario, step) {
 
     const assertionFailures = [];
 
-    // A step passes if the actual status matches expected OR any of the accepted alternatives.
-    const acceptedStatuses = step.accepted_statuses || [];
-    const primaryMatch     = response.status === step.expected_status;
-    const alternativeMatch = !primaryMatch && acceptedStatuses.includes(response.status);
-    const statusMatch      = primaryMatch || alternativeMatch;
-    if (!statusMatch) {
-      assertionFailures.push(`expected HTTP ${step.expected_status}, got ${response.status}`);
-    }
+    // expect_transport_error: true — a TLS/network rejection IS the passing outcome.
+    if (step.expect_transport_error) {
+      if (!response.transportError) {
+        assertionFailures.push(`expected a transport error (TLS rejection) but got HTTP ${response.status}`);
+      }
+    } else {
+      // A step passes if the actual status matches expected OR any of the accepted alternatives.
+      const acceptedStatuses = step.accepted_statuses || [];
+      const primaryMatch     = response.status === step.expected_status;
+      const alternativeMatch = !primaryMatch && acceptedStatuses.includes(response.status);
+      const statusMatch      = primaryMatch || alternativeMatch;
+      if (!statusMatch) {
+        assertionFailures.push(`expected HTTP ${step.expected_status}, got ${response.status}`);
+      }
 
-    // Run field validations only when the PRIMARY expected status is matched.
-    // When we got an accepted alternative (e.g. 404 instead of 200 for a bundle step),
-    // the response body belongs to a different content type — validating it against the
-    // success schema would produce false negatives, so we skip it.
-    if (primaryMatch) {
-      assertionFailures.push(...runValidations(responseSource, step.validations));
-    }
+      // Run field validations only when the PRIMARY expected status is matched.
+      // When we got an accepted alternative (e.g. 404 instead of 200 for a bundle step),
+      // the response body belongs to a different content type — validating it against the
+      // success schema would produce false negatives, so we skip it.
+      if (primaryMatch) {
+        assertionFailures.push(...runValidations(responseSource, step.validations));
+      }
 
-    if (pollTimedOut) {
-      assertionFailures.push(
-        `timed out after ${step.poll.timeout_seconds ?? 120}s waiting for poll.until condition (${pollAttempts} attempt(s))`
-      );
+      if (pollTimedOut) {
+        assertionFailures.push(
+          `timed out after ${step.poll.timeout_seconds ?? 120}s waiting for poll.until condition (${pollAttempts} attempt(s))`
+        );
+      }
     }
 
     let newContext = {};
-    if (assertionFailures.length === 0 && primaryMatch) {
-      newContext = extractContext(responseSource, step.extract_context);
+    if (assertionFailures.length === 0 && !step.expect_transport_error) {
+      const primaryMatch = response.status === step.expected_status;
+      if (primaryMatch) newContext = extractContext(responseSource, step.extract_context);
     }
 
-    const passed = assertionFailures.length === 0 && !response.transportError;
+    const passed = assertionFailures.length === 0 && (step.expect_transport_error || !response.transportError);
     const resultEntry = {
       scenario: scenario.id,
       scenarioName: scenario.name,
