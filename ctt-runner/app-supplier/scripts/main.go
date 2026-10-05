@@ -212,12 +212,12 @@ func main() {
 			filepath.Base(workDir)
 	}
 
-	reportDir :=
-		filepath.Join(
-			"..",
-			"Runner",
-			"application-supplier",
-		)
+reportDir := filepath.Join(
+    "..",
+    "..",
+    "reports",
+    "application-supplier",
+)
 
 	_ = os.MkdirAll(
 		reportDir,

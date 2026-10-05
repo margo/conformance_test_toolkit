@@ -34,7 +34,7 @@ DATA_GEN_DIR="$SCRIPT_DIR/../ctt-creator"
 RUNNER_DIR="$CONFORMANCE_DIR/reports"  # Output directory for test results
 WFM_GROUP_DIR="$SCRIPT_DIR/../test-suites/wfm-supplier"
 DEVICE_GROUP_DIR="$SCRIPT_DIR/../test-suites/device-supplier"
-APPLICATION_DIR="$CONFORMANCE_DIR/app-supplier/utils/sample-package"
+APPLICATION_DIR="$CONFORMANCE_DIR/../test-suites/app-supplier"
 APPLICATION_SERVICE_DIR="$CONFORMANCE_DIR/app-supplier/scripts"
 
 # Create output directories
