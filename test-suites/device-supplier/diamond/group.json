@@ -4,7 +4,7 @@
   "persona": "device-supplier",
   "description": "v1.0.0",
   "FolderPath": [
-    "testcases/user2"
+    "../test-suites/device-supplier/core/test-cases"
   ],
   "testCases": [
     "045403b4-89ac-4c08-9146-7a92040c3476",

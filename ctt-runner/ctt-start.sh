@@ -702,6 +702,14 @@ run_wfm_scenario_group() {
     [[ -f "$cert_dir/device.key" ]] || error "Device private key not found: $cert_dir/device.key"
     [[ -f "$cert_dir/device-cert.pem" ]] || error "Device certificate not found: $cert_dir/device-cert.pem"
 
+    local miaf_dir="$CONFORMANCE_DIR/wfm-supplier/utils/fixtures/miaf"
+    if [[ -f "$miaf_dir/client-svid-cert.pem" && -f "$miaf_dir/client-svid-key.pem" ]]; then
+        cp "$miaf_dir/client-svid-cert.pem" "$cert_dir/svid-cert.pem"
+        cp "$miaf_dir/client-svid-key.pem"  "$cert_dir/svid-key.pem"
+    else
+        error "SVID certs not found at $miaf_dir — required for mtls:true steps"
+    fi
+
     confirm_version_mismatch "$claimed_app_version"
 
     scenario_file=$(create_temp_scenarios_file)
@@ -1460,8 +1468,6 @@ run_wfm_flow() {
                 ;;
 
             2)
-                show_wfm_cert_info
-
                 echo ""
                 info "Selecting test group..."
 

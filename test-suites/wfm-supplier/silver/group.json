@@ -4,9 +4,7 @@
   "persona": "wfm-supplier",
   "description": "new file",
   "FolderPath": [
-    "Data-Generator/wfm-supplier/groups/silver",
-    "testcases/user1",
-    "testcases/user2"
+    "../test-suites/wfm-supplier/silver"
   ],
   "flexibleOrder": false,
   "testCases": [

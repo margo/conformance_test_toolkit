@@ -4,7 +4,7 @@
   "persona": "device-supplier",
   "description": "Regenerated via CLI-1 (E2E verification pass)",
   "FolderPath": [
-    "testcases/device-supplier-flexible-order"
+    "../test-suites/device-supplier/core/test-cases"
   ],
   "flexibleOrder": true,
   "testCases": []

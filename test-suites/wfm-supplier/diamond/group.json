@@ -4,8 +4,7 @@
   "persona": "wfm-supplier",
   "description": "v1.0.0",
   "FolderPath": [
-    "testcases/user1",
-    "testcases/user2"
+    "../test-suites/wfm-supplier/core/test-cases"
   ],
   "testCases": [
     "02555be8-873a-4f60-b961-449291382227",
