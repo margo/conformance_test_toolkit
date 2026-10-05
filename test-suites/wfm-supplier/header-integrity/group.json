@@ -4,6 +4,7 @@
   "persona": "wfm-supplier",
   "description": "Response-header and versioning correctness checks the suite never asserted before: ETag digest grammar (MI-004/MI-027), manifest Content-Type (MI-006/MI-007), first manifestVersion=1 (MI-026), and client ID URL-safety (MI-002/MI-020). All target behavior confirmed present in the real Symphony implementation (device-agent-vendor.go / device.go) — kept isolated in its own group so a wrong assumption about exact header formatting fails here, not in core/silver.",
   "FolderPath": [
+    "../test-suites/wfm-supplier/header-integrity/test-cases",
     "../test-suites/wfm-supplier/core/test-cases"
   ],
   "flexibleOrder": false,

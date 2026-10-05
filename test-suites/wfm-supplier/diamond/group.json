@@ -4,6 +4,7 @@
   "persona": "wfm-supplier",
   "description": "v1.0.0",
   "FolderPath": [
+    "../test-suites/wfm-supplier/diamond/test-cases",
     "../test-suites/wfm-supplier/core/test-cases"
   ],
   "testCases": [

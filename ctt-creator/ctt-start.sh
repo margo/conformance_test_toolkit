@@ -110,8 +110,8 @@ generate_wfm_tests() {
     
     # Run Portman
     log "📋 Generating Postman collection..."
-    if ! "${portman_cmd[@]}" -l "$spec_file" -o postman_collection.json 2>/dev/null; then
-        error "Portman generation failed"
+    if ! "${portman_cmd[@]}" -l "$spec_file" -o postman_collection.json; then
+        error "Portman generation failed — see output above for details"
     fi
     
     log "✅ Test cases generated successfully"

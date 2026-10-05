@@ -4,6 +4,7 @@
   "persona": "device-supplier",
   "description": "ng",
   "FolderPath": [
+    "../test-suites/device-supplier/bronze/test-cases",
     "../test-suites/device-supplier/core/test-cases"
   ],
   "flexibleOrder": false,

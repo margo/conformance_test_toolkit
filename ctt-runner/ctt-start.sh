@@ -1451,8 +1451,6 @@ run_wfm_flow() {
         case "${test_choice,,}" in
 
             1)
-                show_wfm_cert_info
-
                 echo ""
                 read -p "Enter Postman Collection Path: " collection_path
 
