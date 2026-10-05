@@ -7,5 +7,19 @@
     "../test-suites/device-supplier/core/test-cases"
   ],
   "flexibleOrder": false,
-  "testCases": []
+  "testCases": [
+    "scenario-capabilities",
+    "scenario-deployments",
+    "scenario-capabilities-errors",
+    "scenario-status-and-retrieval-errors",
+    "device-core-capability-roles",
+    "device-core-manifest-semantics",
+    "device-mi008-unsupported-digest-algorithm",
+    "device-mi006-bundle-digest-mismatch",
+    "device-mi019-deployment-digest-mismatch",
+    "device-mi010-non-increasing-manifest-version",
+    "device-mi025-026-sizebytes-not-integrity",
+    "device-mi004-rfc5280-certificate",
+    "device-mi018-tls-trust"
+  ]
 }
