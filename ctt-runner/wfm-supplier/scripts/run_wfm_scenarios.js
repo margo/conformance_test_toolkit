@@ -9,6 +9,11 @@ const { execFileSync } = require('child_process');
 function usage() {
   console.error(
     'Usage: node run_wfm_scenarios.js <base-url> <scenarios.json> <report.html> <cert-dir> [group-name] [group-version]\n' +
+    '\n' +
+    '  <base-url> is the vendor WFM\'s SBI base URL (mTLS port), e.g.:\n' +
+    '    https://wfm.vendor.com:4443\n' +
+    '    https://localhost:8084/v1alpha2/margo   (Symphony sandbox)\n' +
+    '\n' +
     '   or: node run_wfm_scenarios.js --curl <METHOD> <endpoint> --base-url <url> --cert-dir <dir> ' +
     '[--body <json>] [--header "Name: value"]... [--unsigned]\n' +
     '   or: node run_wfm_scenarios.js --fetch-trust-bundle <mis-base-url> <output-ca.pem>'

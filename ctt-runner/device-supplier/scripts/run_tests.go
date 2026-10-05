@@ -104,6 +104,16 @@ type TestStep struct {
 	// signing.go. Mutually exclusive with SkipSigning/SigningKey/VerifyTLS,
 	// which are all RFC-9421-flow concepts that don't apply under MIAF.
 	MTLS bool `json:"mtls,omitempty"`
+	// Poll retries this step until all Until conditions are met or TimeoutSeconds
+	// elapses. Mirrors the wfm-supplier JS runner's poll field.
+	Poll *PollConfig `json:"poll,omitempty"`
+}
+
+// PollConfig drives repeated retries for a step until conditions are satisfied.
+type PollConfig struct {
+	IntervalSeconds int              `json:"interval_seconds"`
+	TimeoutSeconds  int              `json:"timeout_seconds"`
+	Until           []StepValidation `json:"until"`
 }
 
 type StepValidation struct {
@@ -254,7 +264,7 @@ func runScenarioSteps(scenario TestScenario, ctx *TestContext, stepFilter string
 
 		fmt.Printf("  → Step: %s\n", step.Name)
 
-		result := executeStep(step, ctx)
+		result := runStep(step, ctx)
 		result.ScenarioID = scenario.ID
 		result.ScenarioName = scenario.Name
 		result.CRIds = mergeCRIds(scenario.CRIds, step.CRIds)
@@ -350,6 +360,49 @@ func runFlexibleOrder(scenarios []TestScenario, scenarioFilter, stepFilter strin
 
 // executeStep runs exactly one step of one scenario against the WFM under
 // test and returns a filled-in TestResult (pass/fail plus everything needed
+// runStep wraps executeStep with optional poll/retry logic (step.Poll).
+// When Poll is nil it behaves identically to a direct executeStep call.
+func runStep(step TestStep, ctx *TestContext) TestResult {
+	if step.Poll == nil {
+		return executeStep(step, ctx)
+	}
+
+	interval := time.Duration(step.Poll.IntervalSeconds) * time.Second
+	if interval == 0 {
+		interval = 5 * time.Second
+	}
+	timeout := time.Duration(step.Poll.TimeoutSeconds) * time.Second
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+
+	deadline := time.Now().Add(timeout)
+	var last TestResult
+	for {
+		last = executeStep(step, ctx)
+		allMet := last.Status == "pass"
+		if allMet && len(step.Poll.Until) > 0 {
+			// Re-check until conditions against the fresh response data
+			for _, cond := range step.Poll.Until {
+				if !validateResponse(last.Response, cond, ctx) {
+					allMet = false
+					break
+				}
+			}
+		}
+		if allMet {
+			return last
+		}
+		if time.Now().After(deadline) {
+			last.Status = "fail"
+			last.Reason = fmt.Sprintf("poll timed out after %s: %s", timeout, last.Reason)
+			return last
+		}
+		fmt.Printf("    ⏳ polling... retrying in %s\n", interval)
+		time.Sleep(interval)
+	}
+}
+
 // to print and report it). It's the device-supplier persona's equivalent of
 // run_wfm_scenarios.js's runStep() on the wfm-supplier side — same overall
 // job, just simulating a device/WFM-Client here instead of a WFM. It's one
@@ -823,9 +876,29 @@ func validateResponse(data interface{}, validation StepValidation, ctx *TestCont
 			return strings.Contains(str, expectedStr)
 		}
 		return false
+	case "gte":
+		// Numeric greater-than-or-equal: value >= expected
+		val, okV := toFloat64(value)
+		exp, okE := toFloat64(expected)
+		return okV && okE && val >= exp
 	default:
 		return true
 	}
+}
+
+func toFloat64(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
+	}
+	return 0, false
 }
 
 func saveResults(results []TestResult) {

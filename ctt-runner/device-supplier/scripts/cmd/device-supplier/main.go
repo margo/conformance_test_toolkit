@@ -31,6 +31,8 @@ import (
 
 const (
 	WFMPort          = ":3001"
+	OTLPPort         = ":4318" // OTLP HTTP receiver (plain HTTP, insecure — matches sandbox device OTEL config)
+	PromWritePort    = ":9090" // Prometheus Remote Write receiver
 	ClientsFile      = "./data/clients.json"
 	DeploymentsFile  = "./data/deployments.json"
 )
@@ -41,6 +43,13 @@ var (
 	deployments      = make(map[string]DeploymentData)
 	mu               sync.RWMutex
 	assertionsConfig *AssertionsConfig
+
+	// Observability telemetry counters — incremented by the OTLP/Prometheus receivers.
+	telemetryMu      sync.RWMutex
+	otlpTracesCount  int64
+	otlpMetricsCount int64
+	otlpLogsCount    int64
+	promWriteCount   int64
 )
 
 // Assertions loaded from JSON (data-driven validation)
@@ -1802,6 +1811,12 @@ func main() {
 
 	// Health check
 	router.HandleFunc("/health", handleHealth).Methods("GET")
+	// Observability health — polled by the conformance suite to verify telemetry flow.
+	// Registered at both paths: bare /health/telemetry for direct access and
+	// under /v1alpha2/margo so the test runner's relative endpoint /health/telemetry
+	// resolves correctly when appended to the WFMServer base URL.
+	router.HandleFunc("/health/telemetry", handleTelemetryHealth).Methods("GET")
+	router.HandleFunc("/v1alpha2/margo/health/telemetry", handleTelemetryHealth).Methods("GET")
 
 	// Discovery
 	router.HandleFunc("/api/v1/discovery", handleDiscovery).Methods("GET")
@@ -1840,6 +1855,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// OTEL observability receivers — plain HTTP so vendor device OTEL collectors
+	// can push without TLS configuration. Port 4318 = OTLP HTTP, Port 9090 = Prometheus Remote Write.
+	go startOTLPServer()
+	go startPrometheusWriteServer()
+
 	// MI-018 negative-test listener: the same API served over TLS with a
 	// certificate NOT signed by our root CA. A device that correctly verifies
 	// the WFM server certificate against the fetched root CA MUST refuse to
@@ -1853,6 +1873,98 @@ func main() {
 	log.Printf("🚀 Mock WFM Server starting on https://localhost%s", WFMPort)
 	if err := http.ListenAndServeTLS(WFMPort, certFile, keyFile, router); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// handleTelemetryHealth returns a JSON summary of received OTLP / Prometheus pushes.
+// The conformance suite polls this to confirm the vendor's device is emitting telemetry.
+func handleTelemetryHealth(w http.ResponseWriter, r *http.Request) {
+	telemetryMu.RLock()
+	traces := otlpTracesCount
+	metrics := otlpMetricsCount
+	logs := otlpLogsCount
+	prom := promWriteCount
+	telemetryMu.RUnlock()
+
+	status := "idle"
+	if traces > 0 || metrics > 0 || prom > 0 {
+		status = "receiving"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"status":%q,"otlp_traces":%d,"otlp_metrics":%d,"otlp_logs":%d,"prom_writes":%d}`,
+		status, traces, metrics, logs, prom)
+}
+
+// startOTLPServer starts a plain HTTP server on OTLPPort that accepts OTLP
+// trace/metric/log pushes from the vendor device's OTEL collector.
+// The device collector should be configured with:
+//   endpoint: http://<ctt-host>:4318
+//   tls: { insecure: true }
+func startOTLPServer() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/traces", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		io.Copy(io.Discard, r.Body)
+		telemetryMu.Lock()
+		otlpTracesCount++
+		telemetryMu.Unlock()
+		log.Printf("[OTLP] trace push received (total: %d)", otlpTracesCount)
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/v1/metrics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		io.Copy(io.Discard, r.Body)
+		telemetryMu.Lock()
+		otlpMetricsCount++
+		telemetryMu.Unlock()
+		log.Printf("[OTLP] metrics push received (total: %d)", otlpMetricsCount)
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/v1/logs", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		io.Copy(io.Discard, r.Body)
+		telemetryMu.Lock()
+		otlpLogsCount++
+		telemetryMu.Unlock()
+		log.Printf("[OTLP] logs push received (total: %d)", otlpLogsCount)
+		w.WriteHeader(http.StatusOK)
+	})
+	log.Printf("📡 OTLP HTTP receiver on http://0.0.0.0%s (traces /v1/traces, metrics /v1/metrics, logs /v1/logs)", OTLPPort)
+	if err := http.ListenAndServe(OTLPPort, mux); err != nil {
+		log.Printf("[OTLP] server stopped: %v", err)
+	}
+}
+
+// startPrometheusWriteServer starts a plain HTTP server on PromWritePort that
+// accepts Prometheus Remote Write pushes from the vendor device's OTEL collector.
+// The device collector should be configured with:
+//   endpoint: http://<ctt-host>:9090/api/v1/write
+func startPrometheusWriteServer() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/write", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		io.Copy(io.Discard, r.Body)
+		telemetryMu.Lock()
+		promWriteCount++
+		telemetryMu.Unlock()
+		log.Printf("[Prometheus] remote write received (total: %d)", promWriteCount)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	log.Printf("📊 Prometheus Remote Write receiver on http://0.0.0.0%s/api/v1/write", PromWritePort)
+	if err := http.ListenAndServe(PromWritePort, mux); err != nil {
+		log.Printf("[Prometheus] server stopped: %v", err)
 	}
 }
 

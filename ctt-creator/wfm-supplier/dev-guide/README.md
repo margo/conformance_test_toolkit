@@ -71,22 +71,50 @@ cd scripts/
 
 ## Running Tests
 
-Tests are executed by the **CTT Runner**:
+The CTT acts as a mock device (WFM Client) that connects to the **vendor's real WFM**
+over mTLS. You provide the WFM's SBI base URL — the CTT appends the Margo SBI paths
+(`/api/v1/capabilities/{deviceId}`, `/api/v1/deployments`, etc.) automatically.
+
+**Vendor WFM:** Your WFM must expose its SBI endpoint (mTLS port) and be reachable from
+the machine running the CTT. Provide its full base URL including any path prefix your
+implementation uses.
+
+Via the interactive CLI:
 
 ```bash
 cd ../../ctt-runner
 ./ctt-start.sh
-# Select: WFM Supplier → choose a test group
+# Select: WFM Supplier → choose a test group → enter your WFM's SBI base URL
 ```
 
 Or directly:
 
 ```bash
 cd ../../ctt-runner/wfm-supplier
+REGISTRY_REF="<registry>/<repo>:<tag>" \
 node scripts/run_wfm_scenarios.js \
-  --base-url https://<wfm-host>:<port> \
-  --scenario-file ../../test-suites/wfm-supplier/core/test-cases/wfm-supplier.json
+  https://<wfm-sbi-host>:<sbi-port> \
+  ../../test-suites/wfm-supplier/core/test-cases/wfm-supplier.json \
+  /tmp/wfm-report.html \
+  utils/certs
 ```
+
+**Reference implementation (Symphony sandbox):** Symphony's SBI is on port 8084 (mTLS)
+with a `/v1alpha2/margo` path prefix, accessible from the same VM:
+
+```bash
+REGISTRY_REF="harbor.machine:8443/library/margo-ctt-hello-world:1.0.0" \
+node scripts/run_wfm_scenarios.js \
+  https://localhost:8084/v1alpha2/margo \
+  ../../test-suites/wfm-supplier/core/test-cases/wfm-supplier.json \
+  /tmp/wfm-report.html \
+  utils/certs
+```
+
+> **Multi-component scenario note:** The `wfm-multi-component-deployment` scenario
+> requires an operator to manually assign a deployment in the WFM console during the
+> test run (the test polls and waits up to 5 minutes). Skip this scenario group if no
+> operator will be present.
 
 ## MIAF Identity Setup
 

@@ -351,10 +351,10 @@ execute_wfm_tests_with_url() {
     # If WFM URL not provided, prompt user
     if [[ -z "$wfm_url" ]]; then
         echo ""
-        read -p "Enter WFM Server Base URL [https://localhost:3001/v1alpha2/margo]: " wfm_url
-        wfm_url="${wfm_url:-https://localhost:3001/v1alpha2/margo}"
+        read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+        [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
     fi
-    
+
     log "🚀 Starting WFM Supplier Test Execution"
     log "   WFM Server: $wfm_url"
     
@@ -818,10 +818,10 @@ execute_wfm_tests_with_group() {
     # If WFM URL not provided, prompt user
     if [[ -z "$wfm_url" ]]; then
         echo ""
-        read -p "Enter WFM Server Base URL [https://localhost:3001/v1alpha2/margo]: " wfm_url
-        wfm_url="${wfm_url:-https://localhost:3001/v1alpha2/margo}"
+        read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+        [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
     fi
-    
+
     log "🚀 Starting WFM Supplier Test Execution (Group Mode)"
     log "   Group: $group_name"
     log "   WFM Server: $wfm_url"
@@ -1453,8 +1453,8 @@ run_wfm_flow() {
                 fi
 
                 echo ""
-                read -p "Enter WFM Server Base URL [https://localhost:3001/v1alpha2/margo]: " wfm_url
-                wfm_url="${wfm_url:-https://localhost:3001/v1alpha2/margo}"
+                read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+                [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
 
                 run_wfm_newman "$wfm_url" "$collection_path"
                 ;;
@@ -1472,8 +1472,8 @@ run_wfm_flow() {
                     success "Selected group: $group_name"
 
                     echo ""
-                    read -p "Enter WFM Server Base URL [https://localhost:3001/v1alpha2/margo]: " wfm_url
-                    wfm_url="${wfm_url:-https://localhost:3001/v1alpha2/margo}"
+                    read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+                    [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
 
                     execute_wfm_tests_with_group "$wfm_url" "$selected_group_path"
                 else

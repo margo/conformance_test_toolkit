@@ -3273,5 +3273,75 @@
         "extract_context": {}
       }
     ]
+  },
+  {
+    "id": "scenario-otel-observability",
+    "name": "OTEL Observability \u2014 otelCollector Capability and Telemetry Push",
+    "description": "Verifies the vendor device's OTEL collector actively pushes telemetry to the CTT's OTLP HTTP receiver (port 4318) and Prometheus Remote Write endpoint (port 9090). PRECONDITION: configure the device's OTEL collector to push to http://<ctt-host>:4318 (OTLP HTTP) and http://<ctt-host>:9090/api/v1/write (Prometheus Remote Write) before running this scenario. Matches the sandbox observability architecture: device \u2192 Jaeger OTLP / Prometheus Remote Write \u2192 WFM observability stack.",
+    "crIds": [],
+    "steps": [
+      {
+        "id": "step-otel-2",
+        "name": "Wait for Device OTEL Collector to Push Telemetry (traces or metrics)",
+        "crIds": [],
+        "method": "GET",
+        "endpoint": "/health/telemetry",
+        "skip_signing": true,
+        "headers": {},
+        "expected_status": 200,
+        "poll": {
+          "interval_seconds": 10,
+          "timeout_seconds": 120,
+          "until": [
+            {
+              "field": "otlp_traces",
+              "operation": "gte",
+              "value": 1
+            }
+          ]
+        },
+        "validations": [
+          {
+            "field": "status",
+            "operation": "equals",
+            "value": "receiving"
+          }
+        ],
+        "extract_context": {
+          "otelStatus": "status",
+          "otlpTraces": "otlp_traces",
+          "promWrites": "prom_writes"
+        }
+      },
+      {
+        "id": "step-otel-3",
+        "name": "Confirm Prometheus Remote Write Also Received",
+        "crIds": [],
+        "method": "GET",
+        "endpoint": "/health/telemetry",
+        "skip_signing": true,
+        "headers": {},
+        "expected_status": 200,
+        "poll": {
+          "interval_seconds": 10,
+          "timeout_seconds": 120,
+          "until": [
+            {
+              "field": "prom_writes",
+              "operation": "gte",
+              "value": 1
+            }
+          ]
+        },
+        "validations": [
+          {
+            "field": "prom_writes",
+            "operation": "gte",
+            "value": 1
+          }
+        ],
+        "extract_context": {}
+      }
+    ]
   }
 ]
