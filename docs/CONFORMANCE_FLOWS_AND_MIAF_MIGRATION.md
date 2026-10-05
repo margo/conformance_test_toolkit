@@ -27,7 +27,7 @@ old → new change matrix).**
 
 ---
 
-## 1. The one‑paragraph summary of what changed
+## 1. summary of what changed
 
 The **old** Margo Management Interface authenticated each device by (a) an
 `POST /onboarding` call where the device uploads a self‑signed X.509 certificate
@@ -55,7 +55,7 @@ See Part 7 for the migration plan.
 
 ---
 
-## 2. Terminology — one line + one example each
+## 2. Terminology
 
 ### 2A. Content‑addressing / HTTP plumbing terms
 
@@ -135,12 +135,12 @@ hits both runners.
 
 ---
 
-## 4. CURRENT conformance flows (what the suite implements today — the OLD spec)
+## 4. CURRENT conformance flows
 
 > This is the `pre-draft` state the suite was built against — RFC 9421 signing,
 > `POST /onboarding`, `clientId` in the path. Kept here as the "before" picture.
 
-### 4.1 WFM‑supplier — current end‑to‑end
+### 4.1 WFM‑supplier Flow
 
 ```
 suite (mock device)                                   real WFM under test
@@ -182,7 +182,7 @@ content negotiation → 500 instead of 406, no `304`, manifest marked `immutable
 MI‑005, MI‑014, MI‑024, MI‑025, MI‑031(non‑null), MI‑033, MI‑038 — parked in the
 separate `wfm-multi-component` group (poll + operator assignment).
 
-### 4.2 device‑supplier — current end‑to‑end
+### 4.2 device‑supplier Flow
 
 The mock WFM (`cmd/device-supplier/main.go`) implements the same endpoints and
 expects the **real device agent** to:
@@ -222,7 +222,7 @@ scenarios can run without a human — these live in
 
 ---
 
-## 5. NEW conformance flow (rc.2 + MIAF) — in detail, in plain language
+## 5. NEW conformance flow (rc.2 + MIAF)
 
 ### 5.1 The mental model
 
@@ -250,7 +250,7 @@ Think of it like getting a **staff badge for a building**:
 | **WFM Client** | The agent on the device. Holds a client X.509‑SVID. Connects to the WFM. |
 | **WFM** | The fleet manager under management. Holds a WFM X.509‑SVID. Serves the Management Interface. |
 
-### 5.3 The flow, end‑to‑end (from the spec's own step list)
+### 5.3 The flow, end‑to‑end
 
 **Phase 1 — Provisioning (out of band, before any connection)**
 
@@ -412,7 +412,7 @@ use:"x509-svid", x5c:[…] } ] }`. `trustBundleUri` MUST be `https://`.
   `Client-Cert` IS allowed (proxy must strip inbound `Client-Cert*`; backend must
   only trust it from the proxy boundary).
 
-### 5.7 What the reference implementation actually does (`feature/miaf` branch, confirmed from code)
+### 5.7 What the reference implementation actually does:
 
 Everything in Parts 5.1–5.6 above comes from the spec pages. This section
 cross‑checks it against the Margo project's own reference code
@@ -660,69 +660,6 @@ over‑engineering a suite that's about to change again):
   handlers, served once at mock startup — not a real MIS implementation.
 - `run_tests.go` (our simulated device): present a client SVID; validate the mock
   WFM's SVID; drop signing.
-
-### 7.4 Order of work (proposed)
-
-1. **Our own SVID fixture** (D) — mint once, out of band, store like today's
-   `certs/` dir.
-2. **`run_wfm_scenarios.js` → mTLS transport swap** (A) — the highest‑value,
-   lowest‑risk change: it doesn't depend on anyone else's work landing.
-3. **One‑time trust‑bundle fetch pre‑flight** (B) — small addition on top of 2.
-4. **Fix the Application Package fixture** (`apiVersion`/`kind`, see §6) and
-   re‑push to Harbor.
-5. **`device‑supplier` mock → mTLS + discovery stub** (A, C) — do this once the
-   dev team's device‑side MIAF work is far enough along to test against (see
-   Part 8, open question 5); no reason to build it blind before then.
-6. **Rewrite device `test-scenarios.json`** to the new paths, once step 5 exists.
-7. **Rewrite / re‑platform the WFM consolidated file** (decision needed: Postman
-   vs all‑declarative — mTLS cert presentation isn't something Postman/Newman
-   can do natively).
-8. **New `wfm-identity` / `wfm-policy` groups** (E, F, G above) — small,
-   additive, can happen any time after step 3.
-9. **CR‑ID re‑map** in both spreadsheets — mark the RFC 9421 MIs obsolete, add the
-   identity/TLS rows (even without official CR‑IDs, track them as
-   `MARGO-WFM-IDENTITY-00x (proposed)`).
-
----
-
-## 8. Open questions to resolve with the team / spec authors
-
-1. ~~**Do we need to build our own MIS?**~~ **Resolved 2026‑09‑17 (manager):**
-   No. WFM‑supplier testing does a one‑time trust‑bundle fetch from the real
-   WFM's declared MIS; device‑supplier testing hosts only the 2 discovery
-   endpoints as a static stub, once per suite run. See Part 5.7 / 7.1.
-2. **Do the identity spec pages get CR‑IDs?** The Management Interface pages have
-   `MARGO-WFM-MANAGEMENTINTERFACE-0xx`; the identity pages currently don't. We need
-   IDs to track coverage. (Raise on Discourse / the spec repo.)
-3. **Is `v1alpha2` / the `/v1alpha2/margo` prefix still a thing**, or does the new
-   API sit at `/api/v1` with no version segment? Symphony currently serves
-   `/v1alpha2/margo/api/v1/...`.
-4. **Postman vs all‑declarative for the WFM persona** (§7.2) — mTLS + Trust‑Bundle
-   logic pushes toward all‑declarative. Manager's call.
-5. **How do we get a pre‑provisioned deployment** for the still‑blocked MIs
-   (MI‑005/014/024/025/033/038)? The multi‑component group already needs an
-   operator to assign an app; MIAF doesn't change that.
-6. **Does Symphony implement any of MIAF yet?** If not, the whole `wfm-core-v2` /
-   `wfm-identity` suite will be red against it — useful as a gap report, but we
-   should confirm the target before investing. **Status:** per the manager, the
-   dev team is building the *device* side of MIAF first and will pick up
-   Symphony after — we're intentionally waiting on that before building the
-   device‑supplier half of this (see §7.4 step 5).
-7. **Trust‑anchor rotation testing** — worth a scenario (publish 2 anchors →
-   client accepts both → retire old), or defer as operator‑playbook territory?
-   The reference MIS itself doesn't support rotation yet (hardcoded sequence
-   number), so there's nothing real to test against today.
-8. **Where does our one SVID actually get minted from?** The reference `mis
-   mint x509` CLI needs a running MIS host with Unix‑socket access — do we
-   get one issued from an existing shared MIS instance (e.g. the one on
-   Pulkit's VM), or does someone stand up a throwaway MIS just long enough to
-   mint our fixture cert once? Either way it's a one‑time action, not
-   suite infrastructure — just needs an owner.
-9. **Is the `refreshHint` units bug (Part 5.8) real?** Worth a quick check
-   against the vendored `go-spiffe` library before we build anything that
-   depends on the actual refresh‑interval value — if it's real, it's a bug
-   report to file against `margo/sandbox`, not something for us to work
-   around silently.
 
 ---
 
