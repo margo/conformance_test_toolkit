@@ -8,11 +8,14 @@ const { execFileSync } = require('child_process');
 
 function usage() {
   console.error(
-    'Usage: node run_wfm_scenarios.js <base-url> <scenarios.json> <report.html> <cert-dir> [group-name] [group-version]\n' +
+    'Usage: node run_wfm_scenarios.js <base-url> <scenarios.json> <report.html> <cert-dir> [group-name] [group-version] [--miaf-url <url>]\n' +
     '\n' +
-    '  <base-url> is the vendor WFM\'s SBI base URL (mTLS port), e.g.:\n' +
+    '  <base-url>    WFM SBI URL; use the mTLS port for Symphony, e.g.:\n' +
     '    https://wfm.vendor.com:4443\n' +
-    '    https://localhost:8084/v1alpha2/margo   (Symphony sandbox)\n' +
+    '    https://symphony.machine:8084/v1alpha2/margo   (Symphony mTLS SBI)\n' +
+    '\n' +
+    '  --miaf-url    Override URL for mtls:true steps (use only when WFM has separate\n' +
+    '                mTLS and plain-TLS ports); defaults to <base-url> when omitted\n' +
     '\n' +
     '   or: node run_wfm_scenarios.js --curl <METHOD> <endpoint> --base-url <url> --cert-dir <dir> ' +
     '[--body <json>] [--header "Name: value"]... [--unsigned]\n' +
@@ -45,18 +48,25 @@ if (isTrustBundleMode) {
 const isCurlMode = process.argv[2] === '--curl';
 
 let baseUrlArg, scenariosFile, reportFile, certDir, groupName, groupVersion, curlArgs;
+let miafUrlArg;
 if (isCurlMode) {
   curlArgs = parseCurlArgs(process.argv.slice(3));
   baseUrlArg = curlArgs.baseUrl;
   certDir = curlArgs.certDir;
   if (!baseUrlArg || !certDir || !curlArgs.method || !curlArgs.endpoint) usage();
 } else {
-  [baseUrlArg, scenariosFile, reportFile, certDir, groupName, groupVersion] =
-    process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+  const miafIdx = rawArgs.indexOf('--miaf-url');
+  if (miafIdx !== -1) {
+    miafUrlArg = rawArgs[miafIdx + 1];
+    rawArgs.splice(miafIdx, 2);
+  }
+  [baseUrlArg, scenariosFile, reportFile, certDir, groupName, groupVersion] = rawArgs;
   if (!baseUrlArg || !scenariosFile || !reportFile || !certDir) usage();
 }
 
 const baseUrl = baseUrlArg.replace(/\/+$/, '');
+const miafUrl = (miafUrlArg || '').replace(/\/+$/, '') || baseUrl;
 const privateKeyPath = path.join(certDir, 'device.key');
 const deviceCertPath = path.join(certDir, 'device-cert.pem');
 const caCertPath = path.join(certDir, 'ca-cert.pem');
@@ -1171,11 +1181,11 @@ function truncate(str, max) {
 
 function printBanner() {
   const grp  = groupName    ? `Group: ${groupName}${groupVersion ? ` (v${groupVersion})` : ''}` : 'WFM Scenario Test';
-  const wfm  = `WFM:   ${baseUrl}`;
   console.log('\n' + THICK_LINE);
   console.log(` Margo WFM Conformance Test Runner`);
   console.log(` ${grp}`);
-  console.log(` ${wfm}`);
+  console.log(` WFM:   ${baseUrl}`);
+  if (miafUrl !== baseUrl) console.log(` MIAF:  ${miafUrl}  (mtls:true steps)`);
   console.log(THICK_LINE);
 }
 
@@ -1306,7 +1316,7 @@ function printFinalSummary(allResults, scenarioResultsList, reportPath) {
 async function performHTTPStep(step) {
   const method   = (step.method || 'GET').toUpperCase();
   const endpoint = substitute(step.endpoint || '');
-  const url      = `${baseUrl}${endpoint}`;
+  const url      = `${step.mtls ? miafUrl : baseUrl}${endpoint}`;
   const headers  = { ...(substitute(step.headers || {})) };
   const body =
     step.request_body === undefined

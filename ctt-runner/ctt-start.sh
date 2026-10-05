@@ -351,7 +351,7 @@ execute_wfm_tests_with_url() {
     # If WFM URL not provided, prompt user
     if [[ -z "$wfm_url" ]]; then
         echo ""
-        read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+        read -p "Enter WFM SBI URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://symphony.machine:8084/v1alpha2/margo): " wfm_url < /dev/tty
         [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
     fi
 
@@ -679,6 +679,7 @@ run_wfm_scenario_group() {
     local wfm_url="$1"
     local group_path="$2"
     local group_name="$3"
+    local miaf_url="${4:-$wfm_url}"
     local scenario_file
     local report_file
     local scenario_runner="$CONFORMANCE_DIR/wfm-supplier/scripts/run_wfm_scenarios.js"
@@ -703,9 +704,18 @@ run_wfm_scenario_group() {
     [[ -f "$cert_dir/device-cert.pem" ]] || error "Device certificate not found: $cert_dir/device-cert.pem"
 
     local miaf_dir="$CONFORMANCE_DIR/wfm-supplier/utils/fixtures/miaf"
-    if [[ -f "$miaf_dir/client-svid-cert.pem" && -f "$miaf_dir/client-svid-key.pem" ]]; then
+    local real_dir="$miaf_dir/real"
+    # Prefer real/ certs (Symphony SVID, signed by the real trust-bundle CA).
+    # Fall back to the test-CA certs in miaf/ when real/ is absent (mock-server runs).
+    if [[ -f "$real_dir/client-svid-cert.pem" && -f "$real_dir/client-svid-key.pem" ]]; then
+        cp "$real_dir/client-svid-cert.pem" "$cert_dir/svid-cert.pem"
+        cp "$real_dir/client-svid-key.pem"  "$cert_dir/svid-key.pem"
+        [[ -f "$real_dir/trust-bundle-ca.pem" ]] && cp "$real_dir/trust-bundle-ca.pem" "$cert_dir/svid-ca.pem"
+        log "Using real SVID certs (Symphony trust bundle)"
+    elif [[ -f "$miaf_dir/client-svid-cert.pem" && -f "$miaf_dir/client-svid-key.pem" ]]; then
         cp "$miaf_dir/client-svid-cert.pem" "$cert_dir/svid-cert.pem"
         cp "$miaf_dir/client-svid-key.pem"  "$cert_dir/svid-key.pem"
+        log "Using test SVID certs (mock server trust bundle)"
     else
         error "SVID certs not found at $miaf_dir — required for mtls:true steps"
     fi
@@ -721,7 +731,9 @@ run_wfm_scenario_group() {
     log "📊 Report: $report_file"
 
     set +e
-    node "$scenario_runner" "$wfm_url" "$scenario_file" "$report_file" "$cert_dir" "$group_name" "$claimed_app_version"
+    local miaf_flags=()
+    [[ "$miaf_url" != "$wfm_url" ]] && miaf_flags=("--miaf-url" "$miaf_url")
+    node "$scenario_runner" "$wfm_url" "$scenario_file" "$report_file" "$cert_dir" "$group_name" "$claimed_app_version" "${miaf_flags[@]}"
     local result=$?
     set -e
 
@@ -811,28 +823,35 @@ run_wfm_newman() {
 execute_wfm_tests_with_group() {
     local wfm_url="${1:-}"
     local group_path="${2:-}"
-    
+    local miaf_url="${3:-}"
+
     if [[ ! -d "$group_path" ]]; then
         error "Group path not found: $group_path"
     fi
-    
+
     local group_json="$group_path/group.json"
     local group_name=$(basename "$group_path")
-    
+
     if [[ ! -f "$group_json" ]]; then
         error "group.json not found in: $group_path"
     fi
-    
+
     # If WFM URL not provided, prompt user
     if [[ -z "$wfm_url" ]]; then
         echo ""
-        read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+        read -p "Enter WFM SBI URL (e.g. https://symphony.machine:8084/v1alpha2/margo): " wfm_url < /dev/tty
         [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
+        echo ""
+        read -p "Enter MIAF mTLS URL for mtls:true steps [Enter = same as above, or different port if WFM has separate mTLS port]: " miaf_url < /dev/tty
+        miaf_url="${miaf_url:-$wfm_url}"
+    else
+        miaf_url="${miaf_url:-$wfm_url}"
     fi
 
     log "🚀 Starting WFM Supplier Test Execution (Group Mode)"
     log "   Group: $group_name"
     log "   WFM Server: $wfm_url"
+    [[ "$miaf_url" != "$wfm_url" ]] && log "   MIAF Server: $miaf_url"
     
     # Get group metadata
     local group_version=$(jq -r '.version // "unknown"' "$group_json")
@@ -853,7 +872,7 @@ execute_wfm_tests_with_group() {
     mapfile -t group_scenario_files < <(discover_group_scenario_files "$group_path")
     if [[ ${#group_scenario_files[@]} -gt 0 ]]; then
         log "📋 Found ${#group_scenario_files[@]} scenario file(s)"
-        run_wfm_scenario_group "$wfm_url" "$group_path" "$group_name"
+        run_wfm_scenario_group "$wfm_url" "$group_path" "$group_name" "$miaf_url"
         return 0
     fi
 
@@ -1459,7 +1478,7 @@ run_wfm_flow() {
                 fi
 
                 echo ""
-                read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+                read -p "Enter WFM SBI URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://symphony.machine:8084/v1alpha2/margo): " wfm_url < /dev/tty
                 [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
 
                 run_wfm_newman "$wfm_url" "$collection_path"
@@ -1476,10 +1495,13 @@ run_wfm_flow() {
                     success "Selected group: $group_name"
 
                     echo ""
-                    read -p "Enter WFM SBI Base URL (e.g. https://wfm.vendor.com:4443 — Symphony sandbox: https://localhost:8084/v1alpha2/margo): " wfm_url < /dev/tty
+                    read -p "Enter WFM SBI URL (e.g. https://symphony.machine:8084/v1alpha2/margo): " wfm_url < /dev/tty
                     [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
+                    echo ""
+                    read -p "Enter MIAF mTLS URL for mtls:true steps [Enter = same as above, or different port if WFM has separate mTLS port]: " miaf_url < /dev/tty
+                    miaf_url="${miaf_url:-$wfm_url}"
 
-                    execute_wfm_tests_with_group "$wfm_url" "$selected_group_path"
+                    execute_wfm_tests_with_group "$wfm_url" "$selected_group_path" "$miaf_url"
                 else
                     error "Failed to select group"
                 fi
@@ -1577,7 +1599,11 @@ device_start_server() {
 
     # Start server in background (must run from device_dir so it finds ./data, ./manifests, ./certs)
     log "🚀 Starting Mock WFM Server..."
-    (cd "$device_dir" && exec ./bin/server) > /tmp/wfm-server.log 2>&1 &
+    (cd "$device_dir" && \
+        MIAF_SERVER_CERT="$cert_dir/server-cert.pem" \
+        MIAF_SERVER_KEY="$cert_dir/server-key.pem" \
+        MIAF_TRUST_CA="$cert_dir/svid-ca.pem" \
+        exec ./bin/server) > /tmp/wfm-server.log 2>&1 &
     local server_pid=$!
     echo $server_pid > /tmp/wfm-server.pid
     sleep 2
@@ -1673,12 +1699,18 @@ device_run_tests() {
     local host_ip
     host_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
     local default_url="https://${host_ip:-localhost}:3001/v1alpha2/margo"
+    local default_miaf_url="https://${host_ip:-localhost}:3003/v1alpha2/margo"
     echo ""
     echo "  ➜  This simulates your device-agent connecting to the Mock WFM Server."
     read -p "Enter Mock WFM Server URL [$default_url]: " wfm_url < /dev/tty
     wfm_url="${wfm_url:-$default_url}"
+    echo ""
+    read -p "Enter MIAF mTLS URL for mtls:true steps [$default_miaf_url]: " miaf_url < /dev/tty
+    miaf_url="${miaf_url:-$default_miaf_url}"
+    [[ "$miaf_url" != "$wfm_url" ]] && extra_flags+=("-miaf-url" "$miaf_url")
 
     log "▶️  Running Device Conformance Tests against: $wfm_url"
+    [[ "$miaf_url" != "$wfm_url" ]] && log "   MIAF mTLS URL: $miaf_url"
     echo ""
 
     local test_result=0

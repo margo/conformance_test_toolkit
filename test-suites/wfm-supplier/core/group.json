@@ -1,8 +1,8 @@
 {
   "name": "core",
-  "version": "1.1.2",
+  "version": "1.0.0-rc.2",
   "persona": "wfm-supplier",
-  "description": "new",
+  "description": "MIAF core scenarios (device capabilities, desired state, header integrity)",
   "FolderPath": [
     "../test-suites/wfm-supplier/core/test-cases"
   ],
