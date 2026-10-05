@@ -108,6 +108,45 @@ generate_wfm_tests() {
         error "OpenAPI Spec file is empty: $spec_file"
     fi
     
+    # Patch circular $ref: MatchExpression.itemSelector → Selector → MatchExpression
+    # Portman's JSON-schema resolver cannot handle recursive $refs; inline one level.
+    local patched_spec_file="${spec_file%.yaml}-patched.yaml"
+    python3 - "$spec_file" "$patched_spec_file" << 'PYEOF'
+import sys, re
+
+src, dst = sys.argv[1], sys.argv[2]
+with open(src) as f:
+    text = f.read()
+
+# Replace the circular back-ref inside MatchExpression.itemSelector with an
+# inline Selector object that omits itemSelector (breaks the cycle).
+circular = (
+    "        itemSelector:\n"
+    "          $ref: '#/components/schemas/Selector'\n"
+    "          description: Selector evaluated against array elements."
+    " Required for the `ContainsAll` or `ContainsAny` operator."
+)
+inline = (
+    "        itemSelector:\n"
+    "          type: object\n"
+    "          description: >-\n"
+    "            Selector evaluated against array elements."
+    " Required for the `ContainsAll` or `ContainsAny` operator.\n"
+    "          properties:\n"
+    "            matchExpressions:\n"
+    "              type: array\n"
+    "              items: {}\n"
+    "              description: Match expressions evaluated against the device's reported capabilities."
+)
+patched = text.replace(circular, inline)
+if patched == text:
+    print("[WARN] Circular $ref pattern not found — spec may have changed; passing through unchanged.", flush=True)
+
+with open(dst, "w") as f:
+    f.write(patched)
+PYEOF
+    spec_file="$patched_spec_file"
+
     # Run Portman
     log "📋 Generating Postman collection..."
     if ! "${portman_cmd[@]}" -l "$spec_file" -o postman_collection.json; then
