@@ -681,7 +681,7 @@ run_wfm_scenario_group() {
     local group_name="$3"
     local scenario_file
     local report_file
-    local scenario_runner="$SCRIPT_DIR/wfm-supplier/scripts/run_wfm_scenarios.js"
+    local scenario_runner="$CONFORMANCE_DIR/../ctt-runner/wfm-supplier/scripts/run_wfm_scenarios.js"
     local cert_dir="$CONFORMANCE_DIR/ctt-creator/wfm-supplier/utils/newman-data/certs"
     local claimed_app_version
     claimed_app_version=$(jq -r '.version // ""' "$group_path/group.json" 2>/dev/null)
@@ -701,6 +701,15 @@ run_wfm_scenario_group() {
 
     [[ -f "$cert_dir/device.key" ]] || error "Device private key not found: $cert_dir/device.key"
     [[ -f "$cert_dir/device-cert.pem" ]] || error "Device certificate not found: $cert_dir/device-cert.pem"
+
+    # Copy SVID certs for mtls:true steps (MIAF scenarios)
+    local miaf_dir="$SCRIPT_DIR/wfm-supplier/utils/fixtures/miaf"
+    if [[ -f "$miaf_dir/client-svid-cert.pem" && -f "$miaf_dir/client-svid-key.pem" ]]; then
+        cp "$miaf_dir/client-svid-cert.pem" "$cert_dir/svid-cert.pem"
+        cp "$miaf_dir/client-svid-key.pem"  "$cert_dir/svid-key.pem"
+    else
+        error "SVID certs not found at $miaf_dir — required for mtls:true steps"
+    fi
 
     confirm_version_mismatch "$claimed_app_version"
 
@@ -890,7 +899,7 @@ execute_wfm_tests_with_group() {
             info "Synced $new_count test IDs to group.json (was $current_count)"
     fi
 
-    local scenario_runner="$SCRIPT_DIR/wfm-supplier/scripts/run_wfm_scenarios.js"
+    local scenario_runner="$CONFORMANCE_DIR/../ctt-runner/wfm-supplier/scripts/run_wfm_scenarios.js"
     command -v node >/dev/null 2>&1 || error "Node.js not found. Install Node.js before running WFM tests."
     [[ -f "$scenario_runner" ]] || error "WFM scenario runner not found: $scenario_runner"
 
