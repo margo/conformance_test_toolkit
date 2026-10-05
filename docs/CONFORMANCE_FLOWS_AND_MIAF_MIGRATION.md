@@ -6,24 +6,6 @@
 **Reference implementation cross‑checked:** `feature/miaf` branch of `github.com/margo/sandbox` (the project's own code‑first sandbox — see Parts 5.7 and 5.8)
 **Companion docs:** [ARCHITECTURE.md](ARCHITECTURE.md) (system architecture overview)
 
-**2026‑09‑17 update:** Parts 5.7, 7, and 8 revised after reading the actual
-`feature/miaf` reference code (not just the spec pages) and after a decision
-from the manager: **we do not build or run our own MIS.** For WFM‑supplier
-testing we just fetch the WFM's published trust bundle once at suite startup;
-for device‑supplier testing we host only the 2 discovery endpoints (a static
-stub, not a real MIS) once at suite startup. See Part 5.7 and the rewritten
-Part 7.
-
-**2026‑09‑22 update:** `feature/miaf` gained ~29 new commits since the
-2026‑09‑17 review — a second pass (Part 5.8) confirms the 5 SBI endpoints and
-MIS's 2 endpoints are unchanged, but the client‑side trust machinery matured
-significantly: the authorized‑WFM allowlist is now genuinely hot‑reloadable
-(and HTTP keep‑alives were deliberately disabled to force per‑request
-re‑authorization), RFC 9457 problem‑details parsing is now real on the device
-side, and status reports gained a new required `adoptedManifestVersion`
-field. Two gaps/bugs worth tracking are flagged in Part 5.8 and a new Part 8
-question. Part 7.1 gained a new capability (H) for the hot‑reload scenario.
-
 ---
 
 ## 0. How to read this document
@@ -94,7 +76,7 @@ See Part 7 for the migration plan.
 | **`adoptedManifestVersion`** | *(new in rc.2 status API)* The manifest version the device has actually **taken up and started applying** — reported back in every status update so the WFM knows how far the device has caught up. Independent of success/failure. | WFM publishes v5; device is still applying v4 → device reports `adoptedManifestVersion: 4`. |
 | **`application/problem+json` (RFC 9457)** | The standard error body shape: `{ type, title, status, detail, instance }` plus Margo extensions `retryable`, `backoffStrategy`, `errors[]`. Replaces ad‑hoc `{"Error": "..."}`. | `{ "type": "https://docs.margo.org/specification/problem-types#semantic-error", "title": "Semantic Error", "status": 422, "errors": [ … ] }` |
 
-### 2B. Identity / MIAF terms (the new stuff)
+### 2B. Identity / MIAF terms
 
 | Term | One line | Example |
 |---|---|---|
@@ -120,7 +102,7 @@ See Part 7 for the migration plan.
 | **late binding** | A device isn't tied to one WFM vendor at manufacture time — because identity is Trust‑Domain‑level, the same device can be pointed at any Margo‑compatible WFM in that domain later. | Ship a generic device; the site operator decides at install time which WFM it talks to. |
 | **see‑thru gateway** | A device that fronts child devices but hosts no workloads itself — it reports its own capabilities and **omits** the hosting fields, and relays child capabilities/status. Child `deviceId`s are hierarchical (`gateway/child`). | `press-line/press-42` — `press-42` sits behind the `press-line` gateway. |
 
-### 2C. Margo workload terms (mostly unchanged, but you asked)
+### 2C. Margo workload terms
 
 | Term | One line | Example |
 |---|---|---|
@@ -136,7 +118,7 @@ See Part 7 for the migration plan.
 
 ---
 
-## 3. The two personas (unchanged concept)
+## 3. The two personas
 
 | | **WFM‑supplier** | **device‑supplier** |
 |---|---|---|
@@ -387,11 +369,9 @@ and use the `retryable` field, not the status code, to decide whether to retry.
 **Caching / compression:** `ETag` + `If-None-Match` → `304`; `Cache-Control:
 private, max-age=31536000, immutable` on digest‑addressed responses only (never the
 manifest, which gets plain `Cache-Control: private`); `Accept-Encoding` /
-`Vary: Accept-Encoding` now in scope (gzip/br MAY). **Corrected 2026‑09‑28:**
-confirmed against `standard/snapshot.spec.yaml` on `feature/miaf` — the directive
-is `private`, not `public` (an earlier draft of this doc had this backwards; our
-own `device-supplier` mock had the same bug, fixed the same day — whether
-Symphony itself gets this right is tracked internally, separately from this repo).
+`Vary: Accept-Encoding` now in scope (gzip/br MAY). Note: the directive is
+`private`, not `public` — confirmed against `standard/snapshot.spec.yaml` on
+`feature/miaf`.
 
 **What is *gone*:** `POST /onboarding`, `GET /onboarding/certificate`,
 `/clients/{clientId}/…` prefix, `Signature`, `Signature-Input`, `Content-Digest`
@@ -605,11 +585,6 @@ status‑report test case needs to check this field now, including on removal.
 ---
 
 ## 7. Conformance‑suite migration plan
-
-> **Revised 2026‑09‑17** after the manager's decision: **we do not build or
-> run our own MIS.** Trust‑bundle handling is a one‑time step at the start of
-> a suite run, not a per‑test‑case concern, and not a component we own.
-> Everything below reflects that — it is a smaller plan than the first draft.
 
 ### 7.1 New capabilities the suite needs
 

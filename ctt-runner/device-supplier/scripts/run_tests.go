@@ -27,6 +27,10 @@ const (
 // WFMServer is the mock WFM server base URL; defaults below, overridable via -url.
 var WFMServer = "https://localhost:3001/v1alpha2/margo"
 
+// MIAFServer is the MIAF mTLS base URL for mtls:true steps; set via -miaf-url.
+// When empty, mtls:true steps fall back to WFMServer (backward-compatible).
+var MIAFServer = ""
+
 // ClaimedAppVersion is the artifact/app version under test, set via -claimed-app-version.
 var ClaimedAppVersion = "unknown"
 
@@ -151,6 +155,7 @@ type TestContext struct {
 func main() {
 	// CLI flags for filtering
 	urlFlag := flag.String("url", WFMServer, "Mock WFM Server base URL (e.g. https://192.168.1.10:3001/v1alpha2/margo)")
+	miafURLFlag := flag.String("miaf-url", "", "MIAF mTLS base URL for mtls:true steps (e.g. https://192.168.1.10:3003/v1alpha2/margo); defaults to -url if unset")
 	scenarioFilter := flag.String("scenario", "", "Run only the scenario with this ID (e.g. scenario-onboarding)")
 	stepFilter := flag.String("step", "", "Run only the step with this ID within the matched scenario (e.g. step-1.2)")
 	scenariosFile := flag.String("file", "device-scenarios/test-scenarios.json", "Path to test scenarios JSON file")
@@ -162,6 +167,9 @@ func main() {
 	cttMargoVersionFlag := flag.String("ctt-margo-version", "1.0.0-rc.2", "CTT Margo Version — the Margo spec version this conformance tool validates against")
 	flag.Parse()
 	WFMServer = *urlFlag
+	if *miafURLFlag != "" {
+		MIAFServer = *miafURLFlag
+	}
 	verbose = *verboseFlag
 	ClaimedAppVersion = *claimedAppVersionFlag
 	CTTMargoVersion = *cttMargoVersionFlag
@@ -473,7 +481,14 @@ func executeStep(step TestStep, ctx *TestContext) TestResult {
 
 	// Create HTTP request. An endpoint may be an absolute URL (used by MI-018 to
 	// hit the untrusted-CA listener) or a path relative to WFMServer.
-	reqURL := WFMServer + endpoint
+	// mtls:true steps use MIAFServer (port 3003) when -miaf-url is set, so the
+	// TLS handshake goes to the RequireAndVerifyClientCert listener and the SVID
+	// is actually presented; falls back to WFMServer when -miaf-url is not set.
+	base := WFMServer
+	if step.MTLS && MIAFServer != "" {
+		base = MIAFServer
+	}
+	reqURL := base + endpoint
 	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
 		reqURL = endpoint
 	}

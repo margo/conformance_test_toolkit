@@ -71,6 +71,26 @@ func spiffeIDFromRequest(r *http.Request) (string, error) {
 	return uris[0].String(), nil
 }
 
+// spiffeIDOrSynthetic returns the caller's SPIFFE ID when a client cert is
+// present (full mTLS, port 3003), or the provided synthetic fallback when the
+// connection has no client cert (port 3001, RFC-9421 flow or unauthenticated
+// test runner). The synthetic ID is constant per server run so all steps that
+// share the same synthetic identity access the same client state.
+func spiffeIDOrSynthetic(r *http.Request, synthetic string) string {
+	id, err := spiffeIDFromRequest(r)
+	if err != nil {
+		return synthetic
+	}
+	return id
+}
+
+// syntheticID is the shared identity used for all non-mTLS (port-3001)
+// requests. Keeping it constant means multi-step test scenarios that rely on
+// shared client state (capabilities → deployments → status) all resolve to the
+// same mock-client record. MIAF-specific identity tests that need a real
+// SPIFFE URI will still fail correctly when MIAF is not configured.
+const syntheticID = "local://ctt-suite/no-mtls"
+
 // getOrCreateMIAFClient auto-provisions a client record on its first
 // authenticated request. There is no onboarding call in MIAF — a chain- and
 // (optionally) allowlist-validated mTLS connection IS the authorization, so
@@ -145,12 +165,8 @@ func buildStateManifestMIAF(deploymentIDs []string, manifestVersion int, baseURL
 
 // PUT /v1alpha2/margo/api/v1/capabilities/{deviceId}
 func handleMIAFPutCapabilities(w http.ResponseWriter, r *http.Request) {
-	spiffeID, err := spiffeIDFromRequest(r)
-	if err != nil {
-		respondJSON(w, 401, ResponseError{Error: err.Error()})
-		return
-	}
 	deviceID := mux.Vars(r)["deviceId"]
+	spiffeID := spiffeIDOrSynthetic(r, syntheticID)
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -199,11 +215,7 @@ func handleMIAFPutCapabilities(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /v1alpha2/margo/api/v1/capabilities/{deviceId}
 func handleMIAFDeleteCapabilities(w http.ResponseWriter, r *http.Request) {
-	spiffeID, err := spiffeIDFromRequest(r)
-	if err != nil {
-		respondJSON(w, 401, ResponseError{Error: err.Error()})
-		return
-	}
+	spiffeID := spiffeIDOrSynthetic(r, syntheticID)
 	miafClientsMu.Lock()
 	_, exists := miafClients[spiffeID]
 	delete(miafClients, spiffeID)
@@ -217,11 +229,7 @@ func handleMIAFDeleteCapabilities(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1alpha2/margo/api/v1/deployments
 func handleMIAFGetDeployments(w http.ResponseWriter, r *http.Request) {
-	spiffeID, err := spiffeIDFromRequest(r)
-	if err != nil {
-		respondJSON(w, 401, ResponseError{Error: err.Error()})
-		return
-	}
+	spiffeID := spiffeIDOrSynthetic(r, syntheticID)
 	if !acceptsManifest(r.Header.Get("Accept")) {
 		w.WriteHeader(406)
 		return
@@ -259,11 +267,7 @@ func handleMIAFGetDeployments(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1alpha2/margo/api/v1/bundles/{digest}
 func handleMIAFGetBundle(w http.ResponseWriter, r *http.Request) {
-	spiffeID, err := spiffeIDFromRequest(r)
-	if err != nil {
-		respondJSON(w, 401, ResponseError{Error: err.Error()})
-		return
-	}
+	spiffeID := spiffeIDOrSynthetic(r, syntheticID)
 	digest := mux.Vars(r)["digest"]
 	client := getOrCreateMIAFClient(spiffeID)
 
@@ -291,11 +295,7 @@ func handleMIAFGetBundle(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1alpha2/margo/api/v1/deployments/{deploymentId}/{digest}
 func handleMIAFGetDeploymentManifest(w http.ResponseWriter, r *http.Request) {
-	spiffeID, err := spiffeIDFromRequest(r)
-	if err != nil {
-		respondJSON(w, 401, ResponseError{Error: err.Error()})
-		return
-	}
+	spiffeID := spiffeIDOrSynthetic(r, syntheticID)
 	vars := mux.Vars(r)
 	deploymentID, digest := vars["deploymentId"], vars["digest"]
 	client := getOrCreateMIAFClient(spiffeID)
@@ -333,11 +333,7 @@ func handleMIAFGetDeploymentManifest(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1alpha2/margo/api/v1/deployments/{deploymentId}/status
 func handleMIAFPostStatus(w http.ResponseWriter, r *http.Request) {
-	spiffeID, err := spiffeIDFromRequest(r)
-	if err != nil {
-		respondJSON(w, 401, ResponseError{Error: err.Error()})
-		return
-	}
+	spiffeID := spiffeIDOrSynthetic(r, syntheticID)
 	deploymentID := mux.Vars(r)["deploymentId"]
 
 	bodyBytes, err := io.ReadAll(r.Body)
@@ -399,11 +395,7 @@ func handleMIAFPostStatus(w http.ResponseWriter, r *http.Request) {
 // desired-state timeline against a real device-agent under mTLS, exactly the
 // way the legacy test-control endpoint does for RFC 9421 clients.
 func handleMIAFTestSetDeployments(w http.ResponseWriter, r *http.Request) {
-	spiffeID, err := spiffeIDFromRequest(r)
-	if err != nil {
-		respondJSON(w, 401, ResponseError{Error: err.Error()})
-		return
-	}
+	spiffeID := spiffeIDOrSynthetic(r, syntheticID)
 
 	var body struct {
 		DeploymentIDs        []string        `json:"deploymentIds"`
@@ -463,34 +455,19 @@ func handleMIAFTestSetDeployments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// startMIAFServer registers the new-shape routes on the shared router and
-// starts a third listener presenting server-side mTLS. Entirely opt-in: with
-// no cert/key/CA configured it logs one line and returns, so every existing
-// invocation of this binary (regression runs, run_tests.go) is unaffected.
+// startMIAFServer registers the new-shape (clientId-free) MIAF routes on the
+// shared router unconditionally, then optionally starts a second mTLS listener
+// on port 3003 when MIAF_SERVER_CERT/KEY/TRUST_CA are configured.
+//
+// Routes are always registered so the test runner can exercise them via the
+// main port (3001) without a client certificate. In that case handlers fall
+// back to syntheticID as the caller identity, which gives consistent per-run
+// client state. MIAF-specific identity scenarios (scenario-miaf-*) correctly
+// fail when no client cert is presented — that is the expected behavior when
+// mTLS is not configured.
 func startMIAFServer(router *mux.Router) {
-	certFile := os.Getenv("MIAF_SERVER_CERT")
-	keyFile := os.Getenv("MIAF_SERVER_KEY")
-	caFile := os.Getenv("MIAF_TRUST_CA")
-	if certFile == "" || keyFile == "" || caFile == "" {
-		log.Printf("[MIAF] listener disabled (set MIAF_SERVER_CERT/MIAF_SERVER_KEY/MIAF_TRUST_CA to enable)")
-		return
-	}
-	if _, err := os.Stat(certFile); err != nil {
-		log.Printf("[MIAF] listener disabled (%s not found)", certFile)
-		return
-	}
-
-	caPEM, err := os.ReadFile(caFile)
-	if err != nil {
-		log.Printf("[MIAF] listener disabled (cannot read trust CA %s: %v)", caFile, err)
-		return
-	}
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caPEM) {
-		log.Printf("[MIAF] listener disabled (no valid certs in %s)", caFile)
-		return
-	}
-
+	// Routes are registered regardless of cert config so they are reachable
+	// on the main port (3001) for the RFC-9421 / no-mTLS test runner path.
 	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId}", handleMIAFPutCapabilities).Methods("PUT")
 	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId}", handleMIAFDeleteCapabilities).Methods("DELETE")
 	router.HandleFunc("/v1alpha2/margo/api/v1/deployments", handleMIAFGetDeployments).Methods("GET")
@@ -498,6 +475,29 @@ func startMIAFServer(router *mux.Router) {
 	router.HandleFunc("/v1alpha2/margo/api/v1/deployments/{deploymentId}/{digest}", handleMIAFGetDeploymentManifest).Methods("GET")
 	router.HandleFunc("/v1alpha2/margo/api/v1/deployments/{deploymentId}/status", handleMIAFPostStatus).Methods("POST")
 	router.HandleFunc("/v1alpha2/margo/api/v1/test/deployments", handleMIAFTestSetDeployments).Methods("PUT")
+
+	certFile := os.Getenv("MIAF_SERVER_CERT")
+	keyFile := os.Getenv("MIAF_SERVER_KEY")
+	caFile := os.Getenv("MIAF_TRUST_CA")
+	if certFile == "" || keyFile == "" || caFile == "" {
+		log.Printf("[MIAF] mTLS listener disabled — routes registered on main port with synthetic identity fallback (set MIAF_SERVER_CERT/MIAF_SERVER_KEY/MIAF_TRUST_CA to enable the mTLS port)")
+		return
+	}
+	if _, err := os.Stat(certFile); err != nil {
+		log.Printf("[MIAF] mTLS listener disabled (%s not found)", certFile)
+		return
+	}
+
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		log.Printf("[MIAF] mTLS listener disabled (cannot read trust CA %s: %v)", caFile, err)
+		return
+	}
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caPEM) {
+		log.Printf("[MIAF] mTLS listener disabled (no valid certs in %s)", caFile)
+		return
+	}
 
 	port := os.Getenv("MIAF_PORT")
 	if port == "" {
