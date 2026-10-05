@@ -621,7 +621,7 @@ EOF
 
 set_supplier_context() {
     SUPPLIER="$1"
-    GROUP_DIR="$DATA_GEN_DIR/$SUPPLIER/utils/groups"
+    GROUP_DIR="$CONFORMANCE_DIR/../test-suites/$SUPPLIER"
 }
 
 create_test_group() {
