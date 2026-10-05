@@ -983,7 +983,7 @@ interactive_mode() {
                 info "You selected: Device Supplier"
                 echo ""
 
-                TEMPLATE_PATH="$CONFORMANCE_DIR/device-supplier/device-scenarios/../docs/template.md"
+                TEMPLATE_PATH="$SCRIPT_DIR/../_archive/device-supplier/docs/template.md"
                 TEMPLATE_PATH="$(realpath "$TEMPLATE_PATH" 2>/dev/null || echo "$TEMPLATE_PATH")"
 
                 echo "!! WARNING !!"

@@ -1596,16 +1596,15 @@ device_start_server() {
     success "Mock WFM Server is running (PID: $server_pid)"
     echo ""
     echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-    echo "║  Mock WFM Server is ready. Share these details with your device-agent:      ║"
+    echo "║  Mock WFM Server is ready (MIAF/rc.2 — mTLS + X.509-SVID identity)         ║"
     echo "╠══════════════════════════════════════════════════════════════════════════════╣"
     printf "║  WFM URL  : %-63s║\n" "$mock_url"
     printf "║  CA Cert  : %-63s║\n" "$cert_dir/ca-cert.pem"
     echo "╚══════════════════════════════════════════════════════════════════════════════╝"
     echo ""
-    echo "  ➜  Start your device-agent pointing at the WFM URL above."
-    echo "  ➜  The device-agent must trust the CA certificate listed above."
-    echo "  ➜  Onboarding must be the first API call; subsequent calls can be in any order."
-    echo "  ➜  Once your device-agent is running, return here and select 'Run Tests' (option 3)."
+    echo "  ➜  The CTT runner simulates the device-agent — no external device-agent needed."
+    echo "  ➜  Device identity is established via MIAF (mTLS + X.509-SVID), not onboarding."
+    echo "  ➜  Select 'Run Tests' (option 3) to execute conformance scenarios."
     echo ""
 }
 
@@ -1653,10 +1652,9 @@ device_run_tests() {
     cp "$group_scenarios" ./device-scenarios/test-scenarios.json
     rm -f "$group_scenarios"
 
-    # Groups may opt into flexible-order mode (fixed_first onboarding, then the
-    # rest of the scenarios in a random relative order) via a "flexibleOrder"
-    # key in their group.json. Absent/false for every existing group, so this
-    # is a no-op for them.
+    # Groups may opt into flexible-order mode via a "flexibleOrder" key in
+    # group.json — runs the fixed_first scenario first, then the rest in random
+    # order. Absent/false for every existing group, so this is a no-op for them.
     local extra_flags=()
     if [[ "$(jq -r '.flexibleOrder // false' "$device_group/group.json" 2>/dev/null)" == "true" ]]; then
         extra_flags+=("-flexible-order")
@@ -1760,13 +1758,13 @@ run_device_flow() {
 
         echo ""
         echo "┌─────────────────────────────────────────────────────────────────────────┐"
-        echo "│              Device Supplier - Conformance Testing                       │"
+        echo "│         Device Supplier - Conformance Testing (MIAF / rc.2)              │"
         echo "│  Mock WFM Server: $server_status"
         echo "├─────────────────────────────────────────────────────────────────────────┤"
         echo "│  Run steps in order:                                                     │"
-        echo "│    1. Generate Certificates  (run once per setup)                        │"
-        echo "│    2. Start Mock WFM Server  (prints URL for device-agent)               │"
-        echo "│    3. Run Tests              (select group, validate conformance)         │"
+        echo "│    1. Generate Certificates  (TLS + SVID certs, run once per setup)      │"
+        echo "│    2. Start Mock WFM Server  (mTLS on :3001, MIAF endpoint on :3003)     │"
+        echo "│    3. Run Tests              (select group, CTT simulates device-agent)  │"
         echo "│    4. Stop Mock WFM Server                                               │"
         echo "│                                                                          │"
         echo "│  B) Back to main menu                                                    │"
