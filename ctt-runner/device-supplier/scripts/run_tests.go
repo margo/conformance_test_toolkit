@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
@@ -585,6 +587,17 @@ func executeStep(step TestStep, ctx *TestContext) TestResult {
 		respData = result.Response
 	}
 
+	// For mTLS steps: inject _client_cert info from the SVID this runner presented.
+	// Scenarios use _client_cert.spiffe_id / _client_cert.trust_domain to assert
+	// that the device presented a valid SVID (MARGO-DEV-MANAGEMENTINTERFACE-MIAF-001/2).
+	if step.MTLS {
+		if info := loadClientCertInfo(); info != nil {
+			if dataMap, ok := respData.(map[string]interface{}); ok {
+				dataMap["_client_cert"] = info
+			}
+		}
+	}
+
 	// Validate status code
 	statusOK := resp.StatusCode == step.ExpectedStatus
 	if !statusOK {
@@ -809,6 +822,36 @@ func interpolateValue(value interface{}, ctx *TestContext) interface{} {
 	default:
 		return value
 	}
+}
+
+// loadClientCertInfo reads this runner's own SVID cert (certDir/svid-cert.pem)
+// and returns a map with spiffe_id and trust_domain, for injection as
+// _client_cert in mTLS step responses. Returns nil when the cert cannot be read.
+func loadClientCertInfo() map[string]interface{} {
+	certPath := filepath.Join(certDir, "svid-cert.pem")
+	data, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil
+	}
+	for _, uri := range cert.URIs {
+		if uri.Scheme == "spiffe" {
+			spiffeID := uri.String()
+			trustDomain := uri.Host
+			return map[string]interface{}{
+				"spiffe_id":    spiffeID,
+				"trust_domain": trustDomain,
+			}
+		}
+	}
+	return nil
 }
 
 func extractJSONPath(data interface{}, path string) interface{} {

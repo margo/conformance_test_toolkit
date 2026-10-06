@@ -21,7 +21,11 @@ openssl req -new -x509 -days $DAYS \
     -key ca-key.pem -out ca-cert.pem \
     -subj "/C=IN/ST=GGN/L=Sector48/O=Margo/OU=WFM/CN=Mock-WFM-CA" 2>/dev/null
 
-# svid-ca.pem is the same CA — used by the mTLS client to verify the WFM's cert
+# svid-ca.pem is the trust bundle the mock WFM uses to validate device mTLS client
+# certs. Starts as the local Mock-WFM-CA only; sandbox integration appends the
+# real MIS CA (CN=margo.org) so both CTT self-test certs and real device SVIDs
+# are trusted. Do not overwrite svid-ca.pem in place during regeneration if it
+# already contains a bundle — replace only the first block.
 cp ca-cert.pem svid-ca.pem
 
 # ── Server cert (signed by CA, with SAN for the mock WFM host) ────────────────
@@ -68,7 +72,10 @@ openssl req -new -x509 -days $DAYS \
     -subj "/C=IN/ST=GGN/L=Sector48/O=AcmeCorp/OU=Devices/CN=device-weak" 2>/dev/null
 
 # ── SVID cert (X.509-SVID with SPIFFE URI SAN, signed by CA) ─────────────────
-# The device uses this for mTLS connections to the WFM's MIAF port.
+# The CTT test runner presents this cert for mTLS connections to the WFM's MIAF
+# port. SPIFFE ID follows the WFM-client format required by MIAF rc.2+:
+#   spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<client-id>
+# (a device-agent is identified as a WFM-client, not as a bare device URI)
 openssl genrsa -out svid-key.pem 2048 2>/dev/null
 openssl req -new \
     -key svid-key.pem \
@@ -77,7 +84,7 @@ openssl req -new \
 openssl x509 -req -days $DAYS \
     -in svid.csr -CA ca-cert.pem -CAkey ca-key.pem -CAcreateserial \
     -out svid-cert.pem \
-    -extfile <(printf "subjectAltName=URI:spiffe://margo.org/device/ctt-device-001\nbasicConstraints=CA:FALSE\nextendedKeyUsage=clientAuth") 2>/dev/null
+    -extfile <(printf "subjectAltName=URI:spiffe://margo.org/margo/wfm/ctt-mock-wfm/client/ctt-device-001\nbasicConstraints=CA:FALSE\nextendedKeyUsage=clientAuth") 2>/dev/null
 rm -f svid.csr
 
 # ── Untrusted server cert (self-signed, different CA — for MI-018 TLS test) ──
@@ -92,7 +99,7 @@ echo "✅ Certificates generated:"
 echo "   CA:               $CERT_DIR/ca-cert.pem"
 echo "   Server (WFM TLS): $CERT_DIR/server-cert.pem  (SAN: $SERVER_HOST)"
 echo "   Device (P-256):   $CERT_DIR/device-cert.pem"
-echo "   SVID:             $CERT_DIR/svid-cert.pem  (spiffe://margo.org/device/ctt-device-001)"
+echo "   SVID:             $CERT_DIR/svid-cert.pem  (spiffe://margo.org/margo/wfm/ctt-mock-wfm/client/ctt-device-001)"
 echo "   Untrusted:        $CERT_DIR/untrusted-server-cert.pem"
 echo ""
 echo "  ➜  Share ca-cert.pem with the real device-agent so it trusts this mock WFM."
