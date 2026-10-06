@@ -57,65 +57,110 @@ jq --version
 ## Phase 1 — Identity setup (one-time per WFM)
 
 This is the only step that requires interacting with your WFM outside the CTT.
-You do it once; the certs are valid for 90 days (re-run when they expire).
+Do it once; the SVID cert is valid for 90 days — re-run when it expires.
 
 ### What you need to end up with
 
 Three files in `ctt-runner/wfm-supplier/utils/fixtures/miaf/real/`:
 
 ```
-client-svid-cert.pem    ← your CTT's X.509-SVID, issued by your WFM's MIS
-client-svid-key.pem     ← the corresponding private key
-trust-bundle-ca.pem     ← the root CA your WFM's MIS publishes
+client-svid-cert.pem    <- your CTT's X.509-SVID, issued by your WFM's MIS
+client-svid-key.pem     <- the corresponding private key
+trust-bundle-ca.pem     <- the root CA your WFM's MIS publishes
 ```
 
 `ctt-start.sh` copies these into the active cert directory automatically at
 run time. You never reference them by path yourself.
 
+**Check whether they already exist and are still valid:**
+
+```bash
+openssl x509 \
+    -in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem \
+    -noout -enddate 2>/dev/null \
+    && echo "Identity OK - check expiry date above" \
+    || echo "No identity found - follow Path A or B below"
+```
+
+If the cert exists and the expiry date is in the future, skip to Phase 2.
+
 ---
 
-### Path A — Symphony / Margo sandbox (reference environment)
+### Path A — Margo sandbox / Symphony reference environment
 
-The sandbox runs a real MIS at `mis.margo.org:9443`. The CTT's cert is
-already minted and stored in `miaf/real/` — you only need to re-mint if it
-has expired (90-day TTL, minted 2026-09-23).
+The sandbox runs a real MIS. One script automates all three steps: mint the
+SVID, register the CTT's SPIFFE ID in Symphony's accepted-client allowlist,
+and fetch the trust bundle.
 
-**Check expiry:**
+**Option 1 — via the interactive menu (recommended):**
 
 ```bash
-openssl x509 -in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem \
+bash ctt-runner/ctt-start.sh
+# Select: 1) WFM Supplier
+# Select: 1. Setup MIAF Identity
+# Select: A (sandbox)
+# Press Enter at every prompt to accept the defaults
+```
+
+**Option 2 — run the script directly:**
+
+```bash
+# Run from the repo root — all defaults match the sandbox VM
+bash ctt-creator/common/scripts/provision-mis-identity.sh
+```
+
+> **Note:** the script defaults to `https://127.0.0.1:9443` for the MIS URL.
+> Use this when running on the sandbox VM itself — the public hostname
+> `mis.margo.org:9443` does not hairpin back from inside the same VM.
+> From any other machine, use `--mis-base-url https://mis.margo.org:9443`.
+
+The script does three things automatically:
+
+```
+Step 1 - Mints a fresh X.509-SVID from the MIS (svid-gen.sh --automated)
+         -> writes: miaf/real/client-svid-{cert,key}.pem
+
+Step 2 - Adds the CTT's SPIFFE ID to Symphony's authorized-clients.json
+         -> spiffe://margo.org/margo/wfm/symphony-1/client/margo-ctt
+
+Step 3 - Fetches the trust bundle from https://127.0.0.1:9443
+         -> writes: miaf/real/trust-bundle-ca.pem
+```
+
+**Verify the result:**
+
+```bash
+openssl verify \
+    -CAfile ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem \
+    ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
+# -> client-svid-cert.pem: OK
+
+# Also check the expiry
+openssl x509 \
+    -in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem \
     -noout -enddate
-# notAfter=Dec 22 00:00:00 2026 GMT  ← still valid; skip to Phase 2
 ```
-
-**Re-mint (if expired):**
-
-```bash
-# Step 1: fetch the current trust bundle from the MIS
-node ctt-runner/wfm-supplier/scripts/run_wfm_scenarios.js \
-    --fetch-trust-bundle https://127.0.0.1:9443 \
-    ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
-
-# Step 2: mint a new SVID via the MIS's API
-# (The sandbox's MIS has a REST endpoint; adjust to your environment's mint command)
-# Replace the output files in miaf/real/ with the new cert + key.
-```
-
-> **Note (sandbox-specific):** use `https://127.0.0.1:9443` instead of
-> `https://mis.margo.org:9443` when running on the sandbox VM itself — the
-> public hostname does not hairpin back on port 9443 from inside the same host.
-> From any other machine, the public hostname works normally.
 
 ---
 
 ### Path B — Your own WFM (vendor path)
 
-Your WFM runs its own MIS. The steps are the same; only the URLs change.
+Your WFM runs its own MIS. Run these three commands in order.
 
-**Step 1 — Fetch the trust bundle**
+**Option 1 — the menu prints the commands for you:**
 
-The MIS publishes a discovery document at `/.well-known/margo`. Use the CTT's
-built-in fetch command to pull the trust bundle and write it as a CA PEM file:
+```bash
+bash ctt-runner/ctt-start.sh
+# Select: 1) WFM Supplier
+# Select: 1. Setup MIAF Identity
+# Select: B (custom WFM)
+# Enter your MIS URL
+# The menu prints the exact commands to run — copy-paste and execute them
+```
+
+**Option 2 — run each command manually:**
+
+**Step 1 — Fetch the trust bundle from your MIS:**
 
 ```bash
 node ctt-runner/wfm-supplier/scripts/run_wfm_scenarios.js \
@@ -123,61 +168,46 @@ node ctt-runner/wfm-supplier/scripts/run_wfm_scenarios.js \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
 ```
 
-This calls `/.well-known/margo` (unauthenticated per spec), extracts the
-`trustBundleUri`, fetches the bundle, and writes out the X.509 anchors. You
-should see:
+Expected output:
 
 ```
-Fetching discovery document: https://your-mis-host:443/.well-known/margo
+Fetching discovery document: https://your-mis-host:9443/.well-known/margo
   trustDomain:    your-domain.com
-  trustBundleUri: https://your-mis-host:443/v1/bundle
-Fetching trust bundle: https://your-mis-host:443/v1/bundle
-✓ wrote 1 trust anchor(s) to .../trust-bundle-ca.pem
+  trustBundleUri: https://your-mis-host:9443/v1/bundle
+wrote 1 trust anchor(s) to .../trust-bundle-ca.pem
 ```
 
-**Step 2 — Get a client SVID for the CTT**
+**Step 2 — Get a client SVID from your WFM:**
 
-This step depends on your WFM's tooling. The outcome is an X.509 certificate
-with a SPIFFE URI `Subject Alternative Name` that identifies the CTT as a
-registered device/client in your WFM.
-
-Common approaches:
-- WFM admin console: "Register device" or "Issue client certificate" → download
-- CLI tool your WFM ships: `wfm-cli issue-svid --client margo-ctt --ttl 90d`
-- Your MIS's REST API directly
-
-The issued cert will have a SPIFFE ID embedded, for example:
+Use your WFM's admin console or CLI to issue an X.509-SVID for the CTT.
+The cert will have a SPIFFE URI embedded as a Subject Alternative Name, e.g.:
 
 ```
-SAN URI: spiffe://your-domain.com/margo/wfm/my-wfm-instance/client/margo-ctt
+SAN URI: spiffe://your-domain.com/margo/wfm/my-instance/client/margo-ctt
 ```
 
-**You do not need to know or record this URI** — the CTT reads it from the
-cert automatically at run time and uses it wherever the SPIFFE ID is needed
-(including as the device target in the multi-component deployment scenario).
-
-**Step 3 — Place the files**
+You do not need to know this URI — the CTT reads it from the cert
+automatically. Copy the files into place:
 
 ```bash
-# Replace with the actual paths your WFM tooling wrote them to
-cp /path/to/issued/client-cert.pem \
+cp /path/to/issued/cert.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-cp /path/to/issued/client-key.pem \
+
+cp /path/to/issued/key.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
-# trust-bundle-ca.pem was written by --fetch-trust-bundle above
 ```
 
-**Step 4 — Verify the chain**
+**Step 3 — Verify the chain:**
 
 ```bash
 openssl verify \
     -CAfile ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-# → client-svid-cert.pem: OK
+# -> client-svid-cert.pem: OK
 ```
 
-If this fails, the cert was not issued by the MIS whose bundle you fetched.
-Re-check Step 1 is pointing at the same MIS that issued the cert.
+If this fails, the cert was not issued by the same MIS whose bundle you
+fetched. Re-run Step 1 pointing at the MIS that issued the cert.
 
 ---
 
@@ -391,18 +421,26 @@ bash ctt-runner/wfm-supplier/utils/fixtures/provision-multi-component.sh --clean
 
 ```
 Phase 1 — Identity (once per WFM, renew after 90 days)
-  □ Fetch trust bundle:
-      node .../run_wfm_scenarios.js --fetch-trust-bundle <mis-url> .../trust-bundle-ca.pem
-  □ Obtain client SVID from your WFM's MIS (cert + key)
-  □ Place both files in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/
-  □ Verify: openssl verify -CAfile trust-bundle-ca.pem client-svid-cert.pem → OK
+
+  Sandbox (Symphony):
+  □ bash ctt-runner/ctt-start.sh
+      -> 1) WFM Supplier -> 1. Setup MIAF Identity -> A (sandbox) -> Enter x4
+  OR directly:
+  □ bash ctt-creator/common/scripts/provision-mis-identity.sh
+  □ Verify: openssl verify -CAfile .../trust-bundle-ca.pem .../client-svid-cert.pem -> OK
+
+  Your own WFM:
+  □ bash ctt-runner/ctt-start.sh
+      -> 1) WFM Supplier -> 1. Setup MIAF Identity -> B (custom WFM) -> enter MIS URL
+      -> copy-paste and run the three printed commands
+  □ Verify chain (same openssl verify command above)
 
 Phase 2 — Run (repeat for each test run)
   □ bash ctt-runner/ctt-start.sh
-  □ Select: WFM Supplier → Run scenario group tests → core
-  □ Enter WFM SBI URL (mTLS port)
-  □ Press Enter for MIAF URL (same port, usually)
-  □ Multi-component prompts: enter NBI URL / credentials (or press Enter for Symphony)
-  □ Wait for run to complete (~2–5 min)
+  □ Select: 1) WFM Supplier -> 2. Run scenario group tests -> core
+  □ Enter WFM SBI URL (mTLS port, e.g. https://localhost:8084/v1alpha2/margo)
+  □ Press Enter for MIAF URL (same port unless WFM splits them)
+  □ Multi-component prompts: press Enter x3 for Symphony, or enter NBI URL/creds
+  □ Wait for run to complete (~2-5 min)
   □ Open report: ctt-runner/reports/wfm-supplier/wfm-scenario-report-core_<ts>.html
 ```

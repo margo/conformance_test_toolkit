@@ -1502,35 +1502,178 @@ EOF
     read -p "Press Enter once you have copied the certificate, or Ctrl+C to cancel: " continue_input
 }
 
+wfm_setup_miaf_identity() {
+    local miaf_real_dir="$CONFORMANCE_DIR/wfm-supplier/utils/fixtures/miaf/real"
+    local provision_script="$DATA_GEN_DIR/common/scripts/provision-mis-identity.sh"
+
+    echo ""
+    echo "┌─────────────────────────────────────────────────────────────────────────┐"
+    echo "│  WFM Supplier — MIAF Identity Setup                                     │"
+    echo "│  Sets up the three files the CTT needs for mTLS conformance tests:      │"
+    echo "│    client-svid-cert.pem   your CTT's X.509-SVID (from your WFM's MIS)  │"
+    echo "│    client-svid-key.pem    private key for that cert                     │"
+    echo "│    trust-bundle-ca.pem    root CA your WFM's MIS publishes              │"
+    echo "└─────────────────────────────────────────────────────────────────────────┘"
+
+    # Show current status
+    echo ""
+    if [[ -f "$miaf_real_dir/client-svid-cert.pem" ]]; then
+        local expiry
+        expiry=$(openssl x509 -in "$miaf_real_dir/client-svid-cert.pem" -noout -enddate 2>/dev/null \
+            | sed 's/notAfter=//')
+        local spiffe_id
+        spiffe_id=$(openssl x509 -in "$miaf_real_dir/client-svid-cert.pem" -text -noout 2>/dev/null \
+            | grep -oE 'URI:spiffe://[^[:space:]]+' | head -1 | sed 's/URI://')
+        info "Current identity:"
+        info "  SPIFFE ID : $spiffe_id"
+        info "  Expires   : $expiry"
+        info "  Location  : $miaf_real_dir/"
+    else
+        warn "No identity found at $miaf_real_dir/ — setup required before running tests."
+    fi
+
+    echo ""
+    echo "Choose your setup path:"
+    echo "  A) Margo sandbox / Symphony reference environment (automated)"
+    echo "     Runs provision-mis-identity.sh — mints SVID from MIS, registers"
+    echo "     the allowlist, and fetches the trust bundle in one command."
+    echo ""
+    echo "  B) Your own WFM (manual — step-by-step with commands)"
+    echo "     Guides you through fetching the trust bundle and placing your SVID."
+    echo ""
+    echo "  S) Skip — identity already set up, continue to tests"
+    echo ""
+    read -p "Select path (A / B / S): " identity_choice < /dev/tty
+
+    case "${identity_choice,,}" in
+
+        a)
+            echo ""
+            echo "────────────────────────────────────────────────────────────────"
+            info "Margo sandbox / Symphony automated path"
+            echo "────────────────────────────────────────────────────────────────"
+            echo ""
+            if [[ ! -f "$provision_script" ]]; then
+                error "provision-mis-identity.sh not found at $provision_script"
+            fi
+
+            echo "  Defaults (press Enter to accept, or type a new value):"
+            echo ""
+            read -p "  MIS base URL   [https://127.0.0.1:9443]: " mis_url < /dev/tty
+            mis_url="${mis_url:-https://127.0.0.1:9443}"
+            read -p "  Trust domain   [margo.org]: " trust_domain < /dev/tty
+            trust_domain="${trust_domain:-margo.org}"
+            read -p "  WFM instance   [symphony-1]: " wfm_id < /dev/tty
+            wfm_id="${wfm_id:-symphony-1}"
+            read -p "  Client ID      [margo-ctt]: " client_id < /dev/tty
+            client_id="${client_id:-margo-ctt}"
+
+            echo ""
+            info "Running: bash $provision_script \\"
+            info "           --mis-base-url $mis_url \\"
+            info "           --trust-domain $trust_domain \\"
+            info "           --wfm-id $wfm_id \\"
+            info "           --client-id $client_id"
+            echo ""
+
+            if bash "$provision_script" \
+                    --mis-base-url   "$mis_url" \
+                    --trust-domain   "$trust_domain" \
+                    --wfm-id         "$wfm_id" \
+                    --client-id      "$client_id" \
+                    --out-dir        "$miaf_real_dir"; then
+                echo ""
+                success "Identity provisioned successfully!"
+                echo ""
+                info "  Files written to: $miaf_real_dir/"
+                openssl x509 -in "$miaf_real_dir/client-svid-cert.pem" -noout -enddate 2>/dev/null \
+                    && info "  SVID expires: $(openssl x509 -in "$miaf_real_dir/client-svid-cert.pem" -noout -enddate 2>/dev/null | sed 's/notAfter=//')"
+                echo ""
+                info "You can now run tests (option 2 in the WFM menu)."
+            else
+                echo ""
+                warn "Provision script failed."
+                warn "Check that the MIS is reachable at $mis_url"
+                warn "and that the sandbox repo is at: $DATA_GEN_DIR/../"
+                warn ""
+                warn "To run manually:"
+                warn "  bash $provision_script --mis-base-url $mis_url"
+            fi
+            ;;
+
+        b)
+            echo ""
+            echo "────────────────────────────────────────────────────────────────"
+            info "Custom WFM — manual setup (copy and run each command)"
+            echo "────────────────────────────────────────────────────────────────"
+            echo ""
+            read -p "  Your MIS base URL (e.g. https://mis.yourwfm.com:9443): " vendor_mis_url < /dev/tty
+            [[ -z "$vendor_mis_url" ]] && warn "MIS URL is required for the commands below." && return 1
+
+            local scenario_runner="$CONFORMANCE_DIR/wfm-supplier/scripts/run_wfm_scenarios.js"
+            echo ""
+            echo "Run these three commands in order:"
+            echo ""
+            echo "  ── Step 1: Fetch the trust bundle from your MIS ───────────"
+            echo ""
+            echo "  node $scenario_runner \\"
+            echo "      --fetch-trust-bundle $vendor_mis_url \\"
+            echo "      $miaf_real_dir/trust-bundle-ca.pem"
+            echo ""
+            echo "  ── Step 2: Get your CTT client SVID from your MIS ─────────"
+            echo ""
+            echo "  Use your WFM's admin console or CLI to issue an X.509-SVID"
+            echo "  for the CTT (any SPIFFE ID is fine, e.g.:"
+            echo "    spiffe://yourdomain.com/margo/wfm/<instance>/client/margo-ctt)"
+            echo "  Then copy the files:"
+            echo ""
+            echo "  cp /path/to/issued/cert.pem $miaf_real_dir/client-svid-cert.pem"
+            echo "  cp /path/to/issued/key.pem  $miaf_real_dir/client-svid-key.pem"
+            echo ""
+            echo "  ── Step 3: Verify the chain ────────────────────────────────"
+            echo ""
+            echo "  openssl verify \\"
+            echo "      -CAfile $miaf_real_dir/trust-bundle-ca.pem \\"
+            echo "      $miaf_real_dir/client-svid-cert.pem"
+            echo "  # → client-svid-cert.pem: OK"
+            echo ""
+            echo "────────────────────────────────────────────────────────────────"
+            echo ""
+            info "Once all three files are in place, come back and run option 2 (tests)."
+            ;;
+
+        s|skip)
+            info "Skipping identity setup."
+            ;;
+
+        *)
+            warn "Invalid choice."
+            ;;
+    esac
+}
+
 run_wfm_flow() {
 
     while true; do
         echo ""
-        echo "What type of test-cases do you want to run?"
-        echo "1. OpenAPI spec based contract tests"
-        echo "2. Functional tests (Group-based test management)"
-        echo ""
-        echo "B) Back"
-        echo "Q) Quit"
+        echo "┌─────────────────────────────────────────────────────────────────────────┐"
+        echo "│  WFM Supplier — Conformance Testing                                     │"
+        echo "├─────────────────────────────────────────────────────────────────────────┤"
+        echo "│  Run steps in order:                                                    │"
+        echo "│    1. Setup MIAF Identity   (mint SVID + trust bundle, once per WFM)   │"
+        echo "│    2. Run scenario group tests  (select group, run against your WFM)   │"
+        echo "│    3. Run contract tests    (OpenAPI / Postman collection)              │"
+        echo "│                                                                         │"
+        echo "│  B) Back to main menu                                                   │"
+        echo "└─────────────────────────────────────────────────────────────────────────┘"
         echo ""
 
-        read -p "Select option (1-2, B, or Q): " test_choice
+        read -p "Select option (1-3, B, or Q): " test_choice
 
         case "${test_choice,,}" in
 
             1)
-                echo ""
-                read -p "Enter Postman Collection Path: " collection_path
-
-                if [[ ! -f "$collection_path" ]]; then
-                    error "Collection file not found: $collection_path"
-                fi
-
-                echo ""
-                read -p "Enter WFM SBI URL (e.g. https://<your-wfm-host>:<port>/v1alpha2/margo): " wfm_url < /dev/tty
-                [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
-
-                run_wfm_newman "$wfm_url" "$collection_path"
+                wfm_setup_miaf_identity || true
                 ;;
 
             2)
@@ -1556,6 +1699,21 @@ run_wfm_flow() {
                 fi
                 ;;
 
+            3)
+                echo ""
+                read -p "Enter Postman Collection Path: " collection_path
+
+                if [[ ! -f "$collection_path" ]]; then
+                    error "Collection file not found: $collection_path"
+                fi
+
+                echo ""
+                read -p "Enter WFM SBI URL (e.g. https://<your-wfm-host>:<port>/v1alpha2/margo): " wfm_url < /dev/tty
+                [[ -z "$wfm_url" ]] && error "WFM SBI URL is required"
+
+                run_wfm_newman "$wfm_url" "$collection_path"
+                ;;
+
             b)
                 return
                 ;;
@@ -1569,6 +1727,9 @@ run_wfm_flow() {
                 warn "Invalid option"
                 ;;
         esac
+
+        echo ""
+        read -p "Press Enter to continue..." _ < /dev/tty
     done
 }
 
