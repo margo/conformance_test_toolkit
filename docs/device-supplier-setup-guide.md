@@ -154,9 +154,9 @@ MIAF mTLS steps — these are separate ports.
 
 ```
 Available Device Test Groups:
-  1) core        v1.0.0-rc.2  — Generic/positive/negative/edge coverage ...
-  2) silver      v1.0.0-rc.2  — ...
-  3) gold        v1.0.0-rc.2  — ...
+  1) core        v1.0.0-rc.3  — Generic/positive/negative/edge coverage ...
+  2) silver      v1.0.0-rc.3  — ...
+  3) gold        v1.0.0-rc.3  — ...
 ```
 
 For a first run, select `core`. It covers the full set of required
@@ -216,90 +216,239 @@ coverage summary, per-scenario table, and a full step-detail table.
 ## Testing a real device-agent
 
 If you want to test **your own device-agent implementation** (not the CTT's
-simulated one), use the mock WFM server as the target:
+simulated one), use the mock WFM server as the target. This is useful to:
 
-### Step 1 — Generate certs and start the mock server
+- Verify your device-agent is spec-conformant before running on a real WFM
+- Use the Margo sandbox device-agent as a reference implementation against the mock WFM
+- Confirm the CTT mock WFM is itself correct from the perspective of a real device
+
+The mock WFM logs every request and validates it against the spec — so you can
+see exactly what your device sends, what the WFM validates, and where any gaps
+are.
+
+---
+
+### Integration with the Margo sandbox device-agent
+
+The Margo sandbox ships a reference device-agent (`workload-fleet-management-client`)
+that is the canonical example of a correct, spec-conformant device. Testing the
+CTT mock WFM against it is the strongest integration validation: if the mock WFM
+handles the sandbox device-agent correctly, vendors can use it with confidence.
+
+#### Step 1 — Generate CTT certificates (if not already done)
 
 ```bash
 bash ctt-runner/ctt-start.sh
-# Select: 2) Device Supplier → 1) Generate Certificates
-# Then:   2) Device Supplier → 2) Start Mock WFM Server (standalone)
+# Select: 2) Device Supplier → 1. Generate Certificates
+```
+
+Or directly:
+
+```bash
+cd ctt-runner/device-supplier
+bash generate-certs.sh ./certs localhost   # or use your machine's IP
+```
+
+#### Step 2 — Start the mock WFM server
+
+```bash
+bash ctt-runner/ctt-start.sh
+# Select: 2) Device Supplier → 2. Start Mock WFM Server
 ```
 
 The server prints its URL when ready:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  Mock WFM Server is ready (MIAF/rc.2 — mTLS + X.509-SVID)   ║
-║  WFM URL  : https://192.168.1.50:3001/v1alpha2/margo         ║
-║  CA Cert  : ctt-runner/device-supplier/certs/ca-cert.pem     ║
-╚══════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  Mock WFM Server is ready (MIAF/rc.3 — mTLS + X.509-SVID identity)         ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  WFM URL  : https://192.168.1.50:3001/v1alpha2/margo                        ║
+║  CA Cert  : ctt-runner/device-supplier/certs/ca-cert.pem                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### Step 2 — Give the CA cert to your device-agent
+#### Step 3 — Export identity for the sandbox device-agent
 
-Your device-agent needs to trust the mock WFM's TLS certificate. Copy
-`ca-cert.pem` to your device-agent machine:
+Use the menu to generate a SVID for the sandbox device-agent and a SPIFFE trust
+bundle the device can use to verify the mock WFM's certificate:
 
 ```bash
-scp ctt-runner/device-supplier/certs/ca-cert.pem <device-agent-host>:/path/to/trust-store/
+bash ctt-runner/ctt-start.sh
+# Select: 2) Device Supplier → 5. Export Identity for Sandbox Device-Agent
 ```
 
-Or configure your device-agent to use it as the WFM CA:
+You will be prompted for:
 
-```yaml
-# Example device-agent config
-wfm:
-  url: https://192.168.1.50:3001/v1alpha2/margo
-  ca_cert: /path/to/ca-cert.pem
-```
+| Prompt | What to enter |
+|---|---|
+| SPIFFE ID for sandbox device-agent | press Enter for `spiffe://margo.org/device/sandbox-device-001` |
+| Output directory | press Enter for `~/ctt-sandbox-agent-identity` |
 
-### Step 3 — Provision an mTLS identity (MIAF)
+The script writes four files to the output directory:
 
-The mock WFM's MIAF port (3003) requires the device-agent to present an
-X.509-SVID (a certificate with a SPIFFE URI `Subject Alternative Name`).
+| File | Purpose |
+|---|---|
+| `sandbox-device-svid-cert.pem` | Device mTLS client cert (SVID) — copy to device-agent |
+| `sandbox-device-svid-key.pem` | Device mTLS private key — copy to device-agent |
+| `ctt-ca-cert.pem` | CTT CA trust anchor — copy to device-agent |
+| `ctt-trust-bundle.json` | SPIFFE JWKS trust bundle — copy to device-agent |
 
-For the CTT's own simulated device-agent, this is done automatically
-(`svid-cert.pem` from `generate-certs.sh`).
+It also prints the exact config patch and copy commands for you to follow.
 
-For **your real device-agent**, you need to mint an SVID for it. The mock WFM
-trusts any cert signed by the CTT's CA (`ca-cert.pem` / `ca-key.pem`), so
-you can generate one locally:
+If you prefer to run the steps manually instead of using the menu:
 
 ```bash
 cd ctt-runner/device-supplier/certs
 
-# Generate key for your device-agent
-openssl ecparam -name prime256v1 -genkey -noout -out my-device-key.pem
+DEVICE_SPIFFE="spiffe://margo.org/device/sandbox-device-001"
+
+# Generate key for the sandbox device-agent
+openssl ecparam -name prime256v1 -genkey -noout \
+    -out sandbox-device-svid-key.pem
 
 # Create a CSR
-openssl req -new -key my-device-key.pem \
-    -subj "/CN=my-device-agent" -out my-device.csr
+openssl req -new \
+    -key sandbox-device-svid-key.pem \
+    -subj "/CN=sandbox-device-agent/O=Margo CTT" \
+    -out sandbox-device.csr
 
-# Sign it with the CTT CA and embed your device's SPIFFE ID
+# Sign it with the CTT CA, embedding the device's SPIFFE ID
 openssl x509 -req -days 365 \
-    -in my-device.csr \
+    -in sandbox-device.csr \
     -CA ca-cert.pem -CAkey ca-key.pem -CAcreateserial \
-    -out my-device-cert.pem \
+    -out sandbox-device-svid-cert.pem \
     -extfile <(printf \
-        "subjectAltName=URI:spiffe://margo.org/device/my-device-001\n\
-basicConstraints=CA:FALSE\n\
-extendedKeyUsage=clientAuth")
+        "subjectAltName=URI:%s\nbasicConstraints=CA:FALSE\nextendedKeyUsage=clientAuth" \
+        "$DEVICE_SPIFFE")
+
+rm sandbox-device.csr
+
+# Build the SPIFFE trust bundle in JWKS format from the CTT CA
+DER_B64=$(openssl x509 -in ca-cert.pem -outform DER | base64 | tr -d '\n')
+printf '{"keys":[{"kty":"RSA","use":"x509-svid","x5c":["%s"]}]}' "$DER_B64" \
+    > ctt-trust-bundle.json
 ```
 
-Give `my-device-cert.pem` and `my-device-key.pem` to your device-agent as its
-mTLS identity for calls to port 3003.
+#### Step 4 — Copy files to the sandbox device-agent machine
 
-### Step 4 — Connect your device-agent
+```bash
+AGENT_HOST=<sandbox-device-agent-machine>
+CERTS=ctt-runner/device-supplier/certs
 
-Point your device-agent at the mock WFM:
+# SVID cert + key (device's mTLS identity)
+scp $CERTS/sandbox-device-svid-cert.pem  $AGENT_HOST:~/sandbox/poc/device/agent/config/identity/
+scp $CERTS/sandbox-device-svid-key.pem   $AGENT_HOST:~/sandbox/poc/device/agent/config/identity/
+
+# SPIFFE trust bundle (to verify the mock WFM's cert without a live MIS)
+scp $CERTS/ctt-trust-bundle.json          $AGENT_HOST:~/sandbox/poc/device/agent/config/mis/
+```
+
+If the CTT and the sandbox device-agent are on the **same machine**, use `cp`
+instead of `scp`, or just point the config at the absolute paths directly.
+
+#### Step 5 — Update the sandbox device-agent config
+
+On the device-agent machine, open
+`~/sandbox/poc/device/agent/config/config.yaml` and apply these changes:
+
+```yaml
+# Change the WFM URL from Symphony to the CTT mock WFM MIAF port (3003)
+wfm:
+  sbiUrl: https://<ctt-host-ip>:3003/v1alpha2/margo
+
+# Update the MIAF identity to use the CTT-signed SVID
+miaf:
+  x509:
+    certPath: "./config/identity/sandbox-device-svid-cert.pem"
+    keyPath:  "./config/identity/sandbox-device-svid-key.pem"
+  mis:
+    # endpoint: "https://mis.margo.org:9443"   # disable - CTT mock WFM has no live MIS
+    # caPath: "./config/mis/https-ca.crt"       # disable
+    cacheInterval: 60
+    trustBundle:
+      path: "./config/mis/ctt-trust-bundle.json"   # static SPIFFE JWKS from CTT CA
+```
+
+Replace `<ctt-host-ip>` with the IP address of the machine running the CTT mock
+WFM (the value printed when you started it in Step 2).
+
+#### Step 6 — Restart the sandbox device-agent
+
+```bash
+# On the device-agent machine:
+bash ~/sandbox/scripts/device-agent.sh docker stop-docker
+bash ~/sandbox/scripts/device-agent.sh docker start-docker
+```
+
+For K3s:
+
+```bash
+bash ~/sandbox/scripts/device-agent.sh k3s stop-k3s
+bash ~/sandbox/scripts/device-agent.sh k3s start-k3s
+```
+
+#### Step 7 — Watch the mock WFM logs
+
+Back on the CTT machine:
+
+```bash
+tail -f /tmp/wfm-server.log
+```
+
+You should see the sandbox device-agent connecting, presenting its SVID, and
+making capability reports and desired-state polls. The mock WFM identifies it
+by its SPIFFE ID (`spiffe://margo.org/device/sandbox-device-001`) and serves
+the standard desired-state manifest.
+
+#### What the mock WFM does with the real device-agent
+
+The mock WFM treats the sandbox device-agent exactly the same as the CTT's
+own simulated device-agent:
+
+- Validates the mTLS client cert is signed by the CTT CA
+- Extracts the device's SPIFFE ID from the cert's `Subject Alternative Name URI`
+- Creates a client record keyed by SPIFFE ID
+- Serves a desired-state manifest and tracks deployment status
+- Enforces all spec requirements (correct headers, ETag, digest, content-type)
+
+Any spec violation in either direction (wrong headers from the device, wrong
+response from the WFM) will be visible in the logs.
+
+#### Restoring the sandbox device-agent to its normal config
+
+After integration testing, restore `config.yaml` to point back at Symphony:
+
+```bash
+# On the device-agent machine:
+WFM_HOST=symphony.machine   # or your real WFM hostname
+WFM_PORT=8084
+
+sed -i "s|sbiUrl:.*|sbiUrl: https://$WFM_HOST:$WFM_PORT/v1alpha2/margo|" \
+    ~/sandbox/poc/device/agent/config/config.yaml
+
+# Re-enable the real MIS endpoint by editing config.yaml:
+# - uncomment  miaf.mis.endpoint and miaf.mis.caPath
+# - comment out miaf.mis.trustBundle
+```
+
+---
+
+### Integration with any device-agent (generic)
+
+The same approach works for any custom device-agent, not just the Margo sandbox.
+The mock WFM trusts any client cert signed by its CA, so:
+
+1. Generate a SVID for your device using the CTT CA (Step 3 commands above,
+   replacing the SPIFFE ID with your device's own ID)
+2. Configure your device-agent's mTLS cert to use the generated cert/key
+3. Configure your device-agent's trust store to use `ctt-ca-cert.pem`
+4. Point your device-agent at port 3003 for MIAF mTLS calls
 
 ```
-SBI URL:       https://<mock-wfm-host>:3001/v1alpha2/margo    (RFC 9421 signed)
-MIAF mTLS URL: https://<mock-wfm-host>:3003/v1alpha2/margo    (mTLS + SVID)
-CA cert:       ca-cert.pem
-Client cert:   my-device-cert.pem
-Client key:    my-device-key.pem
+MIAF mTLS URL: https://<mock-wfm-host>:3003/v1alpha2/margo
+CA cert:       ctt-runner/device-supplier/certs/ca-cert.pem
+Client cert:   <your-device-svid-cert.pem>
+Client key:    <your-device-svid-key.pem>
 ```
 
 The mock WFM logs every request to `/tmp/wfm-server.log`. Watch it while your
@@ -336,6 +485,10 @@ configuration changes needed.
 | TLS handshake error in device-agent | Device-agent not using `ca-cert.pem` | Copy `ca-cert.pem` to the device-agent's trust store |
 | 401 on all requests | Request not signed (RFC 9421) or SVID not presented (MIAF) | Device-agent must sign every request OR present SVID for mTLS port |
 | mTLS handshake fails on port 3003 | Device SVID not issued by the CTT CA | Re-generate the device SVID using `ca-cert.pem` as the signing CA |
+| Sandbox device-agent fails to connect | `config.yaml` still pointing at Symphony | Check `wfm.sbiUrl` is `https://<ctt-host>:3003/...` |
+| Trust bundle error in device-agent logs | `ctt-trust-bundle.json` not in place or wrong path | Re-run option 5 → copy output file to `config/mis/ctt-trust-bundle.json` on agent machine |
+| Device-agent connects but no requests in WFM log | Mock WFM server not running | Start mock WFM (option 2) before the device-agent connects |
+| 401 errors in mock WFM log for sandbox device-agent | SVID presented by device is not signed by CTT CA | Use the SVID from option 5 output, not from `~/certs/` on the sandbox |
 | Go build fails: module not found | Go module cache issue | Run `go mod download` from `ctt-runner/device-supplier/` |
 | Report not generated | Test runner exited non-zero | Check `ctt-runner/reports/device-supplier/test-execution.log` |
 
@@ -345,17 +498,30 @@ configuration changes needed.
 
 ```
 Phase 1 — Setup (once, renew after ~2 years)
-  □ bash ctt-runner/ctt-start.sh → Device Supplier → Generate Certificates
-  □ (Real device only) Copy ctt-runner/device-supplier/certs/ca-cert.pem
-    to your device-agent machine
-  □ (Real device only) Mint a SVID for your device-agent signed by the CTT CA
+  □ bash ctt-runner/ctt-start.sh → Device Supplier → 1. Generate Certificates
 
-Phase 2 — Run (repeat for each test run)
-  □ bash ctt-runner/ctt-start.sh → Device Supplier → Run scenario group tests
+Phase 2 — Run CTT self-test (CTT simulates device-agent)
+  □ bash ctt-runner/ctt-start.sh → Device Supplier → 2. Start Mock WFM Server
+  □ bash ctt-runner/ctt-start.sh → Device Supplier → 3. Run Tests
   □ Press Enter for mock WFM URL (auto-detected)
   □ Press Enter for MIAF mTLS URL (auto-detected)
   □ Select group: core (or the group your engagement specifies)
   □ Wait for run to complete (~1–3 min)
   □ Open report:
       ctt-runner/reports/device-supplier/conformance-report-<ts>.html
+
+Phase 3 — Integration test with real sandbox device-agent (optional)
+  □ bash ctt-runner/ctt-start.sh → Device Supplier → 2. Start Mock WFM Server
+  □ bash ctt-runner/ctt-start.sh → Device Supplier → 5. Export Identity for Sandbox Device-Agent
+      → Press Enter for SPIFFE ID (spiffe://margo.org/device/sandbox-device-001)
+      → Press Enter for output dir (~/.ctt-sandbox-agent-identity)
+      → Follow the printed copy + config patch instructions
+  □ On device-agent machine: edit config/config.yaml
+      → wfm.sbiUrl: https://<ctt-host>:3003/v1alpha2/margo
+      → miaf.x509.certPath/keyPath: sandbox-device-svid-cert/key.pem
+      → miaf.mis.trustBundle.path: ./config/mis/ctt-trust-bundle.json
+      → comment out miaf.mis.endpoint and miaf.mis.caPath
+  □ Restart device-agent (docker stop-docker / start-docker)
+  □ Watch CTT mock WFM logs: tail -f /tmp/wfm-server.log
+  □ Restore config.yaml to point back at Symphony when done
 ```

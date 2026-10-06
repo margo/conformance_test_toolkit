@@ -3,7 +3,7 @@
 ║              Device Supplier Conformance Test Runner                         ║
 ║                   Data-Driven Test Framework                                 ║
 ║                                                                              ║
-║  Testing against: https://localhost:3001/v1alpha2/margo                                 ║
+║  Testing against: https://10.0.0.7:3001/v1alpha2/margo                                 ║
 ║  Spec: Margo Management Interface API 1.0.0-rc.2                            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 	
@@ -12,14 +12,10 @@ Claimed App Version: 1.0.0-rc.2  ·  CTT Margo Version: 1.0.0-rc.2
 
 ▶ Running Scenario: Capability Reporting — Device Role Variants (device-core-capability-roles)
   Description: Per docs.margo.org/specification/margo-management-interface/device-capabilities and the Device Supplier conformance requirements, a device fills either the Standalone Cluster role (Kubernetes + Helm) or the Standalone Device role (Compose) — supportedDeploymentTypes is how a device declares which. This scenario covers both role variants as positive cases, plus negative coverage for invalid enum values and a malformed cpus[] entry not exercised by other groups.
-  → Step: Onboard Device (Setup)
-    📎 Captured clientId = 8950bc84-01c3-475a-922b-8804a9885dec
-    📎 Captured deviceId = 8950bc84-01c3-475a-922b-8804a9885dec
-    ✅ PASS - HTTP 201 (Expected: 201)
   → Step: Report Capabilities — Standalone Device Role (compose only)
     ✅ PASS - HTTP 201 (Expected: 201)
   → Step: Report Capabilities — Standalone Cluster Role (helm only)
-    ✅ PASS - HTTP 201 (Expected: 201)
+    ✅ PASS - HTTP 200 (Expected: 200)
   → Step: Reject Capabilities — Invalid supportedDeploymentTypes Value
     ✅ PASS - HTTP 422 (Expected: 422)
   → Step: Reject Capabilities — Invalid supportedRuntimes Value
@@ -29,17 +25,343 @@ Claimed App Version: 1.0.0-rc.2  ·  CTT Margo Version: 1.0.0-rc.2
 
 ▶ Running Scenario: Desired State — Default Negotiation and Zero-Deployment Manifest (device-core-manifest-semantics)
   Description: Per docs.margo.org/specification/margo-management-interface/desired-state: (1) the WFM (here, our mock server) MUST default to application/vnd.margo.manifest.v1+json when the Accept header is omitted entirely, not just when it's the exact expected value; (2) when a client has zero deployments assigned, the manifest's deployments field MUST still be a valid (empty) array. Both are edge cases the other device-supplier groups don't exercise directly. Note: the spec also requires the manifest's bundle field to be explicit null (not omitted) when deployments is empty — not independently verified here, because this suite's validation engine can't distinguish a field that's present-but-null from one that's absent (both read as Go/JS nil); confirmed instead by reading the mock server's response-construction code directly.
-  → Step: Onboard Device (Setup)
-    📎 Captured clientId = c5c47934-1f99-43a4-8b5e-137d7bb7e6b2
-    ✅ PASS - HTTP 201 (Expected: 201)
   → Step: Get Deployments With No Accept Header — Defaults To Manifest Format
     ✅ PASS - HTTP 200 (Expected: 200)
   → Step: Reset Desired State To Empty (test-control)
     ✅ PASS - HTTP 200 (Expected: 200)
   → Step: Get Deployments — Zero Deployments Still Returns A Valid (Empty) Manifest
     ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Cleanup: Restore Default Deployment
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: MI-004 — Device Certificate Must Conform To RFC 5280 (device-mi004-rfc5280-certificate)
+  Description: MARGO-DEV-MANAGEMENTINTERFACE-004: all client SVIDs MUST conform to RFC 5280. Under MIAF there is no onboarding call to reject a bad cert at -- a non-conformant certificate fails the mTLS handshake itself before any request is processed, and MIS's minter only issues conformant SVIDs, so there is currently no tooling to fabricate a non-conformant one to test the negative case. This step positively confirms our SVID (RFC-5280-conformant by construction) completes a real mTLS handshake and is accepted. NEGATIVE CASE RETIRED -- needs a way to mint/fabricate a non-conformant SVID; tracked as a follow-up, not silently dropped.
+  → Step: Connect With A Conforming SVID Over mTLS — Accepted
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: MI-006/009 — Bundle Digest That Doesn't Match Content Must Be Rejected (device-mi006-bundle-digest-mismatch)
+  Description: SUITE SELF-TEST for MARGO-DEV-MANAGEMENTINTERFACE-006 / -009: the client MUST verify computed digests match manifest values and abort on any mismatch. The 'bundle_digest_mismatch' fixture corrupts bundle.digest while leaving bundle.url pointing at the real archive; evaluateManifest downloads it, hashes it, and must flag the mismatch.
+  → Step: Arm bundle_digest_mismatch Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: GET Deployments — Bundle Digest Mismatch Must Be Rejected
+    ✅ manifest correctly flagged as non-conformant: bundle: digest mismatch — manifest says sha256:cc106b4c5bb872e96b49d5217d5f645d92b38b54e755decbf529c1c5b0003c60, content is sha256:cc106b4c5bb872e96b49d5217d5f645d92b38b54e755decbf529c1c5b0003c6a (MI-006/019)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Cleanup: Restore Default Deployment And Clear Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: MI-008 — Manifest With Unsupported Digest Algorithm Must Be Rejected (device-mi008-unsupported-digest-algorithm)
+  Description: SUITE SELF-TEST for MARGO-DEV-MANAGEMENTINTERFACE-008 ('If a manifest references an unsupported digest algorithm, the client MUST treat the manifest as invalid and abort processing'). The mock is armed with the 'unsupported_digest_algorithm' negative fixture so GET /deployments returns a manifest whose digests use sha512 instead of sha256. The suite then asserts (a) the fixture is actually present in the response and (b) its own manifest-conformance check (expect_manifest_rejected) flags the manifest for rejection. This proves the suite would correctly fail a real device that acted on such a manifest.
+  → Step: Arm The unsupported_digest_algorithm Negative Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: GET Deployments — Manifest Uses An Unsupported Digest Algorithm And Must Be Rejected
+    ✅ manifest correctly flagged as non-conformant: bundle.digest uses an unsupported algorithm: "sha512:c82f87857ab82b1dd482fa42a87520090fbfce35738a9b8eb0aaa7f6746252b1" (MI-008)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Cleanup: Restore Default Deployment And Clear Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: MI-010 — A manifestVersion Not Strictly Greater Than The Last Must Be Rejected (device-mi010-non-increasing-manifest-version)
+  Description: SUITE SELF-TEST for MARGO-DEV-MANAGEMENTINTERFACE-010. The scenario first reads a manifest at version >= 2 (so the runner records it), then the 'non_increasing_manifest_version' fixture serves a manifest back at version 1; evaluateManifest must reject it as a rollback.
+  → Step: Assign A Deployment (manifestVersion climbs to 2)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: GET Deployments — Establish The Current Version
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Arm non_increasing_manifest_version Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: GET Deployments — Version Went Backwards, Must Be Rejected
+    ✅ manifest correctly flagged as non-conformant: manifestVersion 1 is not strictly greater than previously seen 5 (MI-010)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Cleanup: Restore Default Deployment And Clear Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: MI-018 — Device Trusts The WFM Server Certificate Via The Root CA (device-mi018-tls-trust)
+  Description: MARGO-DEV-MANAGEMENTINTERFACE-018: the client MUST trust the WFM's server certificate through a securely obtained root of trust. Under MIAF this is the trust bundle fetched from MIS (CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md Part 5.3 Phase 2), not a bespoke /onboarding/certificate call -- mtlsClient() in signing.go already verifies the WFM's SVID chains to that bundle on every single mtls step in this suite, so a successful connection here IS the positive proof. NEGATIVE CASE RETIRED -- the old :3002 untrusted-cert listener isn't mTLS-capable with a real SVID yet; needs its own MIAF-shaped negative fixture, tracked as a follow-up, not silently dropped.
+  → Step: Connect To The WFM Over mTLS — Server SVID Verified Against The Trust Bundle
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: MI-019 — Any Fetched Artifact With A Wrong Digest Must Be Rejected (device-mi019-deployment-digest-mismatch)
+  Description: SUITE SELF-TEST for MARGO-DEV-MANAGEMENTINTERFACE-019: the client MUST verify the digest of every fetched artifact. The 'deployment_digest_mismatch' fixture corrupts the first deployments[].digest only (the bundle digest stays correct), so the violation is caught on a per-deployment artifact, not the bundle.
+  → Step: Arm deployment_digest_mismatch Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: GET Deployments — Deployment Digest Mismatch Must Be Rejected
+    ✅ manifest correctly flagged as non-conformant: deployments[0]: digest mismatch — manifest says sha256:733772f6bf356d859c864b6ff46f6522d391518940a003e9c8f60d76db629000, content is sha256:733772f6bf356d859c864b6ff46f6522d391518940a003e9c8f60d76db629008 (MI-006/019)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Cleanup: Restore Default Deployment And Clear Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: MI-025/026 — A Wrong sizeBytes (Digest Still Valid) Must NOT Cause Rejection (device-mi025-026-sizebytes-not-integrity)
+  Description: SUITE SELF-TEST for MARGO-DEV-MANAGEMENTINTERFACE-025 / -026: sizeBytes MUST NOT be used for integrity verification. The 'wrong_size_bytes' fixture sets every sizeBytes to 1 but leaves digests correct; a conformant client verifies by digest and MUST still proceed, so the suite asserts expect_manifest_accepted.
+  → Step: Arm wrong_size_bytes Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: GET Deployments — sizeBytes Is Bogus But The Manifest Is Still Acceptable
+    ✅ manifest is conformant on every integrity-relevant check; a client MUST proceed
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Cleanup: Restore Default Deployment And Clear Fixture
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: Flexible Order — Bundle Download (flex-bundle)
+  Description: Self-contained: the first step is a local GET-deployments setup (scenario-scoped, not shared) to obtain bundleDigest, so this scenario never depends on flex-desired-state having run first. Runs under this suite's static mTLS identity, no shared onboarding context needed.
+  → Step: Get Current Deployments (local setup)
+    📎 Captured bundleDigest = sha256:cc106b4c5bb872e96b49d5217d5f645d92b38b54e755decbf529c1c5b0003c6a
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Download Deployment Bundle
+    📎 Captured bundleEtag = "sha256:cc106b4c5bb872e96b49d5217d5f645d92b38b54e755decbf529c1c5b0003c6a"
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Download Bundle With Matching ETag
+    ✅ PASS - HTTP 304 (Expected: 304)
+  → Step: Reject Bundle Download With Wrong Digest
+    ✅ PASS - HTTP 404 (Expected: 404)
+
+▶ Running Scenario: Flexible Order — Capabilities (flex-capabilities)
+  Description: POST/PUT capabilities under this suite's static mTLS identity (MIAF has no per-run onboarding, so no shared clientId/scenario-ordering dependency exists anymore). Includes a positive case that omits properties.resources entirely (regression test for the assertions.json conditional-required fix) and a negative case where resources is present but incomplete (proves its children are still enforced whenever resources is present at all).
+  → Step: Report Capabilities with POST (full resources)
+    ✅ PASS - HTTP 201 (Expected: 201)
+  → Step: Report Capabilities with PUT (full resources)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Capabilities With Empty Peripherals (regression test)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Capabilities With cpus Omitted (optional per schema — only id/vendor/modelNumber/serialNumber are required)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Reject Capabilities With Missing Properties
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Capabilities With Invalid Peripheral Type
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Capabilities With Invalid Interface Type
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Capabilities With Invalid Cpu Architecture
+    ✅ PASS - HTTP 422 (Expected: 422)
+
+▶ Running Scenario: Flexible Order — Deployment Manifest Download (flex-deployment-manifest)
+  Description: Self-contained: the first step is a local GET-deployments setup (scenario-scoped, not shared) to obtain deploymentId+digest, so this scenario never depends on flex-desired-state having run first. Runs under this suite's static mTLS identity, no shared onboarding context needed.
+  → Step: Get Current Deployments (local setup)
+    📎 Captured deploymentDigest = sha256:733772f6bf356d859c864b6ff46f6522d391518940a003e9c8f60d76db629008
+    📎 Captured deploymentId = self-test-app
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Download Individual Deployment Manifest
+    📎 Captured deploymentEtag = "sha256:733772f6bf356d859c864b6ff46f6522d391518940a003e9c8f60d76db629008"
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Download Individual Deployment Manifest With Matching ETag
+    ✅ PASS - HTTP 304 (Expected: 304)
+  → Step: Reject Deployment Manifest Download With Wrong Digest
+    ✅ PASS - HTTP 404 (Expected: 404)
+
+▶ Running Scenario: Flexible Order — Desired State (GET deployments) (flex-desired-state)
+  Description: GET /deployments is the spec's desired-state endpoint (UnsignedAppStateManifest = 'the complete desired state for all workloads assigned to a device'). Uses the shared this suite's static mTLS identity (MIAF has no per-run onboarding); extracted values stay scenario-local.
+  → Step: Get Current Deployments
+    📎 Captured manifestEtag = "724579e7d70ca74dde71da667a3a8313ff8d5c594bda754271a103d07c5ddc66"
+    📎 Captured bundleDigest = sha256:cc106b4c5bb872e96b49d5217d5f645d92b38b54e755decbf529c1c5b0003c6a
+    📎 Captured deploymentId = self-test-app
+    📎 Captured deploymentDigest = sha256:733772f6bf356d859c864b6ff46f6522d391518940a003e9c8f60d76db629008
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments With Matching ETag
+    ✅ PASS - HTTP 304 (Expected: 304)
+  → Step: Reject Deployments Request With Unsupported Accept Header
+    ✅ PASS - HTTP 406 (Expected: 406)
+
+▶ Running Scenario: Flexible Order — Multi-App Desired State (mock server reports both apps) (flex-desired-state-multi-app)
+  Description: Device-supplier counterpart to the wfm-supplier multi-app scenario, but fully deterministic since this mock server is entirely under test-harness control (no external operator to wait on). Uses the test-control endpoint to assign two REAL sample apps (sample-app-a: nginx, sample-app-b: redis — see device-supplier/sample-apps/{app-a,app-b}/compose.yaml, served by this mock server at /sample-apps/{app}/compose.yaml) simultaneously, verifies the mock server correctly reports BOTH in one desired-state manifest, brings both to 'installed' via individual status reports, then removes one (app-b) and verifies exactly one (app-a) remains. Ends by restoring the original default deployment (a3e2f5dc-912e-494f-8395-52cf3769bc06), matching every other flexible-order scenario's assumption, so this is safe to run in any shuffle order.
+  → Step: Assign Both Sample Apps (test-control)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments — Confirm Mock Server Reports Both Apps
+    📎 Captured appADigest = sha256:d6117429dfc4d133db85290d97b5081f6013878697ac8ae80f3a7f798aca0083
+    📎 Captured appBDigest = sha256:02c95dedbe866306897b52af195f1f817c0b618446ae4758a400e611f0784263
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Fetch App A Deployment Manifest (nginx compose)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Fetch App A's Actual compose.yaml (served by this mock server)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report App A Status: pending
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report App A Status: installing
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report App A Status: installed
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Fetch App B Deployment Manifest (redis compose)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Fetch App B's Actual compose.yaml (served by this mock server)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report App B Status: pending
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report App B Status: installing
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report App B Status: installed — both apps now running
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Remove App B, Keep App A (test-control)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments — Confirm Exactly App A Remains
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report App B Status: removed (no longer desired)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Restore Default Deployment (test-control) — leave shared client in the state siblings expect
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments — Confirm Restored To Default Only
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: Flexible Order — Desired State Reconciliation Lifecycle (flex-desired-state-reconciliation)
+  Description: Per docs.margo.org/specification/margo-management-interface/desired-state, 'desired state' is a reconciliation pattern (poll -> version check -> fetch -> reconcile -> report status), not a single endpoint — confirmed against a real device-agent's stateSync/deployment/status logs on this VM. This scenario scripts the mock server's desired-state timeline via the test-control endpoint (PUT .../test/clients/{reconClientId}/deployments, not part of the real spec) to exercise manifestVersion progression, ETag steady-state caching, and add/remove reconciliation with status reporting — mirroring the real device-agent trace (empty -> DESIRED-STATE-ADDED -> installed -> removed). Onboards its own dedicated client (not the shared this suite's static mTLS identity) so its hardcoded manifestVersion assertions stay valid no matter what order this scenario runs in relative to others that also mutate the shared client's desired state.
+  → Step: Reset Desired State To Empty (test-control)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments — Confirm Empty Desired State
+    📎 Captured reconEmptyEtag = "4324a31883f6949457d6ca40163b49d28c4ebd269bd5de6f03559412d2a3f6a5"
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Re-poll With Same ETag — Steady State (304, no reconciliation needed)
+    ✅ PASS - HTTP 304 (Expected: 304)
+  → Step: Add Default Deployment Back (test-control) — DESIRED-STATE-ADDED
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments — Confirm Deployment Present, Version Advanced
+    📎 Captured reconBundleDigest = sha256:ef66f028e19b2322a574da4f34e61021d6f63a7fe6dbed98d2ba85915cd09f6f
+    📎 Captured reconDeploymentDigest = sha256:aa4a6fe74fec2b91ec0173f48e61b950a4ae3e56a16f4ab5ad2acb19e2df07fa
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Fetch Bundle For Newly-Added Deployment
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Fetch Individual Deployment Manifest
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Status: pending
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Status: installing
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Status: installed
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Assign A Second Deployment (test-control)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Status: installed (second deployment)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Unassign Second Deployment (test-control) — back to default only
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Status: removed (second deployment, no longer desired)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments — Confirm Restored To Default Only
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: Flexible Order — Deployment Status Reporting (flex-status)
+  Description: Self-contained: the first step is a local GET-deployments setup (scenario-scoped, not shared) to obtain deploymentId, so this scenario never depends on flex-desired-state having run first. Runs under this suite's static mTLS identity, no shared onboarding context needed.
+  → Step: Get Current Deployments (local setup)
+    📎 Captured deploymentId = a3e2f5dc-912e-494f-8395-52cf3769bc06
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Deployment Status
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Report Deployment Status With Optional deviceId (now type-checked)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Reject Status With Invalid State
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Status With Missing Component Name
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Status With Path Deployment Mismatch
+    ✅ PASS - HTTP 422 (Expected: 422)
+
+▶ Running Scenario: Capabilities Reporting (scenario-capabilities)
+  Description: POST and PUT capability manifests that match the spec-aligned schema.
+  → Step: Report Capabilities with POST
+    ✅ PASS - HTTP 201 (Expected: 201)
+  → Step: Report Capabilities with PUT
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: Capabilities Error Handling (scenario-capabilities-errors)
+  Description: Negative tests for digest, schema, role, interface, and client validation.
+  → Step: Reject Capabilities With Missing Properties
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Capabilities With Invalid Peripheral Type
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Capabilities With Invalid Interface Type
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Capabilities With Invalid Cpu Architecture
+    ✅ PASS - HTTP 422 (Expected: 422)
+
+▶ Running Scenario: Deployment Retrieval And Status (scenario-deployments)
+  Description: Deployment state retrieval, cache validation, immutable artifact downloads, and status updates.
+  → Step: Get Current Deployments
+    📎 Captured deploymentDigest = sha256:aa4a6fe74fec2b91ec0173f48e61b950a4ae3e56a16f4ab5ad2acb19e2df07fa
+    📎 Captured manifestEtag = "301d20687f08eb127579d3d2206de081aceaf7f6be85dfab16ec9eb0584fa4f2"
+    📎 Captured bundleDigest = sha256:ef66f028e19b2322a574da4f34e61021d6f63a7fe6dbed98d2ba85915cd09f6f
+    📎 Captured deploymentId = a3e2f5dc-912e-494f-8395-52cf3769bc06
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Get Deployments With Matching ETag
+    ✅ PASS - HTTP 304 (Expected: 304)
+  → Step: Download Deployment Bundle
+    📎 Captured bundleEtag = "sha256:ef66f028e19b2322a574da4f34e61021d6f63a7fe6dbed98d2ba85915cd09f6f"
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Download Bundle With Matching ETag
+    ✅ PASS - HTTP 304 (Expected: 304)
+  → Step: Download Individual Deployment Manifest
+    📎 Captured deploymentEtag = "sha256:aa4a6fe74fec2b91ec0173f48e61b950a4ae3e56a16f4ab5ad2acb19e2df07fa"
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Download Individual Deployment Manifest With Matching ETag
+    ✅ PASS - HTTP 304 (Expected: 304)
+  → Step: Report Deployment Status
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: Live Assertion Demo — Dynamic Error Code (scenario-live-assertion-demo)
+  Description: DEMO SCENARIO: Proves server reloads assertions.json on every restart. Step 7.1 sends an invalid capabilities request (missing apiVersion) which triggers a validation error. The expected HTTP status code comes directly from error_responses.unprocessable.status_code in assertions.json. Change that one value, restart, re-run — the code changes without touching any Go code.
+  → Step: Non-Standard Memory String Is Accepted (spec places no format constraint on memory/storage)
+    ✅ PASS - HTTP 201 (Expected: 201)
+
+▶ Running Scenario: MIAF Identity — mTLS SVID Authentication (scenario-miaf-identity-mtls)
+  Description: Verifies the Device Supplier presents a valid X.509-SVID for mTLS authentication and that the CTT mock WFM validates it against the trust bundle. See docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md §4.
+  → Step: Device Presents Valid SVID on Capabilities PUT
+    ❌ FAIL - Validation failed for field '_client_cert.spiffe_id': matches_regex
+  → Step: Device SPIFFE ID Matches Accepted Client Policy
+    ❌ FAIL - Validation failed for field '_client_cert.spiffe_id': exists
+
+▶ Running Scenario: MIAF Identity — SVID Rotation Continuity (scenario-miaf-identity-svid-rotation)
+  Description: Verifies the Device Supplier continues to function after SVID rotation without manual re-registration.
+  → Step: Device Sends Status With Original SVID (baseline)
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Device Sends Status With Rotated SVID (post-rotation)
+    ✅ PASS - HTTP 200 (Expected: 200)
+
+▶ Running Scenario: OTEL Observability — otelCollector Capability and Telemetry Push (scenario-otel-observability)
+  Description: Verifies the vendor device's OTEL collector actively pushes telemetry to the CTT's OTLP HTTP receiver (port 4318) and Prometheus Remote Write endpoint (port 9090). PRECONDITION: configure the device's OTEL collector to push to http://<ctt-host>:4318 (OTLP HTTP) and http://<ctt-host>:9090/api/v1/write (Prometheus Remote Write) before running this scenario. Matches the sandbox observability architecture: device → Jaeger OTLP / Prometheus Remote Write → WFM observability stack.
+  → Step: Wait for Device OTEL Collector to Push Telemetry (traces or metrics)
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ❌ FAIL - poll timed out after 2m0s: Validation failed for field 'status': equals
+  → Step: Confirm Prometheus Remote Write Also Received
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ⏳ polling... retrying in 10s
+    ❌ FAIL - poll timed out after 2m0s: Validation failed for field 'prom_writes': gte
+
+▶ Running Scenario: Status And Retrieval Errors (scenario-status-and-retrieval-errors)
+  Description: Negative coverage for deployment content negotiation, immutable resource lookup, and status schema validation.
+  → Step: Get Current Deployments (Setup)
+    📎 Captured bundleDigest = sha256:ef66f028e19b2322a574da4f34e61021d6f63a7fe6dbed98d2ba85915cd09f6f
+    📎 Captured deploymentId = a3e2f5dc-912e-494f-8395-52cf3769bc06
+    📎 Captured deploymentDigest = sha256:aa4a6fe74fec2b91ec0173f48e61b950a4ae3e56a16f4ab5ad2acb19e2df07fa
+    📎 Captured manifestEtag = "301d20687f08eb127579d3d2206de081aceaf7f6be85dfab16ec9eb0584fa4f2"
+    ✅ PASS - HTTP 200 (Expected: 200)
+  → Step: Reject Deployments Request With Unsupported Accept Header
+    ✅ PASS - HTTP 406 (Expected: 406)
+  → Step: Reject Bundle Download With Wrong Digest
+    ✅ PASS - HTTP 404 (Expected: 404)
+  → Step: Reject Deployment Manifest Download With Wrong Digest
+    ✅ PASS - HTTP 404 (Expected: 404)
+  → Step: Reject Status With Invalid State
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Status With Missing Component Name
+    ✅ PASS - HTTP 422 (Expected: 422)
+  → Step: Reject Status With Path Deployment Mismatch
+    ✅ PASS - HTTP 422 (Expected: 422)
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  Test Results: 10 PASSED, 0 FAILED (Total: 10)
+║  Test Results: 108 PASSED, 4 FAILED (Total: 112)
+║  Requirements verified: 30  (referenced by tests: 32)
 ╚══════════════════════════════════════════════════════════════════════════════╝
-📊 Test report saved: reports/conformance-report-2026-08-17T12-52-09-000Z.html
+📊 Test report saved: reports/conformance-report-2026-10-05T21-45-22-000Z.html
