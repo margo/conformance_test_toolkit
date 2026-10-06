@@ -1,20 +1,38 @@
 # Reference multi-component compose ApplicationDeployment for the
-# `multi-component` wfm-supplier group (testcases/wfm-multi-component).
+# wfm-multi-component-deployment scenario.
 #
-# HOW TO USE
-#   1. Start the group run:  ./run-tests.sh  (pick persona wfm-supplier, group multi-component)
-#   2. When step 3 ("Wait For The Multi-Component Deployment To Be Assigned") starts
-#      polling, assign this ApplicationDeployment to the freshly-onboarded test
-#      client through the Symphony / WFM console (out of band — the suite only
-#      observes, it never assigns).
-#   3. The suite fetches the served YAML and checks the WFM relayed it faithfully:
-#      both `wait: true` and `wait: false` survive byte-for-byte, the ETag is the
-#      sha256 of the body, and that digest matches the one in the desired-state
-#      manifest. No container is deployed — `wait` sequencing is the device-agent's
-#      job (device-supplier persona), not the WFM's.
+# HOW TO USE (automated — recommended)
+#   Run the provision script BEFORE starting the CTT scenario group:
 #
-# Keep BOTH components: one with wait: true, one with wait: false. That single
-# combination is what exercises MARGO-WFM-APPLICATIONDESCRIPTION-001.
+#     bash ctt-runner/wfm-supplier/utils/fixtures/provision-multi-component.sh
+#
+#   The script authenticates with the WFM NBI, registers a Margo app package
+#   from the OCI registry, and creates an ApplicationDeployment with two
+#   compose components (one wait:true, one wait:false) targeting the CTT's
+#   SPIFFE ID.  For Symphony sandbox (no args needed); for other WFMs pass
+#   --nbi-url, --nbi-user, --nbi-pass, --device-id, --compose-image.
+#   After the test run: bash provision-multi-component.sh --cleanup
+#
+# HOW TO USE (manual — fallback for WFMs without an NBI)
+#   1. Register an OCI app package in your WFM console that contains at least
+#      one compose deployment profile.
+#   2. Create an ApplicationDeployment with TWO components:
+#        - wait-true-component   (wait: true)
+#        - wait-false-component  (wait: false)
+#      and assign it to the CTT's SPIFFE ID / device ID.
+#   3. Start the CTT group run — step 2 polls until the deployment appears.
+#
+# The suite validates:
+#   - GET /api/v1/deployments returns deployments.length >= 1
+#   - The manifest ETag is sha256:<64-hex>
+#   - The deployment YAML body contains both `wait: true` and `wait: false`
+#   - The ETag equals the sha256 of the served body
+#   - No container is deployed — `wait` sequencing is the device-agent's job
+#
+# IMPORTANT: Cache-Control MUST NOT include `immutable` on the manifest endpoint.
+# `immutable` indicates the response never changes, but the manifest changes
+# whenever deployments are assigned or removed (MARGO-WFM-MANAGEMENTINTERFACE-030).
+
 apiVersion: margo.org/v1alpha1
 kind: ApplicationDeployment
 metadata:
@@ -29,9 +47,9 @@ spec:
     components:
       - name: wait-true-component
         properties:
-          packageLocation: oci://registry.example.com/cts/wait-true-component:1.0.0
+          packageLocation: oci://<your-registry>/<your-repo>:<tag>
           wait: true
       - name: wait-false-component
         properties:
-          packageLocation: oci://registry.example.com/cts/wait-false-component:1.0.0
+          packageLocation: oci://<your-registry>/<your-repo>:<tag>
           wait: false
