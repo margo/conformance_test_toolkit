@@ -34,16 +34,18 @@ CLIENT_ID="${CLIENT_ID:-margo-ctt}"
 MIS_BASE_URL="${MIS_BASE_URL:-https://mis.margo.org:9443}"
 ALLOWLIST_PATH="${ALLOWLIST_PATH:-${HOME}/symphony/api/mis/authorized-clients.json}"
 OUT_DIR="${OUT_DIR:-${CONFORMANCE_DIR}/wfm-supplier/fixtures/miaf/real}"
+SANDBOX_REPO_URL="${SANDBOX_REPO_URL:-}"   # set to auto-clone the sandbox if svid-gen.sh is absent
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --sandbox-dir)     SANDBOX_DIR="$2"; shift 2 ;;
-    --trust-domain)    TRUST_DOMAIN="$2"; shift 2 ;;
-    --wfm-id)          WFM_ID="$2"; shift 2 ;;
-    --client-id)       CLIENT_ID="$2"; shift 2 ;;
-    --mis-base-url)    MIS_BASE_URL="$2"; shift 2 ;;
-    --allowlist-path)  ALLOWLIST_PATH="$2"; shift 2 ;;
-    --out-dir)         OUT_DIR="$2"; shift 2 ;;
+    --sandbox-dir)        SANDBOX_DIR="$2"; shift 2 ;;
+    --trust-domain)       TRUST_DOMAIN="$2"; shift 2 ;;
+    --wfm-id)             WFM_ID="$2"; shift 2 ;;
+    --client-id)          CLIENT_ID="$2"; shift 2 ;;
+    --mis-base-url)       MIS_BASE_URL="$2"; shift 2 ;;
+    --allowlist-path)     ALLOWLIST_PATH="$2"; shift 2 ;;
+    --out-dir)            OUT_DIR="$2"; shift 2 ;;
+    --sandbox-repo-url)   SANDBOX_REPO_URL="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
@@ -65,8 +67,34 @@ echo " Output dir      : ${OUT_DIR}"
 echo "════════════════════════════════════════════════════════════════"
 
 if [[ ! -f "${SVID_GEN}" ]]; then
-  echo "[ERROR] svid-gen.sh not found at ${SVID_GEN} — is --sandbox-dir correct?" >&2
-  exit 1
+  if [[ -n "${SANDBOX_REPO_URL}" ]]; then
+    echo "[INFO] svid-gen.sh not found at ${SVID_GEN}"
+    echo "[INFO] Attempting sparse clone of sandbox scripts from: ${SANDBOX_REPO_URL}"
+    if ! command -v git &>/dev/null; then
+      echo "[ERROR] git is required for auto-clone but was not found." >&2
+      echo "[ERROR] Install git or manually clone the sandbox repo to ${SANDBOX_DIR}" >&2
+      exit 1
+    fi
+    mkdir -p "${SANDBOX_DIR}"
+    git -C "${SANDBOX_DIR}" init -q 2>/dev/null || true
+    git -C "${SANDBOX_DIR}" remote add origin "${SANDBOX_REPO_URL}" 2>/dev/null || \
+      git -C "${SANDBOX_DIR}" remote set-url origin "${SANDBOX_REPO_URL}"
+    git -C "${SANDBOX_DIR}" config core.sparseCheckout true
+    mkdir -p "${SANDBOX_DIR}/.git/info"
+    echo "scripts/lib/mis/" > "${SANDBOX_DIR}/.git/info/sparse-checkout"
+    git -C "${SANDBOX_DIR}" fetch --depth=1 origin HEAD
+    git -C "${SANDBOX_DIR}" checkout FETCH_HEAD -- scripts/lib/mis/ 2>/dev/null || \
+      git -C "${SANDBOX_DIR}" reset --hard FETCH_HEAD
+    echo "[INFO] Sandbox scripts fetched to ${SANDBOX_DIR}/scripts/lib/mis/"
+  fi
+  if [[ ! -f "${SVID_GEN}" ]]; then
+    echo "[ERROR] svid-gen.sh not found at ${SVID_GEN}" >&2
+    echo "[ERROR] Options:" >&2
+    echo "[ERROR]   1. Clone the sandbox repo: git clone <sandbox-repo-url> ${SANDBOX_DIR}" >&2
+    echo "[ERROR]   2. Pass --sandbox-repo-url <url> to auto-clone the needed scripts" >&2
+    echo "[ERROR]   3. Pass --sandbox-dir <path> if sandbox is cloned elsewhere" >&2
+    exit 1
+  fi
 fi
 
 mkdir -p "${OUT_DIR}"
