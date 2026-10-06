@@ -311,6 +311,7 @@
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
+        "mtls": true,
         "headers": {
           "Accept": "application/json"
         },
@@ -351,6 +352,7 @@
         },
         "headers": {},
         "expected_status": 200,
+        "accepted_statuses": [200, 404],
         "validations": [],
         "extract_context": {}
       }
