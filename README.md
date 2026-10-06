@@ -124,7 +124,9 @@ its own already-provisioned identity instead.
 
 | Document | What it's for |
 |---|---|
-| [`docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`](docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md) | **Start here.** Every conformance flow explained end to end, full terminology glossary, and the complete old-flow → MIAF migration analysis with CR-ID mapping. |
+| [`docs/wfm-supplier-setup-guide.md`](docs/wfm-supplier-setup-guide.md) | **WFM Supplier start here.** Step-by-step: identity setup (MIAF / SPIFFE), running the core group, reading the report, troubleshooting. |
+| [`docs/device-supplier-setup-guide.md`](docs/device-supplier-setup-guide.md) | **Device Supplier start here.** Step-by-step: cert generation, starting the mock WFM, running the test suite, and optionally connecting a real device-agent. |
+| [`docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md`](docs/CONFORMANCE_FLOWS_AND_MIAF_MIGRATION.md) | Every conformance flow explained end to end, full terminology glossary, and the complete old-flow → MIAF migration analysis with CR-ID mapping. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture: what the toolkit is, how the three personas and two CLIs fit together, the test data model, and how reports trace back to spec requirements. |
 | [`docs/client-demo-brief.md`](docs/client-demo-brief.md) | One-page summary for explaining the suite to a vendor or stakeholder. |
 
