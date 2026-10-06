@@ -722,6 +722,55 @@ run_wfm_scenario_group() {
 
     confirm_version_mismatch "$claimed_app_version"
 
+    # ── Multi-component pre-seeding ──────────────────────────────────────────
+    # When the group includes wfm-multi-component-deployment, run the provision
+    # script now so the deployment exists before run_wfm_scenarios.js starts
+    # polling for it.  The provision script is idempotent and exits quickly when
+    # an active deployment is already present.
+    local provision_script="$CONFORMANCE_DIR/wfm-supplier/utils/fixtures/provision-multi-component.sh"
+    if [[ -f "$provision_script" ]] && \
+       jq -r '.testCases[]?' "$group_path/group.json" 2>/dev/null \
+           | grep -q "^wfm-multi-component-deployment$"; then
+
+        # Pull the SPIFFE ID directly out of the SVID cert we just copied, so
+        # the deployment targets exactly the identity the runner will present.
+        local device_spiffe_id=""
+        if [[ -f "$cert_dir/svid-cert.pem" ]]; then
+            device_spiffe_id=$(openssl x509 -in "$cert_dir/svid-cert.pem" -text -noout 2>/dev/null \
+                | grep -oE 'URI:spiffe://[^[:space:]]+' | head -1 | sed 's/URI://')
+        fi
+
+        echo ""
+        echo "────────────────────────────────────────────────────────────────"
+        info "Group includes 'wfm-multi-component-deployment'"
+        info "Pre-seeding a multi-component ApplicationDeployment via the WFM NBI..."
+        [[ -n "$device_spiffe_id" ]] && info "  Detected device SPIFFE ID: $device_spiffe_id"
+        echo ""
+        read -p "  WFM NBI base URL [https://localhost:8082/v1alpha2]: " mc_nbi_url < /dev/tty
+        mc_nbi_url="${mc_nbi_url:-https://localhost:8082/v1alpha2}"
+        read -p "  NBI username [admin]: " mc_nbi_user < /dev/tty
+        mc_nbi_user="${mc_nbi_user:-admin}"
+        read -s -p "  NBI password (leave empty for Symphony default — empty password): " mc_nbi_pass < /dev/tty
+        echo ""
+        echo "────────────────────────────────────────────────────────────────"
+        echo ""
+
+        local provision_args=(
+            "--nbi-url"  "$mc_nbi_url"
+            "--nbi-user" "$mc_nbi_user"
+            "--nbi-pass" "$mc_nbi_pass"
+        )
+        [[ -n "$device_spiffe_id" ]] && provision_args+=("--device-id" "$device_spiffe_id")
+
+        if bash "$provision_script" "${provision_args[@]}"; then
+            info "Multi-component deployment provisioned — runner will poll for it"
+        else
+            warn "Provision script failed — the multi-component poll step may time out"
+            warn "To provision manually: bash $provision_script"
+        fi
+        echo ""
+    fi
+
     scenario_file=$(create_temp_scenarios_file)
     build_device_group_scenarios "$group_path" "$scenario_file"
 
