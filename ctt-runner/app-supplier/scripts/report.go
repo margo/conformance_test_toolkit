@@ -1,29 +1,31 @@
 package main
 
 import (
-    "fmt"
-    "html/template"
-    "os"
-    "time"
+	"fmt"
+	"html/template"
+	"os"
+	"time"
 )
+
 // ValidationEntry represents a single validation result displayed in the conformance report.
 type ValidationEntry struct {
-    CRID        string
-    Field       string
-    Status      string
-    Type        string
-    Rule        string
-    ActualValue string
-    Remarks     string
+	CRID        string
+	Field       string
+	Status      string
+	Type        string
+	Rule        string
+	ActualValue string
+	Remarks     string
 }
 
 // ValidationReport contains application details, validation entries, and the overall validation status.
 type ValidationReport struct {
-    Entries            []ValidationEntry
-    Status             string
-    ApplicationName    string
-    ApplicationVersion string
+	Entries            []ValidationEntry
+	Status             string
+	ApplicationName    string
+	ApplicationVersion string
 }
+
 // reportTemplate defines the HTML template used to generate the application conformance report.
 const reportTemplate = `
 <!DOCTYPE html>
@@ -34,6 +36,8 @@ const reportTemplate = `
 <title>Application Supplier Conformance Test Report</title>
 
 <style>
+
+@page { size: A4 landscape; margin: 1cm; }
 
 body {
     font-family: Arial, sans-serif;
@@ -228,200 +232,182 @@ th {
 </body>
 </html>
 `
+
 // NewValidationReport creates a validation report with the initial status set to PASSED.
 func NewValidationReport() *ValidationReport {
-    return &ValidationReport{
-        Status: "PASSED",
-    }
+	return &ValidationReport{
+		Status: "PASSED",
+	}
 }
+
 // Log adds a validation entry to the report and updates the overall status on failure.
 func (r *ValidationReport) Log(
-    validate string,
-    details string,
-    status string,
+	validate string,
+	details string,
+	status string,
 ) {
+	r.Entries = append(
+		r.Entries,
+		ValidationEntry{
+			Field:   validate,
+			Remarks: details,
+			Status:  status,
+		},
+	)
 
-    r.Entries = append(
-        r.Entries,
-        ValidationEntry{
-    Field:   validate,
-    Remarks: details,
-    Status:  status,
-},
-    )
-
-    if status == "FAIL" {
-        r.Status = "FAILED"
-    }
+	if status == "FAIL" {
+		r.Status = "FAILED"
+	}
 }
 
 // Check adds a validation check entry to the report.
 func (r *ValidationReport) Check(
-    crId string,
-    field string,
-    dataType string,
-    expected string,
+	crId string,
+	field string,
+	dataType string,
+	expected string,
 ) {
-
-    r.Entries = append(
-        r.Entries,
-        ValidationEntry{
-            CRID:  crId,
-            Field: field,
-            Type:  dataType,
-            Rule:  expected,
-        },
-    )
+	r.Entries = append(
+		r.Entries,
+		ValidationEntry{
+			CRID:  crId,
+			Field: field,
+			Type:  dataType,
+			Rule:  expected,
+		},
+	)
 }
-
 
 // Pass updates the last validation entry as passed with the actual value and remarks.
 func (r *ValidationReport) Pass(
-    actual string,
-    details string,
+	actual string,
+	details string,
 ) {
+	if len(r.Entries) == 0 {
+		return
+	}
 
-    if len(r.Entries) == 0 {
-        return
-    }
+	last := &r.Entries[len(r.Entries)-1]
 
-    last :=
-        &r.Entries[len(r.Entries)-1]
-
-    last.Status = "PASS"
-    last.ActualValue = actual
-    last.Remarks = details
+	last.Status = "PASS"
+	last.ActualValue = actual
+	last.Remarks = details
 }
 
 // Fail updates the last validation entry as failed with the actual value and remarks, and sets the overall report status to FAILED.
 func (r *ValidationReport) Fail(
-    actual string,
-    details string,
+	actual string,
+	details string,
 ) {
+	if len(r.Entries) == 0 {
+		return
+	}
 
-    if len(r.Entries) == 0 {
-        return
-    }
+	last := &r.Entries[len(r.Entries)-1]
 
-    last :=
-        &r.Entries[len(r.Entries)-1]
+	last.Status = "FAIL"
+	last.ActualValue = actual
+	last.Remarks = details
 
-    last.Status = "FAIL"
-    last.ActualValue = actual
-    last.Remarks = details
-
-    r.Status = "FAILED"
+	r.Status = "FAILED"
 }
-
-
 
 // GenerateHTMLReport generates an HTML report for the validation results and writes it to the specified file.
 func (r ValidationReport) GenerateHTMLReport(
-    file string,
+	file string,
 ) error {
+	funcMap := template.FuncMap{
+		"lower": func(s string) string {
+			switch s {
 
-    funcMap := template.FuncMap{
+			case "PASS":
+				return "pass"
 
-        "lower": func(s string) string {
+			case "FAIL":
+				return "fail"
 
-            switch s {
+			default:
+				return "validate"
+			}
+		},
 
-            case "PASS":
-                return "pass"
+		"now": func() string {
+			return time.Now().
+				UTC().
+				Format(
+					"2006-01-02T15:04:05Z",
+				)
+		},
 
-            case "FAIL":
-                return "fail"
+		"passedCount": func(
+			entries []ValidationEntry,
+		) int {
+			count := 0
 
-            default:
-                return "validate"
-            }
-        },
+			for _, e := range entries {
+				if e.Status == "PASS" {
+					count++
+				}
+			}
 
-        "now": func() string {
+			return count
+		},
 
-            return time.Now().
-                UTC().
-                Format(
-                    "2006-01-02T15:04:05Z",
-                )
-        },
+		"failedCount": func(
+			entries []ValidationEntry,
+		) int {
+			count := 0
 
-        "passedCount": func(
-            entries []ValidationEntry,
-        ) int {
+			for _, e := range entries {
+				if e.Status == "FAIL" {
+					count++
+				}
+			}
 
-            count := 0
+			return count
+		},
 
-            for _, e := range entries {
+		"successRate": func(
+			entries []ValidationEntry,
+		) string {
+			total := 0
+			passed := 0
 
-                if e.Status == "PASS" {
-                    count++
-                }
-            }
+			for _, e := range entries {
+				if e.Status == "PASS" ||
+					e.Status == "FAIL" {
 
-            return count
-        },
+					total++
 
-        "failedCount": func(
-            entries []ValidationEntry,
-        ) int {
+					if e.Status == "PASS" {
+						passed++
+					}
+				}
+			}
 
-            count := 0
+			if total == 0 {
+				return "0.0"
+			}
 
-            for _, e := range entries {
+			return fmt.Sprintf(
+				"%.1f",
+				float64(passed)*100/float64(total),
+			)
+		},
+	}
 
-                if e.Status == "FAIL" {
-                    count++
-                }
-            }
+	tmpl := template.Must(
+		template.New("report").
+			Funcs(funcMap).
+			Parse(reportTemplate),
+	)
 
-            return count
-        },
+	f, err := os.Create(file)
+	if err != nil {
+		return err
+	}
 
-        "successRate": func(
-            entries []ValidationEntry,
-        ) string {
+	defer f.Close()
 
-            total := 0
-            passed := 0
-
-            for _, e := range entries {
-
-                if e.Status == "PASS" ||
-                    e.Status == "FAIL" {
-
-                    total++
-
-                    if e.Status == "PASS" {
-                        passed++
-                    }
-                }
-            }
-
-            if total == 0 {
-                return "0.0"
-            }
-
-            return fmt.Sprintf(
-                "%.1f",
-                float64(passed)*100/float64(total),
-            )
-        },
-    }
-
-    tmpl := template.Must(
-        template.New("report").
-            Funcs(funcMap).
-            Parse(reportTemplate),
-    )
-
-    f, err := os.Create(file)
-
-    if err != nil {
-        return err
-    }
-
-    defer f.Close()
-
-    return tmpl.Execute(f, r)
+	return tmpl.Execute(f, r)
 }
