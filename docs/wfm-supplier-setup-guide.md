@@ -127,78 +127,61 @@ domain and WFM IDs.
 > WFM ID. If five vendors bring WFMs, the MIS admin issues five device SVIDs
 > for CTT (one per WFM under test).
 
-#### Step 1 — MIS admin mints SVIDs for CTT
+#### Step 1 — Request SVIDs from the MIS admin
 
-If the centralized MIS runs as a Docker container on a reachable host:
+Contact the MIS admin and provide the SPIFFE IDs below. They will use their
+deployment's tooling to mint the certs and share the files with you.
 
-```bash
-# ── CTT device SVID (for WFM Supplier testing) ───────────────────────────
-# Repeat for each vendor WFM, substituting <vendor-wfm-id> each time
-MIS_HOST=<mis-host>
-VENDOR_WFM_ID=<vendor-wfm-id>
-TRUST_DOMAIN=<trust-domain>   # e.g. margo.org
+**For WFM Supplier testing (CTT acts as mock device):**
 
-sudo docker exec margo-identity-service mkdir -p /tmp/ctt-device-svid
-sudo docker exec margo-identity-service ./mis-cli mint x509 \
-    --spiffeID "spiffe://${TRUST_DOMAIN}/margo/wfm/${VENDOR_WFM_ID}/client/margo-ctt" \
-    --ttl 86400 \
-    --outputDir /tmp/ctt-device-svid
+Request one device SVID per vendor WFM under test:
 
-# ── CTT WFM SVID (for Device Supplier testing) ───────────────────────────
-sudo docker exec margo-identity-service mkdir -p /tmp/ctt-wfm-svid
-sudo docker exec margo-identity-service ./mis-cli mint x509 \
-    --spiffeID "spiffe://${TRUST_DOMAIN}/margo/wfm/ctt-mock-wfm" \
-    --ttl 86400 \
-    --outputDir /tmp/ctt-wfm-svid
+```
+SPIFFE ID: spiffe://<trust-domain>/margo/wfm/<vendor-wfm-id>/client/margo-ctt
 ```
 
-#### Step 2 — Transfer certs to the CTT machine
+**For Device Supplier testing (CTT acts as mock WFM):**
 
-Run these from the **MIS host** (or from the CTT machine if MIS is local):
+Request one WFM SVID for the CTT mock WFM:
+
+```
+SPIFFE ID: spiffe://<trust-domain>/margo/wfm/ctt-mock-wfm
+```
+
+In both cases, also ask for the **MIS root CA certificate** — CTT needs it to
+verify the peer's cert during the mTLS handshake.
+
+#### Step 2 — Place received certs in CTT fixture paths
+
+Once the MIS admin delivers the cert files (via scp, shared storage, or any
+other method), copy them to the following locations:
 
 ```bash
-CTT_HOST=<ctt-machine-user>@<ctt-machine-ip>
 CTT_REPO=<path-to-ctt-repo>   # e.g. /home/margo/test/sandbox
 
 # ── WFM Supplier fixtures (CTT as mock device) ───────────────────────────
-sudo docker cp margo-identity-service:/tmp/ctt-device-svid/payload-cert.pem /tmp/client-svid-cert.pem
-sudo docker cp margo-identity-service:/tmp/ctt-device-svid/payload-key.pem  /tmp/client-svid-key.pem
-sudo docker cp margo-identity-service:/certs/ca.crt                          /tmp/trust-bundle-ca.pem
-
-scp /tmp/client-svid-cert.pem  ${CTT_HOST}:${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-scp /tmp/client-svid-key.pem   ${CTT_HOST}:${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
-scp /tmp/trust-bundle-ca.pem   ${CTT_HOST}:${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
-
-# ── Device Supplier certs (CTT as mock WFM) ──────────────────────────────
-sudo docker cp margo-identity-service:/tmp/ctt-wfm-svid/payload-cert.pem /tmp/server-cert.pem
-sudo docker cp margo-identity-service:/tmp/ctt-wfm-svid/payload-key.pem  /tmp/server-key.pem
-
-scp /tmp/server-cert.pem       ${CTT_HOST}:${CTT_REPO}/ctt-runner/device-supplier/certs/server-cert.pem
-scp /tmp/server-key.pem        ${CTT_HOST}:${CTT_REPO}/ctt-runner/device-supplier/certs/server-key.pem
-scp /tmp/trust-bundle-ca.pem   ${CTT_HOST}:${CTT_REPO}/ctt-runner/device-supplier/certs/svid-ca.pem
-```
-
-If MIS is on the **same machine as CTT** (no scp needed):
-
-```bash
-sudo docker cp margo-identity-service:/tmp/ctt-device-svid/payload-cert.pem \
+cp <received>/device-svid-cert.pem \
     ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-sudo docker cp margo-identity-service:/tmp/ctt-device-svid/payload-key.pem \
+cp <received>/device-svid-key.pem \
     ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
-sudo docker cp margo-identity-service:/certs/ca.crt \
+cp <received>/ca.pem \
     ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
 
-sudo docker cp margo-identity-service:/tmp/ctt-wfm-svid/payload-cert.pem \
+# ── Device Supplier certs (CTT as mock WFM) ──────────────────────────────
+cp <received>/wfm-svid-cert.pem \
     ${CTT_REPO}/ctt-runner/device-supplier/certs/server-cert.pem
-sudo docker cp margo-identity-service:/tmp/ctt-wfm-svid/payload-key.pem \
+cp <received>/wfm-svid-key.pem \
     ${CTT_REPO}/ctt-runner/device-supplier/certs/server-key.pem
-sudo docker cp margo-identity-service:/certs/ca.crt \
+cp <received>/ca.pem \
     ${CTT_REPO}/ctt-runner/device-supplier/certs/svid-ca.pem
 
-sudo chmod 644 \
+chmod 644 \
     ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem \
     ${CTT_REPO}/ctt-runner/device-supplier/certs/*.pem
 ```
+
+> Rename files as needed — what matters is the destination path, not the
+> source filename. The MIS admin may use different naming conventions.
 
 #### Step 3 — Verify certs on the CTT machine
 
@@ -250,8 +233,8 @@ openssl x509 \
 
 ```
 Setup (one-time per MIS deployment):
-  □ MIS admin provisions: CTT device SVIDs (one per vendor WFM) + CTT WFM SVID + CA cert
-  □ Transfer all certs to CTT machine (Step 2 above)
+  □ Provide MIS admin with SPIFFE IDs for CTT (one device SVID per vendor WFM + one WFM SVID)
+  □ Receive cert files from MIS admin and place them in CTT fixture paths (Step 2 above)
   □ Verify all chains on CTT machine (Step 3 above)
   □ Confirm CTT machine can reach vendor WFM SBI ports (firewall / network)
   □ Share CTT's device SPIFFE ID with each WFM vendor (for their allowlist)
