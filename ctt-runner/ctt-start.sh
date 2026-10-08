@@ -1614,6 +1614,8 @@ _wfm_miaf_symphony() {
     # Use ctt-margo.org trust domain to match Symphony's symphony-api-margo.json MIS config.
     # CTT_DIR auto-installs device SVID to fixture paths.
     TRUST_DOMAIN="ctt-margo.org" CTT_DIR="$CONFORMANCE_DIR" bash "$mis_script"
+    # svid-gen.sh runs as sudo inside mis_script; fix ownership immediately so CTT can read the certs
+    sudo chown -R "${USER}:${USER}" "$real_dir" 2>/dev/null || true
 
     # Read the SPIFFE ID from the installed cert
     local device_spiffe_id=""

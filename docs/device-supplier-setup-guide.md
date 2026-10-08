@@ -122,6 +122,7 @@ x509svid-wfm/
 Copy to the cert directory and fix ownership:
 
 ```bash
+mkdir -p certs
 sudo chown margo:margo x509svid-wfm/*
 cp x509svid-wfm/payload-cert.pem certs/miaf-server-cert.pem
 cp x509svid-wfm/payload-key.pem  certs/miaf-server-key.pem

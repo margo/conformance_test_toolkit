@@ -361,6 +361,9 @@ WFM_CLIENT_SVID_DIR=$HOME/mis-deployment/x509svid-<wfm-id>-<client-id>
 ```bash
 sudo cp ${WFM_SVID_DIR}/payload-cert.pem  $HOME/symphony/api/certificates/
 sudo cp ${WFM_SVID_DIR}/payload-key.pem   $HOME/symphony/api/certificates/
+sudo chown margo:margo \
+    $HOME/symphony/api/certificates/payload-cert.pem \
+    $HOME/symphony/api/certificates/payload-key.pem
 
 # Verify the cert and key match (public keys must be identical):
 openssl x509 -in $HOME/symphony/api/certificates/payload-cert.pem -noout -pubkey | openssl md5
@@ -372,6 +375,7 @@ openssl ec  -in $HOME/symphony/api/certificates/payload-key.pem  -pubout   | ope
 
 ```bash
 sudo cp $HOME/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
+sudo chown margo:margo $HOME/symphony/api/mis/https-ca.crt
 ```
 
 **Step 5 — Add mis.margo.org to /etc/hosts:**
@@ -413,6 +417,7 @@ sudo cp ${WFM_CLIENT_SVID_DIR}/payload-key.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
 sudo cp $HOME/mis-deployment/certs/ca.crt \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
+sudo chown margo:margo ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
 sudo chmod 644 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
 ```
 
