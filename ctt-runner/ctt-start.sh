@@ -660,6 +660,48 @@ get_ctt_margo_version() {
     echo "1.0.0-rc.3"
 }
 
+# Validate MIAF cert fixtures before running scenarios.
+# Catches cert/key mismatches and wrong CA chains early with a clear message.
+validate_miaf_certs() {
+    local cert_dir="$1"
+    local errors=0
+
+    local svid_cert="$cert_dir/svid-cert.pem"
+    local svid_key="$cert_dir/svid-key.pem"
+    local svid_ca="$cert_dir/svid-ca.pem"
+
+    # All three files must exist
+    for f in "$svid_cert" "$svid_key" "$svid_ca"; do
+        if [[ ! -f "$f" ]]; then
+            error "MIAF cert missing: $f"
+        fi
+    done
+
+    # SVID cert and key must be a matching pair
+    local cert_pub key_pub
+    cert_pub=$(openssl x509 -in "$svid_cert" -noout -pubkey 2>/dev/null | openssl md5 2>/dev/null)
+    key_pub=$(openssl ec  -in "$svid_key"  -pubout 2>/dev/null | openssl md5 2>/dev/null)
+    if [[ -z "$cert_pub" || "$cert_pub" != "$key_pub" ]]; then
+        log "❌ SVID cert/key mismatch: $svid_cert and $svid_key are not a matching pair."
+        log "   Re-run mis.sh (or ctt-mis.sh) to regenerate and re-copy the SVID certs."
+        errors=$((errors + 1))
+    fi
+
+    # Trust bundle CA must verify the SVID cert
+    if ! openssl verify -CAfile "$svid_ca" "$svid_cert" >/dev/null 2>&1; then
+        log "❌ Trust bundle CA does not verify the SVID cert."
+        log "   $svid_ca did not sign $svid_cert."
+        log "   Ensure both files come from the same MIS issuance."
+        errors=$((errors + 1))
+    fi
+
+    if [[ $errors -gt 0 ]]; then
+        error "MIAF cert validation failed ($errors error(s)). Fix certs before running scenarios."
+    fi
+
+    log "✅ MIAF cert validation passed (cert/key match, CA chain OK)"
+}
+
 confirm_version_mismatch() {
     local claimed_app_version="$1"
     local ctt_margo_version
@@ -717,6 +759,8 @@ run_wfm_scenario_group() {
     else
         error "SVID certs not found at $miaf_dir — required for mtls:true steps"
     fi
+
+    validate_miaf_certs "$cert_dir"
 
     confirm_version_mismatch "$claimed_app_version"
 
@@ -776,6 +820,13 @@ run_wfm_scenario_group() {
 
     log "▶️  Running WFM scenarios from group: $group_name"
     log "📊 Report: $report_file"
+
+    # Repair ownership on paths that sudo-based setup (wfm.sh, cert copies) may
+    # have left owned by root — the node runner and ORAS both run as this user.
+    local current_user
+    current_user=$(id -un)
+    sudo chown -R "${current_user}:${current_user}" "$cert_dir" 2>/dev/null || true
+    sudo chown -R "${current_user}:${current_user}" "${HOME}/.docker" 2>/dev/null || true
 
     set +e
     local miaf_flags=()
@@ -1006,6 +1057,11 @@ execute_wfm_tests_with_group() {
         local report_file="$RUNNER_WFM/wfm-scenario-report-${report_suffix}_$(date +%Y%m%d_%H%M%S).html"
         log "📊 Report: $(basename "$report_file")"
 
+        local current_user
+        current_user=$(id -un)
+        sudo chown -R "${current_user}:${current_user}" "$cert_dir" 2>/dev/null || true
+        sudo chown -R "${current_user}:${current_user}" "${HOME}/.docker" 2>/dev/null || true
+
         set +e
         node "$scenario_runner" "$wfm_url" "$filtered_collection" "$report_file" "$cert_dir" "$group_name" "$group_version"
         local result=$?
@@ -1172,6 +1228,12 @@ execute_device_tests() {
         fi
     fi
     
+    # Repair ownership on cert paths that sudo-based setup may have left as root
+    local current_user
+    current_user=$(id -un)
+    sudo chown -R "${current_user}:${current_user}" "./certs" 2>/dev/null || true
+    sudo chown -R "${current_user}:${current_user}" "${HOME}/.docker" 2>/dev/null || true
+
     # Start mock server in background with MIAF mTLS enabled
     log "🚀 Starting Mock WFM Server (background)..."
     local cli_cert_dir="./certs"

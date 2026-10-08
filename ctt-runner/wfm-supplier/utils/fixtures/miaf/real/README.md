@@ -7,7 +7,7 @@ environment (`mis.margo.org:9443`, trust domain `margo.org`):
 - `client-svid-cert.pem` / `client-svid-key.pem` — a real X.509-SVID minted by
   that MIS via `scripts/lib/mis/svid-gen.sh --automated --principal wfm-client
   --spiffe-id spiffe://margo.org/margo/wfm/symphony-1/client/margo-ctt-device`
-  (90-day TTL, minted 2026-09-23). This is our conformance suite's identity
+  (expires 2027-01-06, minted 2026-09-23). This is our conformance suite's identity
   when acting as a WFM Client under Symphony's WFM (`symphony-1`).
 - `trust-bundle-ca.pem` — the trust domain's real root CA, extracted from
   `GET https://mis.margo.org:9443/.well-known/spiffe/bundle.json` via
