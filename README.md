@@ -56,7 +56,7 @@ always reads as *expected vs. actual*, not just pass/fail.
 conformance_test_toolkit/
 ├── ctt-creator/               # Test-case authoring and group management
 │   ├── ctt-start.sh           #   entry point: create/edit test groups
-│   ├── common/scripts/        #   shared helpers (e.g. provision-mis-identity.sh)
+│   ├── common/scripts/        #   shared helpers
 │   ├── wfm-supplier/          #   WFM group authoring scripts + utils/groups/
 │   ├── device-supplier/       #   Device group authoring scripts + utils/groups/
 │   └── app-supplier/          #   App Package group authoring
@@ -110,13 +110,14 @@ declarative JSON format automatically and drives it through
 `run_wfm_scenarios.js` directly (no Newman involved) — see
 `run_wfm_scenario_group()` in `run-tests.sh` if you need to see exactly how.
 
-**Provisioning an identity for MIAF testing:** `ctt-creator/common/scripts/provision-mis-identity.sh`
-mints a client X.509-SVID from a real Margo Identity Service (MIS), registers
-it with the WFM's accepted-client policy, and fetches the trust bundle — the
-three one-time setup steps MIAF requires before any mTLS scenario can run.
-This is a demo/self-test convenience for when the "WFM under test" is a
-`margo/sandbox`-based reference deployment; a real vendor engagement brings
-its own already-provisioned identity instead.
+**Provisioning an identity for MIAF testing:** `ctt-runner/ctt-mis.sh`
+generates a local CA and X.509-SVIDs (one WFM identity, one device/WFM-client
+identity) using OpenSSL — no external SPIFFE server required.  Run it once
+from the `ctt-start.sh` menu (WFM Supplier → Setup MIAF Identity) or directly;
+it automatically installs the CTT fixtures under
+`ctt-runner/wfm-supplier/utils/fixtures/miaf/real/`.
+For vendor WFMs with their own SPIFFE infrastructure, copy the externally
+issued cert + key + CA into `miaf/real/` manually instead.
 
 ---
 

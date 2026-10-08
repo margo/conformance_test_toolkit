@@ -1511,11 +1511,125 @@ EOF
 }
 
 wfm_setup_miaf_identity() {
-    local setup_script="$CONFORMANCE_DIR/wfm-supplier/setup-miaf-identity.sh"
-    if [[ ! -f "$setup_script" ]]; then
-        error "setup-miaf-identity.sh not found at $setup_script"
+    local mis_script="$SCRIPT_DIR/ctt-mis.sh"
+    if [[ ! -f "$mis_script" ]]; then
+        error "ctt-mis.sh not found at $mis_script"
     fi
-    bash "$setup_script"
+
+    while true; do
+        echo ""
+        echo "┌─────────────────────────────────────────────────────────────────────────┐"
+        echo "│  MIAF Identity Setup — Which WFM are you testing against?               │"
+        echo "├─────────────────────────────────────────────────────────────────────────┤"
+        echo "│  1) Margo sandbox / Symphony   (CTT generates identity; you add it to  │"
+        echo "│                                 Symphony via its CLI option 7)          │"
+        echo "│  2) Vendor WFM (own SPIFFE)    (vendor's admin issues CTT a SVID)      │"
+        echo "│  3) Self-contained / no WFM    (CTT mock WFM; all certs self-signed)   │"
+        echo "│  B) Back                                                                 │"
+        echo "└─────────────────────────────────────────────────────────────────────────┘"
+        echo ""
+        read -p "Select option (1-3 or B): " miaf_choice < /dev/tty
+
+        case "${miaf_choice,,}" in
+            1) _wfm_miaf_symphony "$mis_script"; return ;;
+            2) _wfm_miaf_vendor;                 return ;;
+            3) CTT_DIR="$CONFORMANCE_DIR" bash "$mis_script"; return ;;
+            b|back) return ;;
+            *) warn "Invalid option — enter 1, 2, 3, or B" ;;
+        esac
+    done
+}
+
+_wfm_miaf_symphony() {
+    local mis_script="$1"
+    local real_dir="$CONFORMANCE_DIR/wfm-supplier/utils/fixtures/miaf/real"
+
+    echo ""
+    info "Generating CTT device identity for Symphony testing..."
+    info "Using trust domain: ctt-margo.org (matches Symphony's MIS config)"
+    echo ""
+
+    # Use ctt-margo.org trust domain to match Symphony's symphony-api-margo.json MIS config.
+    # CTT_DIR auto-installs device SVID to fixture paths.
+    TRUST_DOMAIN="ctt-margo.org" CTT_DIR="$CONFORMANCE_DIR" bash "$mis_script"
+
+    # Read the SPIFFE ID from the installed cert
+    local device_spiffe_id=""
+    if [[ -f "$real_dir/client-svid-cert.pem" ]]; then
+        device_spiffe_id=$(openssl x509 \
+            -in "$real_dir/client-svid-cert.pem" \
+            -text -noout 2>/dev/null \
+            | grep -oE 'URI:spiffe://[^[:space:]]+' | head -1 | sed 's/URI://')
+    fi
+
+    echo ""
+    echo "════════════════════════════════════════════════════════════════"
+    echo "  CTT identity generated."
+    echo ""
+    [[ -n "$device_spiffe_id" ]] \
+        && echo "  Device SPIFFE ID: ${device_spiffe_id}" \
+        && echo "  (Add this to Symphony via wfm.sh → option 7)"
+    echo ""
+    echo "  Before starting Symphony, complete the manual Symphony-side"
+    echo "  config steps in docs/wfm-supplier-setup-guide.md → Path 1."
+    echo "════════════════════════════════════════════════════════════════"
+}
+
+_wfm_miaf_vendor() {
+    local real_dir="$CONFORMANCE_DIR/wfm-supplier/utils/fixtures/miaf/real"
+    mkdir -p "$real_dir"
+
+    echo ""
+    echo "════════════════════════════════════════════════════════════════"
+    echo "  Vendor WFM — SPIFFE Identity Setup"
+    echo "════════════════════════════════════════════════════════════════"
+    echo ""
+    echo "  The vendor's SPIFFE administrator must issue CTT a client SVID."
+    echo "  Ask them for three files, then enter the paths below."
+    echo ""
+    echo "  Files needed from the vendor's SPIFFE admin:"
+    echo "    client-svid-cert.pem  — CTT's X.509-SVID (SPIFFE URI SAN)"
+    echo "    client-svid-key.pem   — private key for the above cert"
+    echo "    trust-bundle-ca.pem   — root CA their MIS uses to sign SVIDs"
+    echo ""
+
+    local cert_path key_path ca_path
+    read -p "  Path to client SVID cert  : " cert_path < /dev/tty
+    [[ -f "$cert_path" ]] || { warn "File not found: $cert_path"; return 1; }
+
+    read -p "  Path to client SVID key   : " key_path < /dev/tty
+    [[ -f "$key_path" ]] || { warn "File not found: $key_path"; return 1; }
+
+    read -p "  Path to trust bundle CA   : " ca_path < /dev/tty
+    [[ -f "$ca_path" ]] || { warn "File not found: $ca_path"; return 1; }
+
+    cp "$cert_path" "$real_dir/client-svid-cert.pem"
+    cp "$key_path"  "$real_dir/client-svid-key.pem"
+    cp "$ca_path"   "$real_dir/trust-bundle-ca.pem"
+
+    echo ""
+    if openssl verify -CAfile "$real_dir/trust-bundle-ca.pem" \
+            "$real_dir/client-svid-cert.pem" >/dev/null 2>&1; then
+        success "Chain verified — identity installed to ${real_dir}/"
+    else
+        warn "Chain verify failed — cert and CA may be from different sources. Check with vendor's SPIFFE admin."
+    fi
+
+    # Show the SPIFFE ID so the user can share it with the vendor's WFM admin
+    local ctt_spiffe_id=""
+    ctt_spiffe_id=$(openssl x509 \
+        -in "$real_dir/client-svid-cert.pem" \
+        -text -noout 2>/dev/null \
+        | grep -oE 'URI:spiffe://[^[:space:]]+' | head -1 | sed 's/URI://')
+
+    echo ""
+    echo "  ─────────────────────────────────────────────────────────────"
+    echo "  Share this SPIFFE ID with the vendor's WFM admin so they can"
+    echo "  authorize CTT as a client in their WFM's allowlist:"
+    echo ""
+    [[ -n "$ctt_spiffe_id" ]] && echo "     ${ctt_spiffe_id}"
+    echo "  ─────────────────────────────────────────────────────────────"
+    echo ""
 }
 
 run_wfm_flow() {

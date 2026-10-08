@@ -118,10 +118,12 @@ node scripts/run_wfm_scenarios.js \
 
 ## MIAF Identity Setup
 
-Before running identity tests, provision SVID certificates:
+Before running identity tests, generate SVID certificates:
 
 ```bash
-../../common/scripts/provision-mis-identity.sh
+bash ctt-runner/ctt-mis.sh
 ```
 
-Writes certs to `ctt-runner/wfm-supplier/utils/certs/`.
+Generates a local CA and X.509-SVIDs, then installs them to
+`ctt-runner/wfm-supplier/utils/fixtures/miaf/real/` automatically.
+See `docs/wfm-supplier-setup-guide.md` for full details.

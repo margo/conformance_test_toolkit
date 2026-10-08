@@ -67,13 +67,20 @@ go run ./scripts/... \
 
 ## MIAF Identity Setup
 
-Before running identity tests, provision an X.509-SVID:
+Before running identity tests, generate SVID certificates:
 
 ```bash
-../../common/scripts/provision-mis-identity.sh
+bash ctt-runner/ctt-mis.sh
 ```
 
-This writes `ctt-runner/device-supplier/utils/certs/svid-cert.pem`, `svid-key.pem`, and `svid-ca.pem`.
+Generates a local CA and X.509-SVIDs using OpenSSL.  For the device-supplier
+persona, copy the WFM identity into place:
+
+```bash
+cp ~/conformance-identities/wfm-svid-cert.pem  ctt-runner/device-supplier/certs/server-cert.pem
+cp ~/conformance-identities/wfm-svid-key.pem   ctt-runner/device-supplier/certs/server-key.pem
+cp ~/conformance-identities/ca-cert.pem         ctt-runner/device-supplier/certs/svid-ca.pem
+```
 
 ## Useful Flags (CTT Runner)
 

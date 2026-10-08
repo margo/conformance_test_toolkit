@@ -31,4 +31,4 @@ Select the persona you want to author or update test groups for. The CLI will gu
 
 ## Common
 
-`common/scripts/provision-mis-identity.sh` — provisions a MIAF/SPIFFE identity (X.509-SVID) used by both device-supplier and wfm-supplier runner tests for mTLS.
+`common/scripts/` — shared helper scripts used across personas.
