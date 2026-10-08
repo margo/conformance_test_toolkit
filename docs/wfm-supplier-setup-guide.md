@@ -98,8 +98,7 @@ The sections below document each path in detail.
 
 ### Path 1 — External / Centralized MIS
 
-Use this path when an operator or event organizer deploys a shared MIS and
-issues SVIDs to all participants. The MIS admin mints certs for CTT; you place
+Use this path when a centralized MIS is deployed. The MIS admin mints certs for CTT; you place
 them in the fixture paths below. Each vendor WFM admin adds CTT's SPIFFE ID to
 their WFM's authorized-clients list.
 
