@@ -374,6 +374,7 @@ sudo -E bash /home/margo/sandbox/scripts/wfm.sh
 **Step 6 — Copy MIS-generated certs to CTT fixture paths:**
 
 ```bash
+# DEV_SVID_DIR was set in Step 2 above
 sudo cp ${DEV_SVID_DIR}/payload-cert.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
 sudo cp ${DEV_SVID_DIR}/payload-key.pem \
