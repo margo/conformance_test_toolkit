@@ -1,8 +1,8 @@
 {
   "name": "core",
-  "version": "1.2.1-rc2",
+  "version": "1.0.0-rc.3",
   "persona": "wfm-supplier",
-  "description": "rc2 grp",
+  "description": "WFM Supplier core conformance scenarios",
   "FolderPath": [
     "../test-suites/wfm-supplier/core/test-cases"
   ],
@@ -44,6 +44,7 @@
     "wfm-identity-svid-refresh",
     "wfm-identity-tb-1",
     "wfm-identity-tb-2",
+    "wfm-identity-tb-3",
     "wfm-identity-trust-bundle",
     "wfm-multi-component-deployment",
     "wfm-otel-cap-1",

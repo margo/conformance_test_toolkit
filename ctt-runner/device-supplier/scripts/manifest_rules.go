@@ -25,7 +25,7 @@ import (
 // else with an RFC 9421-signed GET for the legacy flow.
 func signedGET(endpoint string) (int, []byte, error) {
 	if mc, err := mtlsClient(); err == nil {
-		resp, err := mc.Get(WFMServer + endpoint)
+		resp, err := mc.Get(MIAFServer + endpoint)
 		if err != nil {
 			return 0, nil, err
 		}

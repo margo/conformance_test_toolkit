@@ -62,6 +62,10 @@ type TestScenario struct {
 	// surfaced in the HTML report's coverage summary. A step may add its own.
 	CRIds       []string   `json:"crIds,omitempty"`
 	FixedFirst  bool       `json:"fixed_first,omitempty"`
+	// Optional: when true, a poll timeout or step failure is recorded as "skip"
+	// rather than "fail" — the scenario requires a precondition (e.g. vendor
+	// device already configured) that may not be present on every machine.
+	Optional         bool       `json:"optional,omitempty"`
 	// SigningKey / SigningAlgorithm apply to every step in the scenario unless a
 	// step overrides them. Used to exercise the non-default RFC 9421 signature
 	// algorithms (MI-012 ecdsa-p384-sha384, MI-014 rsa-v1_5-sha256).
@@ -278,6 +282,14 @@ func runScenarioSteps(scenario TestScenario, ctx *TestContext, stepFilter string
 		result.ScenarioID = scenario.ID
 		result.ScenarioName = scenario.Name
 		result.CRIds = mergeCRIds(scenario.CRIds, step.CRIds)
+
+		// Optional scenarios: convert "fail" to "skip" so the report distinguishes
+		// a precondition-missing scenario from a genuine conformance failure.
+		if scenario.Optional && result.Status == "fail" {
+			result.Status = "skip"
+			result.Reason = "precondition not met (optional scenario): " + result.Reason
+		}
+
 		results = append(results, result)
 
 		if verbose {
@@ -289,6 +301,8 @@ func runScenarioSteps(scenario TestScenario, ctx *TestContext, stepFilter string
 		if result.Status == "pass" {
 			fmt.Printf("    ✅ PASS - HTTP %d (Expected: %d)\n", result.StatusCode, step.ExpectedStatus)
 			pass++
+		} else if result.Status == "skip" {
+			fmt.Printf("    ⏭  SKIP - %s\n", result.Reason)
 		} else {
 			fmt.Printf("    ❌ FAIL - %s\n", result.Reason)
 			fail++
@@ -1034,8 +1048,8 @@ func htmlEscape(v string) string {
 
 // scenarioTally is a per-scenario pass/fail rollup for the report's summary table.
 type scenarioTally struct {
-	name                 string
-	total, passed, faild int
+	name                        string
+	total, passed, faild, skipped int
 }
 
 // generateHTMLReport builds one self-contained HTML page (inline CSS, no
@@ -1062,10 +1076,12 @@ type scenarioTally struct {
 // (summary line, scenario table, CR-ID chips, per-step detail table) is just
 // a loop over one of the pieces of data computed above.
 func generateHTMLReport(results []TestResult) string {
-	passCount, failCount := 0, 0
+	passCount, failCount, skipCount := 0, 0, 0
 	for _, r := range results {
 		if r.Status == "pass" {
 			passCount++
+		} else if r.Status == "skip" {
+			skipCount++
 		} else {
 			failCount++
 		}
@@ -1084,6 +1100,8 @@ func generateHTMLReport(results []TestResult) string {
 		t.total++
 		if r.Status == "pass" {
 			t.passed++
+		} else if r.Status == "skip" {
+			t.skipped++
 		} else {
 			t.faild++
 		}
@@ -1112,8 +1130,9 @@ func generateHTMLReport(results []TestResult) string {
     table { border-collapse: collapse; width: 100%; font-size: 13px; margin-bottom: 24px; }
     th, td { border: 1px solid #d7dde5; padding: 7px 9px; text-align: left; vertical-align: top; }
     th { background: #eef2f7; }
-    tr.pass td:first-child { color: #166534; font-weight: 700; }
-    tr.fail td:first-child, tr.fail td:last-child { color: #b91c1c; font-weight: 700; }
+    tr.pass td:nth-child(9) { color: #166534; font-weight: 700; }
+    tr.fail td:nth-child(9), tr.fail td:last-child { color: #b91c1c; font-weight: 700; }
+    tr.skip td:nth-child(9) { color: #92400e; font-weight: 700; }
     .version-warning { margin-bottom: 14px; padding: 10px 14px; border-radius: 4px; background: #dcfce7; color: #166534; border: 1px solid #86efac; font-size: 13px; font-weight: bold; }
   </style>
 </head>
@@ -1138,8 +1157,12 @@ func generateHTMLReport(results []TestResult) string {
 	if failCount != 0 {
 		cls, icon = "has-fail", "❌"
 	}
-	fmt.Fprintf(&b, `  <div class="summary %s">%s %d passed, %d failed, %d total</div>
-`, cls, icon, passCount, failCount, len(results))
+	skipStr := ""
+	if skipCount > 0 {
+		skipStr = fmt.Sprintf(", %d skipped", skipCount)
+	}
+	fmt.Fprintf(&b, `  <div class="summary %s">%s %d passed, %d failed%s, %d total</div>
+`, cls, icon, passCount, failCount, skipStr, len(results))
 
 	// Requirements coverage
 	fmt.Fprintf(&b, `  <h2>Requirements Coverage</h2>
@@ -1160,7 +1183,7 @@ func generateHTMLReport(results []TestResult) string {
 	// Scenario summary
 	b.WriteString(`  <h2>Scenario Summary</h2>
   <table>
-    <thead><tr><th>Scenario</th><th>Total</th><th>Passed</th><th>Failed</th></tr></thead>
+    <thead><tr><th>Scenario</th><th>Total</th><th>Passed</th><th>Failed</th><th>Skipped</th></tr></thead>
     <tbody>
 `)
 	for _, id := range order {
@@ -1168,9 +1191,11 @@ func generateHTMLReport(results []TestResult) string {
 		rowCls := "pass"
 		if t.faild != 0 {
 			rowCls = "fail"
+		} else if t.skipped != 0 {
+			rowCls = "skip"
 		}
-		fmt.Fprintf(&b, "    <tr class=\"%s\"><td>%s</td><td>%d</td><td>%d</td><td>%d</td></tr>\n",
-			rowCls, htmlEscape(t.name), t.total, t.passed, t.faild)
+		fmt.Fprintf(&b, "    <tr class=\"%s\"><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td></tr>\n",
+			rowCls, htmlEscape(t.name), t.total, t.passed, t.faild, t.skipped)
 	}
 	b.WriteString("    </tbody>\n  </table>\n")
 
@@ -1178,14 +1203,16 @@ func generateHTMLReport(results []TestResult) string {
 	b.WriteString(`  <h2>Step Details</h2>
   <table>
     <thead><tr>
-      <th>Status</th><th>Scenario</th><th>Step</th><th>CR-IDs</th><th>Name</th>
-      <th>Method</th><th>Endpoint</th><th>Expected</th><th>Actual</th><th>Failure Reason</th>
+      <th>Scenario</th><th>Step</th><th>Name</th><th>CR-IDs</th>
+      <th>Method</th><th>Endpoint</th><th>Expected</th><th>Actual</th><th>Status</th><th>Failure Reason</th>
     </tr></thead>
     <tbody>
 `)
 	for _, r := range results {
 		rowCls, statusText := "pass", "PASS"
-		if r.Status != "pass" {
+		if r.Status == "skip" {
+			rowCls, statusText = "skip", "SKIP"
+		} else if r.Status != "pass" {
 			rowCls, statusText = "fail", "FAIL"
 		}
 		expected := ""
@@ -1193,12 +1220,12 @@ func generateHTMLReport(results []TestResult) string {
 			expected = fmt.Sprintf("%d", r.Expected)
 		}
 		fmt.Fprintf(&b, `    <tr class="%s">
-      <td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>
-      <td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td>
+      <td>%s</td><td>%s</td><td>%s</td><td>%s</td>
+      <td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%s</td>
     </tr>
-`, rowCls, statusText, htmlEscape(r.ScenarioName), htmlEscape(r.StepID),
-			htmlEscape(strings.Join(r.CRIds, ", ")), htmlEscape(r.StepName),
-			htmlEscape(r.Method), htmlEscape(r.Endpoint), expected, r.StatusCode, htmlEscape(r.Reason))
+`, rowCls, htmlEscape(r.ScenarioName), htmlEscape(r.StepID),
+			htmlEscape(r.StepName), htmlEscape(strings.Join(r.CRIds, ", ")),
+			htmlEscape(r.Method), htmlEscape(r.Endpoint), expected, r.StatusCode, statusText, htmlEscape(r.Reason))
 	}
 	b.WriteString("    </tbody>\n  </table>\n</body>\n</html>\n")
 

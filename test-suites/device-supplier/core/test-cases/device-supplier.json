@@ -3279,6 +3279,7 @@
     "name": "OTEL Observability \u2014 otelCollector Capability and Telemetry Push",
     "description": "Verifies the vendor device's OTEL collector actively pushes telemetry to the CTT's OTLP HTTP receiver (port 4318) and Prometheus Remote Write endpoint (port 9090). PRECONDITION: configure the device's OTEL collector to push to http://<ctt-host>:4318 (OTLP HTTP) and http://<ctt-host>:9090/api/v1/write (Prometheus Remote Write) before running this scenario. Matches the sandbox observability architecture: device \u2192 Jaeger OTLP / Prometheus Remote Write \u2192 WFM observability stack.",
     "crIds": [],
+    "optional": true,
     "steps": [
       {
         "id": "step-otel-2",

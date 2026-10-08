@@ -198,40 +198,6 @@ const DEVICE_CAPABILITIES_BODY = {
 };
 
 const POSTMAN_ENDPOINT_RULES = {
-  'GET /api/v1/onboarding/certificate': {
-    skip_signing: true,
-    validations: [{ field: 'certificate', operation: 'is_string' }],
-  },
-  'POST /api/v1/onboarding': {
-    body: {
-      apiVersion: 'onboarding.margo.org/v1alpha1',
-      kind: 'OnboardingRequest',
-      certificate: './certs/device-cert.pem',
-    },
-    // deviceId: this suite models one device per client, so the device shares the
-    // client's identity. Spec allows deviceId to differ from clientId (e.g. a gateway
-    // fronting multiple child devices); revisit if/when a multi-device scenario is added.
-    extract_context: { clientId: 'clientId', deviceId: 'clientId' },
-    validations: [{ field: 'clientId', operation: 'is_string' }],
-  },
-  // Spec path is /clients/{clientId}/capabilities/{deviceId} — verified against Symphony
-  // directly (both the old no-deviceId path and this one return 201; the spec's is correct
-  // and matches the currently-published API version).
-  'POST /api/v1/clients/{clientId}/capabilities/{deviceId}': {
-    body: DEVICE_CAPABILITIES_BODY,
-  },
-  'PUT /api/v1/clients/{clientId}/capabilities/{deviceId}': {
-    body: DEVICE_CAPABILITIES_BODY,
-  },
-  // Same endpoint without the {deviceId} segment — the shape the baseline
-  // (user1) Postman collection uses. Without this, capability items fall back to
-  // the Portman placeholder body and get a spurious 400 "invalid API version".
-  'POST /api/v1/clients/{clientId}/capabilities': {
-    body: DEVICE_CAPABILITIES_BODY,
-  },
-  'PUT /api/v1/clients/{clientId}/capabilities': {
-    body: DEVICE_CAPABILITIES_BODY,
-  },
   'GET /api/v1/clients/{clientId}/deployments': {
     extract_context: {
       deploymentId: 'deployments.0.deploymentId',
@@ -746,7 +712,11 @@ function request(method, url, headers, bodyText, mtls) {
       path: parsedUrl.pathname + parsedUrl.search,
       headers,
       ca: (mtls && mtls.ca) || caCertificate,
-      rejectUnauthorized: false,
+      rejectUnauthorized: !!(mtls && mtls.ca),
+      // X.509-SVIDs carry only a SPIFFE URI SAN, never a DNS/IP SAN, so standard
+      // hostname verification always fails. Skip hostname check but keep CA chain
+      // verification — this is the correct approach for SPIFFE-based mTLS.
+      ...(mtls && mtls.ca ? { checkServerIdentity: () => undefined } : {}),
       timeout: 30000,
     };
     if (mtls) {
@@ -858,6 +828,9 @@ function simpleGet(url) {
         port: u.port || 443,
         path: u.pathname + u.search,
         headers: { Accept: 'application/json' },
+        // rejectUnauthorized: false intentional here — simpleGet is only used
+        // for the --fetch-trust-bundle setup command against MIS, where the MIS
+        // HTTPS CA is not yet available to the caller.
         rejectUnauthorized: false,
         timeout: 15000,
       },
@@ -1336,7 +1309,13 @@ async function performHTTPStep(step) {
         `see wfm-supplier/fixtures/miaf/README.md`
       );
     }
-    const response = await request(method, url, headers, bodyText, miafIdentity);
+    // mtls_wrong_server_ca: true → MIAF-002 negative test: present real client SVID
+    // but verify the WFM's server cert against the wrong CA (device self-signed CA).
+    // The WFM's SVID cannot chain to the device CA → TLS handshake fails → transport error.
+    const identity = step.mtls_wrong_server_ca
+      ? { cert: miafIdentity.cert, key: miafIdentity.key, ca: caCertificate }
+      : miafIdentity;
+    const response = await request(method, url, headers, bodyText, identity);
     const parsed = parseBody(response.body);
     const responseSource = { ...parsed, _headers: response.headers, _body: response.body };
     return { method, endpoint, bodyText, response, responseSource };
@@ -1634,7 +1613,6 @@ function writeReport() {
     .map(
       (r) => `
     <tr class="${r.passed ? 'pass' : 'fail'}">
-      <td>${htmlEscape(r.passed ? 'PASS' : 'FAIL')}</td>
       <td>${htmlEscape(r.scenarioName || r.scenario)}</td>
       <td>${htmlEscape(r.step)}</td>
       <td>${htmlEscape(r.name)}</td>
@@ -1643,6 +1621,7 @@ function writeReport() {
       <td>${htmlEscape(r.endpoint)}</td>
       <td>${htmlEscape(r.expected)}</td>
       <td>${htmlEscape(r.actual)}</td>
+      <td>${htmlEscape(r.passed ? 'PASS' : 'FAIL')}</td>
       <td>${htmlEscape(r.reason)}</td>
     </tr>`
     )
@@ -1678,8 +1657,8 @@ function writeReport() {
     table { border-collapse: collapse; width: 100%; font-size: 13px; margin-bottom: 24px; }
     th, td { border: 1px solid #d7dde5; padding: 7px 9px; text-align: left; vertical-align: top; }
     th { background: #eef2f7; }
-    tr.pass td:first-child { color: #166534; font-weight: 700; }
-    tr.fail td:first-child, tr.fail td:last-child { color: #b91c1c; font-weight: 700; }
+    tr.pass td:nth-child(9) { color: #166534; font-weight: 700; }
+    tr.fail td:nth-child(9), tr.fail td:last-child { color: #b91c1c; font-weight: 700; }
     .scenario-summary td:nth-child(4) { color: #b91c1c; }
     tr.pass.scenario-summary td:nth-child(4) { color: inherit; }
     .version-warning { margin-bottom: 14px; padding: 10px 14px; border-radius: 4px; background: #dcfce7; color: #166534; border: 1px solid #86efac; font-size: 13px; font-weight: bold; }
@@ -1731,8 +1710,8 @@ function writeReport() {
   <table>
     <thead>
       <tr>
-        <th>Status</th><th>Scenario</th><th>Step</th><th>Name</th><th>CR-IDs</th>
-        <th>Method</th><th>Endpoint</th><th>Expected</th><th>Actual</th><th>Failure Reason</th>
+        <th>Scenario</th><th>Step</th><th>Name</th><th>CR-IDs</th>
+        <th>Method</th><th>Endpoint</th><th>Expected</th><th>Actual</th><th>Status</th><th>Failure Reason</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>

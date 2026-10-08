@@ -258,8 +258,8 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"[GET]::.../deployments - Wrong Accept header returns 406 (or 400/500 if not implemented)\", function () {",
-              "    pm.expect([400, 406, 500]).to.include(pm.response.code);",
+              "pm.test(\"[GET]::.../deployments - Wrong Accept header returns 406\", function () {",
+              "    pm.expect(pm.response.code).to.equal(406);",
               "});"
             ]
           }
