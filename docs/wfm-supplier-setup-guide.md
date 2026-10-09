@@ -44,7 +44,16 @@ CTT (device-agent role)          Your WFM
 | jq | any | group file parsing; `apt install jq` / `brew install jq` |
 | bash | 4+ | macOS ships bash 3 — install bash 5 via Homebrew |
 
-Clone or check out the repo, then verify:
+Clone the repo and check out the conformance branch:
+
+```bash
+mkdir -p ~/workspace && cd ~/workspace
+git clone https://github.com/margo/conformance_test_toolkit.git
+cd conformance_test_toolkit
+git checkout feature/multi-persona-conformance
+```
+
+Then verify tooling:
 
 ```bash
 node --version
@@ -317,23 +326,19 @@ where the files come from.
 
 #### Path 3A — Using sandbox mis.sh (simpler, recommended)
 
-> **Note:** `mis.sh` uses sudo internally, so it always writes output to
-> `/root/mis-deployment/` regardless of how you invoke it. Run the `sudo chown`
-> command in Step 1 immediately after generation to regain access.
-
 **Step 1 — Generate identity via sandbox mis.sh:**
 
 ```bash
 bash /home/margo/sandbox/scripts/mis.sh
 # Follow prompts to generate WFM SVID + device SVID
 
-# mis.sh writes as root — fix ownership immediately
-sudo chown -R margo:margo /root/mis-deployment
+# mis.sh creates ~/mis-deployment/ but with root ownership — fix it:
+sudo chown -R margo:margo ~/mis-deployment
 ```
 
 **Step 2 — Find the output directories from mis.sh:**
 
-mis.sh writes SVIDs into `/root/mis-deployment/` in directories named after
+mis.sh writes SVIDs into `~/mis-deployment/` in directories named after
 the WFM ID and client ID you entered during generation:
 
 ```
@@ -344,17 +349,17 @@ x509svid-<wfm-id>-<client-id> ← CTT's device SVID (client identity)
 Check what was generated:
 
 ```bash
-ls /root/mis-deployment/ | grep x509svid
+ls ~/mis-deployment/ | grep x509svid
 ```
 
 Set variables for the rest of the steps:
 
 ```bash
-WFM_SVID_DIR=/root/mis-deployment/x509svid-<wfm-id>
-WFM_CLIENT_SVID_DIR=/root/mis-deployment/x509svid-<wfm-id>-<client-id>
-# Example: if wfm-id="wfm", client-id="wfm-client":
-#   WFM_SVID_DIR=/root/mis-deployment/x509svid-wfm
-#   WFM_CLIENT_SVID_DIR=/root/mis-deployment/x509svid-wfm-wfm-client
+WFM_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>
+WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>-<client-id>
+# Example: if wfm-id="wfm", client-id="wfmclient":
+#   WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
+#   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfmclient
 ```
 
 **Step 3 — Place WFM SVID & key in Symphony's certificates directory:**
@@ -375,7 +380,7 @@ openssl ec  -in $HOME/symphony/api/certificates/payload-key.pem  -pubout   | ope
 **Step 4 — Place MIS HTTPS CA in Symphony's mis directory:**
 
 ```bash
-sudo cp /root/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
+sudo cp ~/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
 sudo chown margo:margo $HOME/symphony/api/mis/https-ca.crt
 ```
 
@@ -416,7 +421,7 @@ sudo cp ${WFM_CLIENT_SVID_DIR}/payload-cert.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
 sudo cp ${WFM_CLIENT_SVID_DIR}/payload-key.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
-sudo cp /root/mis-deployment/certs/ca.crt \
+sudo cp ~/mis-deployment/certs/ca.crt \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
 sudo chown margo:margo ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
 sudo chmod 644 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
@@ -432,10 +437,10 @@ openssl verify \
 # → client-svid-cert.pem: OK
 
 # 2. MIS HTTPS server cert is reachable and chains to the same CA:
-openssl verify \
-    -CAfile /root/mis-deployment/certs/https-ca.crt \
-    <(echo | openssl s_client -connect 127.0.0.1:9443 -quiet 2>/dev/null)
-# → stdin: OK  (if this fails, re-run mis.sh to regenerate certs)
+echo | openssl s_client \
+    -connect 127.0.0.1:9443 \
+    -CAfile ~/mis-deployment/certs/https-ca.crt 2>&1 | grep "Verify return code"
+# → Verify return code: 0 (ok)  (if non-zero, re-run mis.sh to regenerate certs)
 ```
 
 **Step 9 — Start Symphony:**
@@ -603,13 +608,13 @@ You will see an interactive menu. Select:
 Then:
 
 ```
-2) Run scenario group tests
+2) Functional tests   (Group-based test management)
 ```
 
 Then select the group. For the full WFM conformance test set:
 
 ```
-core  (wfm-supplier/core)
+3) core  (wfm-supplier/core)
 ```
 
 ### Enter your WFM endpoints
@@ -810,14 +815,14 @@ Phase 1 — Identity (once per WFM, re-run only if cert expires)
   □ Verify: openssl verify -CAfile .../trust-bundle-ca.pem .../client-svid-cert.pem → OK
 
   Path 3A — Sandbox / Symphony MIS (mis.sh):
-  □ bash /home/margo/sandbox/scripts/mis.sh → 6) Generate SVID (WFM SVID + device SVID)
-  □ sudo chown -R margo:margo /root/mis-deployment
-  □ ls /root/mis-deployment/ | grep x509svid   (note the directory names)
-  □ sudo cp /root/mis-deployment/x509svid-<wfm-id>/payload-cert.pem + payload-key.pem → $HOME/symphony/api/certificates/
-  □ sudo cp /root/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
+  □ bash /home/margo/sandbox/scripts/mis.sh → follow prompts (WFM SVID + device SVID)
+  □ sudo chown -R margo:margo ~/mis-deployment
+  □ ls ~/mis-deployment/ | grep x509svid   (note the directory names)
+  □ sudo cp ~/mis-deployment/x509svid-<wfm-id>/payload-cert.pem + payload-key.pem → $HOME/symphony/api/certificates/
+  □ sudo cp ~/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
   □ sudo -E bash wfm.sh → 7 → 1 → add CTT's device SPIFFE ID
-  □ sudo cp /root/mis-deployment/x509svid-<wfm-id>-<client-id>/payload-cert.pem + payload-key.pem → ctt-runner/wfm-supplier/utils/fixtures/miaf/real/
-  □ sudo cp /root/mis-deployment/certs/ca.crt → trust-bundle-ca.pem
+  □ sudo cp ~/mis-deployment/x509svid-<wfm-id>-<client-id>/payload-cert.pem + payload-key.pem → ctt-runner/wfm-supplier/utils/fixtures/miaf/real/
+  □ sudo cp ~/mis-deployment/certs/ca.crt → trust-bundle-ca.pem
   □ sudo -E bash wfm.sh → 3) Symphony: Start
 
   Path 3B — Sandbox / Symphony MIS (ctt-mis.sh, no MIS needed):
@@ -836,7 +841,7 @@ Phase 1 — Identity (once per WFM, re-run only if cert expires)
 
 Phase 2 — Run (repeat for each test run)
   □ bash ctt-runner/ctt-start.sh
-  □ Select: 1) WFM Supplier -> 2. Run scenario group tests -> core
+  □ Select: 1) WFM Supplier → 2) Functional tests → 3) core
   □ Enter WFM SBI URL (mTLS port, e.g. https://localhost:8084/v1alpha2/margo)
   □ Press Enter for MIAF URL (same port unless WFM splits them)
   □ Multi-component prompts: press Enter x3 for Symphony, or enter NBI URL/creds
