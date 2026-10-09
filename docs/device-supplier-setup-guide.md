@@ -108,67 +108,58 @@ If not running, start it:
 bash ~/sandbox/scripts/mis.sh docker start-docker
 ```
 
-#### Step 2 — Generate SVID for the mock WFM server
+#### Step 2 — Generate SVIDs via sandbox mis.sh
 
-The mock WFM presents this cert as its TLS identity on port 3003.
+Run `mis.sh` once to generate both the WFM server SVID and the CTT device SVID:
+
+```bash
+bash /home/margo/sandbox/scripts/mis.sh
+# Follow the prompts to create a WFM SVID and a client/device SVID
+```
+
+`mis.sh` creates `~/mis-deployment/` owned by root — fix ownership:
+
+```bash
+sudo chown -R $USER:$USER ~/mis-deployment
+```
+
+#### Step 3 — Find the output directories and copy to certs/
+
+```bash
+ls ~/mis-deployment/ | grep x509svid
+```
+
+Set shell variables for the two SVID directories:
+
+```bash
+WFM_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>
+DEVICE_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>-<client-id>
+# Example:
+#   WFM_SVID_DIR=~/mis-deployment/x509svid-ctt-mock-wfm
+#   DEVICE_SVID_DIR=~/mis-deployment/x509svid-ctt-mock-wfm-ctt-device
+# The exact names depend on the IDs you entered in mis.sh.
+```
+
+Copy everything to the cert directory:
 
 ```bash
 cd ctt-runner/device-supplier
-sudo bash ~/sandbox/scripts/lib/mis/svid-gen.sh \
-    --automated \
-    --principal wfm \
-    --spiffe-id spiffe://margo.org/margo/wfm/ctt-mock-wfm
-```
-
-The script outputs to `x509svid-wfm/` relative to your working directory:
-
-```
-x509svid-wfm/
-  payload-cert.pem   ← WFM server SVID cert
-  payload-key.pem    ← WFM server SVID key
-```
-
-Copy to the cert directory and fix ownership:
-
-```bash
 mkdir -p certs
-sudo chown margo:margo x509svid-wfm/*
-cp x509svid-wfm/payload-cert.pem certs/miaf-server-cert.pem
-cp x509svid-wfm/payload-key.pem  certs/miaf-server-key.pem
-```
 
-#### Step 3 — Generate SVID for the CTT device (test runner identity)
+# WFM server SVID → mock WFM's mTLS identity (port 3003)
+cp ${WFM_SVID_DIR}/payload-cert.pem certs/miaf-server-cert.pem
+cp ${WFM_SVID_DIR}/payload-key.pem  certs/miaf-server-key.pem
 
-The CTT test runner presents this cert as the device's mTLS client identity
-when connecting to port 3003.
+# Device SVID → CTT test runner's mTLS client identity
+cp ${DEVICE_SVID_DIR}/payload-cert.pem certs/svid-cert.pem
+cp ${DEVICE_SVID_DIR}/payload-key.pem  certs/svid-key.pem
 
-```bash
-sudo bash ~/sandbox/scripts/lib/mis/svid-gen.sh \
-    --automated \
-    --principal wfm-client \
-    --spiffe-id spiffe://margo.org/margo/wfm/ctt-mock-wfm/client/ctt-device
-```
-
-Outputs to `x509svid-wfmclient/`:
-
-```bash
-sudo chown margo:margo x509svid-wfmclient/*
-cp x509svid-wfmclient/payload-cert.pem certs/svid-cert.pem
-cp x509svid-wfmclient/payload-key.pem  certs/svid-key.pem
-```
-
-#### Step 4 — Copy the MIS trust bundle CA
-
-Both the mock WFM and the test runner use this CA to verify each other's
-SVID during the mTLS handshake.
-
-```bash
-sudo cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem
-sudo chown margo:margo certs/svid-ca.pem
+# MIS trust bundle CA
+cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem
 chmod 644 certs/svid-ca.pem
 ```
 
-#### Step 5 — Also run generate-certs.sh for the RFC 9421 certs
+#### Step 4 — Also run generate-certs.sh for the RFC 9421 certs
 
 Port 3001 still uses the CTT's own self-signed cert (for RFC 9421 signed
 calls). Generate those if not already present:
@@ -180,7 +171,7 @@ bash generate-certs.sh ./certs localhost
 Replace `localhost` with your machine's IP if a real device-agent will
 connect from a different machine.
 
-#### Step 6 — Verify chains
+#### Step 5 — Verify chains
 
 ```bash
 # WFM server SVID chains to MIS CA
@@ -201,7 +192,7 @@ openssl x509 -in certs/svid-cert.pem -text -noout | grep "URI:spiffe"
 ```
 
 **SVID validity:** MIS issues SVIDs with a ~90-day TTL by default. Re-run
-Steps 2–4 when certs expire. The RFC 9421 certs from `generate-certs.sh`
+Steps 2–3 when certs expire. The RFC 9421 certs from `generate-certs.sh`
 are valid for ~2 years.
 
 ---
@@ -462,19 +453,21 @@ If the SVID is expired or missing, re-generate it on the MIS machine:
 
 ```bash
 # On the MIS / CTT machine:
-sudo bash ~/sandbox/scripts/lib/mis/svid-gen.sh \
-    --automated \
-    --principal wfm-client \
-    --spiffe-id spiffe://margo.org/margo/wfm/<vendor-wfm-id>/client/<device-id>
+bash /home/margo/sandbox/scripts/mis.sh
+# Follow prompts — enter the vendor WFM ID and device ID
+
+sudo chown -R $USER:$USER ~/mis-deployment
+# Then find the output dir:
+ls ~/mis-deployment/ | grep x509svid
 ```
 
 Then copy the files to the device-agent machine:
 
 ```bash
-sudo chown margo:margo x509svid-wfmclient/*
-scp x509svid-wfmclient/payload-cert.pem \
+DEVICE_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>-<device-id>
+scp ${DEVICE_SVID_DIR}/payload-cert.pem \
     <agent-host>:~/sandbox/poc/device/agent/config/identity/client-svid-cert.pem
-scp x509svid-wfmclient/payload-key.pem \
+scp ${DEVICE_SVID_DIR}/payload-key.pem \
     <agent-host>:~/sandbox/poc/device/agent/config/identity/client-svid-key.pem
 ```
 
@@ -583,7 +576,7 @@ Trust CA:      ctt-runner/device-supplier/certs/svid-ca.pem  (MIS CA)
 ```
 
 If your device-agent does **not** have a MIS-issued SVID yet, issue one
-via `svid-gen.sh` as shown in Phase 1, Path 1, Steps 2–3 above.
+via `mis.sh` as shown in Phase 1, Path 1, Steps 2–3 above.
 
 The mock WFM logs every request to `/tmp/wfm-server.log`. Watch it while your
 device-agent runs to see exactly what it sends and what the WFM validates:
@@ -599,7 +592,7 @@ tail -f /tmp/wfm-server.log
 | Cert type | Validity | Renewal |
 |---|---|---|
 | RFC 9421 certs (`server-cert.pem`, `device-*.pem`) | ~2 years (825 days) | Re-run `generate-certs.sh` |
-| MIS SVIDs (`miaf-server-cert.pem`, `svid-cert.pem`) | ~90 days (MIS default TTL) | Re-run Steps 2–4 from Phase 1 Path 1 |
+| MIS SVIDs (`miaf-server-cert.pem`, `svid-cert.pem`) | ~90 days (MIS default TTL) | Re-run Steps 2–3 from Phase 1 Path 1 |
 | MIS CA (`svid-ca.pem`) | Long-lived (MIS CA cert) | Rare; re-copy from `~/mis-deployment/certs/ca.crt` if MIS CA rotates |
 
 Check expiry:
@@ -627,15 +620,14 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 | `bin/server: no such file` | Not built yet | `go build -o bin/server ./scripts/cmd/device-supplier` from `ctt-runner/device-supplier/` |
 | `Failed to start mock server. Check /tmp/wfm-server.log` | Port 3001 or 3003 in use | `lsof -ti :3001 \| xargs kill` then retry |
 | `x509: certificate signed by unknown authority` on port 3003 | `MIAF_TRUST_CA` not set or wrong CA | Set `MIAF_TRUST_CA=certs/svid-ca.pem` when starting `bin/server`; ensure `svid-ca.pem` is the MIS CA |
-| `x509: certificate has expired` (MIS SVID) | SVID older than 90 days | Re-run `svid-gen.sh` steps and copy new cert/key files |
+| `x509: certificate has expired` (MIS SVID) | SVID older than 90 days | Re-run `mis.sh`, `sudo chown -R $USER:$USER ~/mis-deployment`, and re-copy cert/key files |
 | `x509: certificate has expired` (RFC 9421) | Certs older than 825 days | Re-run `generate-certs.sh` |
 | mTLS handshake fails on port 3003 | Device SVID not issued by the same MIS CA | Verify `openssl verify -CAfile certs/svid-ca.pem certs/svid-cert.pem` returns OK |
 | 401 on all requests (port 3001) | Request not signed (RFC 9421) | Device-agent must HTTP-sign every request on port 3001 |
 | Sandbox device-agent fails to connect | `config.yaml` WFM URL still points at Symphony | Set `wfm.sbiUrl: https://<ctt-host>:3003/v1alpha2/margo` |
 | Device-agent connects but WFM log is silent | Mock WFM server not running | Start `bin/server` with MIAF env vars before the device-agent connects |
 | `container 'margo-identity-service' is not running` | MIS container stopped | `bash ~/sandbox/scripts/mis.sh docker start-docker` |
-| `sudo: svid-gen.sh: not found` | Wrong path to svid-gen.sh | Full path is `~/sandbox/scripts/lib/mis/svid-gen.sh` |
-| Output dir of svid-gen.sh owned by root | Script runs as sudo | `sudo chown margo:margo x509svid-wfm/* x509svid-wfmclient/*` |
+| `~/mis-deployment/` dirs still owned by root | `mis.sh` runs as sudo | `sudo chown -R $USER:$USER ~/mis-deployment` |
 | Go build fails: module not found | Go module cache issue | `go mod download` from `ctt-runner/device-supplier/` |
 | Report not generated | Test runner exited non-zero | Check `ctt-runner/reports/device-supplier/test-execution.log` |
 
@@ -646,24 +638,18 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 ```
 Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
   □ Verify MIS is running: docker ps --filter name=margo-identity-service
-  □ cd ctt-runner/device-supplier
-  □ Generate WFM SVID:
-      sudo bash ~/sandbox/scripts/lib/mis/svid-gen.sh \
-        --automated --principal wfm \
-        --spiffe-id spiffe://margo.org/margo/wfm/ctt-mock-wfm
-      sudo chown margo:margo x509svid-wfm/*
-      cp x509svid-wfm/payload-cert.pem certs/miaf-server-cert.pem
-      cp x509svid-wfm/payload-key.pem  certs/miaf-server-key.pem
-  □ Generate device SVID:
-      sudo bash ~/sandbox/scripts/lib/mis/svid-gen.sh \
-        --automated --principal wfm-client \
-        --spiffe-id spiffe://margo.org/margo/wfm/ctt-mock-wfm/client/ctt-device
-      sudo chown margo:margo x509svid-wfmclient/*
-      cp x509svid-wfmclient/payload-cert.pem certs/svid-cert.pem
-      cp x509svid-wfmclient/payload-key.pem  certs/svid-key.pem
+  □ Generate SVIDs: bash /home/margo/sandbox/scripts/mis.sh  (follow prompts)
+  □ Fix ownership:  sudo chown -R $USER:$USER ~/mis-deployment
+  □ Note SVID dirs: ls ~/mis-deployment/ | grep x509svid
+  □ cd ctt-runner/device-supplier && mkdir -p certs
+  □ Copy WFM SVID:
+      cp ~/mis-deployment/x509svid-<wfm-id>/payload-cert.pem certs/miaf-server-cert.pem
+      cp ~/mis-deployment/x509svid-<wfm-id>/payload-key.pem  certs/miaf-server-key.pem
+  □ Copy device SVID:
+      cp ~/mis-deployment/x509svid-<wfm-id>-<client-id>/payload-cert.pem certs/svid-cert.pem
+      cp ~/mis-deployment/x509svid-<wfm-id>-<client-id>/payload-key.pem  certs/svid-key.pem
   □ Copy MIS CA:
-      sudo cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem
-      sudo chown margo:margo certs/svid-ca.pem && chmod 644 certs/svid-ca.pem
+      cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem && chmod 644 certs/svid-ca.pem
   □ Generate RFC 9421 certs (if not already present):
       bash generate-certs.sh ./certs localhost
 

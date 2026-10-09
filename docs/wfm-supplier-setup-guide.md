@@ -83,7 +83,7 @@ Note:
     > passed or was dropped internally). Fix it with:
     > ```bash
     > sudo mv /root/symphony $HOME/symphony
-    > sudo chown -R margo:margo $HOME/symphony
+    > sudo chown -R $USER:$USER $HOME/symphony
     > ```
 
 After prerequisites, Symphony prints the three steps that must be completed
@@ -106,7 +106,7 @@ bash /home/margo/sandbox/scripts/mis.sh
 # Follow prompts to generate WFM SVID + device SVID
 
 # mis.sh creates ~/mis-deployment/ but with root ownership — fix it:
-sudo chown -R margo:margo ~/mis-deployment
+sudo chown -R $USER:$USER ~/mis-deployment
 ```
 
 **Step 2 — Find the output directories from mis.sh:**
@@ -142,7 +142,7 @@ WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-<client-id>
 ```bash
 sudo cp ${WFM_SVID_DIR}/payload-cert.pem  $HOME/symphony/api/certificates/
 sudo cp ${WFM_SVID_DIR}/payload-key.pem   $HOME/symphony/api/certificates/
-sudo chown margo:margo \
+sudo chown $USER:$USER \
     $HOME/symphony/api/certificates/payload-cert.pem \
     $HOME/symphony/api/certificates/payload-key.pem
 
@@ -156,7 +156,7 @@ openssl ec  -in $HOME/symphony/api/certificates/payload-key.pem  -pubout   | ope
 
 ```bash
 sudo cp ~/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
-sudo chown margo:margo $HOME/symphony/api/mis/https-ca.crt
+sudo chown $USER:$USER $HOME/symphony/api/mis/https-ca.crt
 ```
 
 **Step 5 — Add mis.margo.org to /etc/hosts:**
@@ -198,7 +198,7 @@ sudo cp ${WFM_CLIENT_SVID_DIR}/payload-key.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
 sudo cp ~/mis-deployment/certs/ca.crt \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
-sudo chown margo:margo ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
+sudo chown $USER:$USER ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
 sudo chmod 644 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
 ```
 
@@ -416,7 +416,7 @@ Phase 1 — Identity (once per WFM, re-run only if cert expires)
 
   Path 3A — Sandbox / Symphony MIS (mis.sh):
   □ bash /home/margo/sandbox/scripts/mis.sh → follow prompts (WFM SVID + device SVID)
-  □ sudo chown -R margo:margo ~/mis-deployment
+  □ sudo chown -R $USER:$USER ~/mis-deployment
   □ ls ~/mis-deployment/ | grep x509svid   (note the directory names)
   □ sudo cp ~/mis-deployment/x509svid-<wfm-id>/payload-cert.pem + payload-key.pem → $HOME/symphony/api/certificates/
   □ sudo cp ~/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
