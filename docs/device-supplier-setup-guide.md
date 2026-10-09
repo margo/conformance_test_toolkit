@@ -57,7 +57,16 @@ device-agent](#testing-a-real-device-agent) below.
 | jq | any | group file parsing; `apt install jq` / `brew install jq` |
 | bash | 4+ | macOS ships bash 3 — install bash 5 via Homebrew |
 
-Verify:
+Clone the repo and check out the conformance branch:
+
+```bash
+mkdir -p ~/workspace && cd ~/workspace
+git clone https://github.com/margo/conformance_test_toolkit.git
+cd conformance_test_toolkit
+git checkout feature/multi-persona-conformance
+```
+
+Then verify tooling:
 
 ```bash
 go version      # need 1.24+
@@ -154,7 +163,7 @@ Both the mock WFM and the test runner use this CA to verify each other's
 SVID during the mTLS handshake.
 
 ```bash
-sudo cp /root/mis-deployment/certs/ca.crt certs/svid-ca.pem
+sudo cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem
 sudo chown margo:margo certs/svid-ca.pem
 chmod 644 certs/svid-ca.pem
 ```
@@ -591,7 +600,7 @@ tail -f /tmp/wfm-server.log
 |---|---|---|
 | RFC 9421 certs (`server-cert.pem`, `device-*.pem`) | ~2 years (825 days) | Re-run `generate-certs.sh` |
 | MIS SVIDs (`miaf-server-cert.pem`, `svid-cert.pem`) | ~90 days (MIS default TTL) | Re-run Steps 2–4 from Phase 1 Path 1 |
-| MIS CA (`svid-ca.pem`) | Long-lived (MIS CA cert) | Rare; re-copy from `/root/mis-deployment/certs/ca.crt` if MIS CA rotates |
+| MIS CA (`svid-ca.pem`) | Long-lived (MIS CA cert) | Rare; re-copy from `~/mis-deployment/certs/ca.crt` if MIS CA rotates |
 
 Check expiry:
 
@@ -653,7 +662,7 @@ Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
       cp x509svid-wfmclient/payload-cert.pem certs/svid-cert.pem
       cp x509svid-wfmclient/payload-key.pem  certs/svid-key.pem
   □ Copy MIS CA:
-      sudo cp /root/mis-deployment/certs/ca.crt certs/svid-ca.pem
+      sudo cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem
       sudo chown margo:margo certs/svid-ca.pem && chmod 644 certs/svid-ca.pem
   □ Generate RFC 9421 certs (if not already present):
       bash generate-certs.sh ./certs localhost
