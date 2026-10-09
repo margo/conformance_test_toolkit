@@ -140,29 +140,17 @@ DEVICE_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>-<client-id>
 # The exact names depend on the IDs you entered in mis.sh.
 ```
 
-Copy everything to the cert directory:
-
 ```bash
 cd ctt-runner/device-supplier
 mkdir -p certs
-
-# WFM server SVID → mock WFM's mTLS identity (port 3003)
-cp ${WFM_SVID_DIR}/payload-cert.pem certs/miaf-server-cert.pem
-cp ${WFM_SVID_DIR}/payload-key.pem  certs/miaf-server-key.pem
-
-# Device SVID → CTT test runner's mTLS client identity
-cp ${DEVICE_SVID_DIR}/payload-cert.pem certs/svid-cert.pem
-cp ${DEVICE_SVID_DIR}/payload-key.pem  certs/svid-key.pem
-
-# MIS trust bundle CA
-cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem
-chmod 644 certs/svid-ca.pem
 ```
 
-#### Step 4 — Also run generate-certs.sh for the RFC 9421 certs
+#### Step 4 — Run generate-certs.sh for the RFC 9421 certs
 
-Port 3001 still uses the CTT's own self-signed cert (for RFC 9421 signed
-calls). Generate those if not already present:
+Port 3001 uses the CTT's own self-signed cert for RFC 9421 signed calls.
+Run this **before** copying the MIS SVIDs — `generate-certs.sh` also writes
+`svid-ca.pem`, `svid-cert.pem`, and `svid-key.pem` and will overwrite the
+MIS certs if run after them.
 
 ```bash
 bash generate-certs.sh ./certs localhost
@@ -170,6 +158,17 @@ bash generate-certs.sh ./certs localhost
 
 Replace `localhost` with your machine's IP if a real device-agent will
 connect from a different machine.
+
+Then copy the MIS SVIDs on top:
+
+```bash
+cp ${WFM_SVID_DIR}/payload-cert.pem certs/miaf-server-cert.pem
+cp ${WFM_SVID_DIR}/payload-key.pem  certs/miaf-server-key.pem
+cp ${DEVICE_SVID_DIR}/payload-cert.pem certs/svid-cert.pem
+cp ${DEVICE_SVID_DIR}/payload-key.pem  certs/svid-key.pem
+cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem
+chmod 644 certs/svid-ca.pem
+```
 
 #### Step 5 — Verify chains
 
@@ -620,6 +619,7 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 | `bin/server: no such file` | Not built yet | `go build -o bin/server ./scripts/cmd/device-supplier` from `ctt-runner/device-supplier/` |
 | `Failed to start mock server. Check /tmp/wfm-server.log` | Port 3001 or 3003 in use | `lsof -ti :3001 \| xargs kill` then retry |
 | `x509: certificate signed by unknown authority` on port 3003 | `MIAF_TRUST_CA` not set or wrong CA | Set `MIAF_TRUST_CA=certs/svid-ca.pem` when starting `bin/server`; ensure `svid-ca.pem` is the MIS CA |
+| `openssl verify` fails on `svid-cert.pem` / `svid-ca.pem` | `generate-certs.sh` run after MIS copy, overwriting MIS certs | Re-copy: `cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem` and re-copy SVID files from `~/mis-deployment/` |
 | `x509: certificate has expired` (MIS SVID) | SVID older than 90 days | Re-run `mis.sh`, `sudo chown -R $USER:$USER ~/mis-deployment`, and re-copy cert/key files |
 | `x509: certificate has expired` (RFC 9421) | Certs older than 825 days | Re-run `generate-certs.sh` |
 | mTLS handshake fails on port 3003 | Device SVID not issued by the same MIS CA | Verify `openssl verify -CAfile certs/svid-ca.pem certs/svid-cert.pem` returns OK |
@@ -642,7 +642,9 @@ Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
   □ Fix ownership:  sudo chown -R $USER:$USER ~/mis-deployment
   □ Note SVID dirs: ls ~/mis-deployment/ | grep x509svid
   □ cd ctt-runner/device-supplier && mkdir -p certs
-  □ Copy WFM SVID:
+  □ Generate RFC 9421 certs FIRST (overwrites svid-* files — must run before MIS copy):
+      bash generate-certs.sh ./certs localhost
+  □ Copy WFM SVID (overwrites generate-certs.sh svid files with MIS-issued ones):
       cp ~/mis-deployment/x509svid-<wfm-id>/payload-cert.pem certs/miaf-server-cert.pem
       cp ~/mis-deployment/x509svid-<wfm-id>/payload-key.pem  certs/miaf-server-key.pem
   □ Copy device SVID:
@@ -650,8 +652,6 @@ Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
       cp ~/mis-deployment/x509svid-<wfm-id>-<client-id>/payload-key.pem  certs/svid-key.pem
   □ Copy MIS CA:
       cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem && chmod 644 certs/svid-ca.pem
-  □ Generate RFC 9421 certs (if not already present):
-      bash generate-certs.sh ./certs localhost
 
 Phase 2 — Build binaries (once)
   □ go build -o bin/server   ./scripts/cmd/device-supplier
