@@ -154,6 +154,9 @@ MIS certs if run after them.
 
 ```bash
 bash generate-certs.sh ./certs localhost
+# Fix ownership and permissions — generated files may be root-owned and read-only:
+sudo chown -R $USER:$USER certs/
+chmod -R u+w certs/
 ```
 
 Replace `localhost` with your machine's IP if a real device-agent will
@@ -628,6 +631,7 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 | Device-agent connects but WFM log is silent | Mock WFM server not running | Start `bin/server` with MIAF env vars before the device-agent connects |
 | `container 'margo-identity-service' is not running` | MIS container stopped | `bash ~/sandbox/scripts/mis.sh docker start-docker` |
 | `~/mis-deployment/` dirs still owned by root | `mis.sh` runs as sudo | `sudo chown -R $USER:$USER ~/mis-deployment` |
+| `cp: cannot create regular file 'certs/svid-key.pem': Permission denied` | Files in `certs/` are root-owned or mode 400 | `sudo chown -R $USER:$USER certs/ && chmod -R u+w certs/` then re-copy |
 | Go build fails: module not found | Go module cache issue | `go mod download` from `ctt-runner/device-supplier/` |
 | Report not generated | Test runner exited non-zero | Check `ctt-runner/reports/device-supplier/test-execution.log` |
 
@@ -644,6 +648,7 @@ Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
   □ cd ctt-runner/device-supplier && mkdir -p certs
   □ Generate RFC 9421 certs FIRST (overwrites svid-* files — must run before MIS copy):
       bash generate-certs.sh ./certs localhost
+      sudo chown -R $USER:$USER certs/ && chmod -R u+w certs/
   □ Copy WFM SVID (overwrites generate-certs.sh svid files with MIS-issued ones):
       cp ~/mis-deployment/x509svid-<wfm-id>/payload-cert.pem certs/miaf-server-cert.pem
       cp ~/mis-deployment/x509svid-<wfm-id>/payload-key.pem  certs/miaf-server-key.pem
