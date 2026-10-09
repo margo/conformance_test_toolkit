@@ -11,7 +11,7 @@ have expired.
 
 ---
 
-## What the CTT does in this persona
+## What CTT does in this persona
 
 The CTT acts as a **device / WFM-Client**. It fires real HTTPS requests at
 your WFM, checks the responses against the Margo spec, and generates an HTML
@@ -63,253 +63,13 @@ jq --version
 
 ---
 
-## Phase 1 — Identity setup (one-time per WFM)
+### Identity Setup — Sandbox MIS as Centralized SVID Authority
 
-This is the only step that requires interacting with your WFM outside the CTT.
-Do it once; re-run only if certs expire or you switch to a different WFM.
+The Margo sandbox MIS (`mis.sh`) acts as the centralized SVID authority for
+all CTT identity setup. 
+Use this path when testing CTT against Symphony (WFM)
+in a local or sandbox environment.
 
-### What you need to end up with
-
-Three files in `ctt-runner/wfm-supplier/utils/fixtures/miaf/real/`:
-
-```
-client-svid-cert.pem    <- CTT's X.509-SVID (SPIFFE URI SAN)
-client-svid-key.pem     <- the corresponding private key
-trust-bundle-ca.pem     <- CA cert CTT uses to verify the WFM's server cert
-```
-
-`ctt-start.sh` copies these into the active cert directory automatically at
-run time. You never reference them by path yourself.
-
-**Check whether they already exist and are still valid:**
-
-```bash
-openssl x509 \
-    -in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem \
-    -noout -enddate 2>/dev/null \
-    && echo "Identity OK - check expiry date above" \
-    || echo "No identity found - run identity setup below"
-```
-
-If the cert exists and the expiry is in the future, skip to Phase 2.
-
-### Using the interactive menu (recommended)
-
-```bash
-bash ctt-runner/ctt-start.sh
-# Select: 1) WFM Supplier → 1. Setup MIAF Identity
-```
-
-The menu prompts you to choose your setup path and guides through every step.
-The sections below document each path in detail.
-
----
-
-### Path 1 — External / Centralized MIS
-
-Use this path when a centralized MIS is deployed. The MIS admin mints certs for CTT; you place
-them in the fixture paths below. Each vendor WFM admin adds CTT's SPIFFE ID to
-their WFM's authorized-clients list.
-
-```
-Centralized MIS  ──issues SVIDs──►  CTT (mock device)  ──mTLS──►  Vendor WFM
-                 ──issues SVIDs──►  CTT (mock WFM)     ◄──mTLS──  Vendor device
-```
-
-CTT needs **one set of certs per persona** (one device SVID for WFM Supplier
-testing, one WFM SVID for Device Supplier testing). These come from the MIS
-admin. Each vendor WFM admin adds CTT's SPIFFE ID to their WFM's allowlist.
-
-#### What to request from the MIS admin
-
-Ask the MIS admin to issue two SVIDs for CTT and share the MIS root CA.
-Provide them with the SPIFFE IDs below — they substitute their actual trust
-domain and WFM IDs.
-
-| Item | SPIFFE ID / file | Used for |
-|---|---|---|
-| CTT device SVID | `spiffe://<td>/margo/wfm/<vendor-wfm-id>/client/margo-ctt` | CTT acting as mock device → vendor WFM |
-| CTT WFM SVID | `spiffe://<td>/margo/wfm/ctt-mock-wfm` | CTT acting as mock WFM ← vendor device |
-| MIS root CA | `ca.crt` / `ca.pem` | Both: chain verification |
-
-> **One CTT device SVID per vendor WFM** — each SPIFFE ID encodes the vendor's
-> WFM ID. If five vendors bring WFMs, the MIS admin issues five device SVIDs
-> for CTT (one per WFM under test).
-
-#### Step 1 — Request SVIDs from the MIS admin
-
-Contact the MIS admin and provide the SPIFFE IDs below. They will use their
-deployment's tooling to mint the certs and share the files with you.
-
-**For WFM Supplier testing (CTT acts as mock device):**
-
-Request one device SVID per vendor WFM under test:
-
-```
-SPIFFE ID: spiffe://<trust-domain>/margo/wfm/<vendor-wfm-id>/client/margo-ctt
-```
-
-**For Device Supplier testing (CTT acts as mock WFM):**
-
-Request one WFM SVID for the CTT mock WFM:
-
-```
-SPIFFE ID: spiffe://<trust-domain>/margo/wfm/ctt-mock-wfm
-```
-
-In both cases, also ask for the **MIS root CA certificate** — CTT needs it to
-verify the peer's cert during the mTLS handshake.
-
-#### Step 2 — Place received certs in CTT fixture paths
-
-Once the MIS admin delivers the cert files (via scp, shared storage, or any
-other method), copy them to the following locations:
-
-```bash
-CTT_REPO=<path-to-ctt-repo>   # e.g. /home/margo/test/sandbox
-
-# ── WFM Supplier fixtures (CTT as mock device) ───────────────────────────
-cp <received>/device-svid-cert.pem \
-    ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-cp <received>/device-svid-key.pem \
-    ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
-cp <received>/ca.pem \
-    ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
-
-# ── Device Supplier certs (CTT as mock WFM) ──────────────────────────────
-cp <received>/wfm-svid-cert.pem \
-    ${CTT_REPO}/ctt-runner/device-supplier/certs/server-cert.pem
-cp <received>/wfm-svid-key.pem \
-    ${CTT_REPO}/ctt-runner/device-supplier/certs/server-key.pem
-cp <received>/ca.pem \
-    ${CTT_REPO}/ctt-runner/device-supplier/certs/svid-ca.pem
-
-chmod 644 \
-    ${CTT_REPO}/ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem \
-    ${CTT_REPO}/ctt-runner/device-supplier/certs/*.pem
-```
-
-> Rename files as needed — what matters is the destination path, not the
-> source filename. The MIS admin may use different naming conventions.
-
-#### Step 3 — Verify certs on the CTT machine
-
-```bash
-cd <path-to-ctt-repo>
-
-# WFM Supplier (CTT device cert chains to MIS CA)
-openssl verify \
-    -CAfile ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem \
-    ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-# -> client-svid-cert.pem: OK
-
-# Print CTT's device SPIFFE ID (share this with each vendor WFM admin)
-openssl x509 \
-    -in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem \
-    -text -noout | grep "URI:spiffe"
-
-# Device Supplier (CTT WFM cert chains to MIS CA)
-openssl verify \
-    -CAfile ctt-runner/device-supplier/certs/svid-ca.pem \
-    ctt-runner/device-supplier/certs/server-cert.pem
-# -> server-cert.pem: OK
-
-# Print CTT's WFM SPIFFE ID (share this with each vendor device admin)
-openssl x509 \
-    -in ctt-runner/device-supplier/certs/server-cert.pem \
-    -text -noout | grep "URI:spiffe"
-```
-
-#### Step 4 — What to share with each vendor
-
-**WFM vendors** (vendor brings WFM, CTT acts as device):
-
-| Item | Value |
-|---|---|
-| CTT's device SPIFFE ID | printed by verify step above — add to their WFM allowlist |
-| MIS root CA | `trust-bundle-ca.pem` — vendor WFM must trust this CA to verify CTT's cert |
-
-**Device vendors** (vendor brings device-agent, CTT acts as WFM):
-
-| Item | Value / command |
-|---|---|
-| CTT's mock WFM URL | `https://<ctt-machine-ip>:3001/v1alpha2/margo` |
-| CTT's WFM SPIFFE ID | printed by verify step above |
-| MIS root CA | `svid-ca.pem` — device must trust this CA to verify CTT mock WFM's cert |
-| Device SVID | MIS admin issues one for the vendor's device-agent; vendor configures their device with it |
-
-#### Pre-run checklist
-
-```
-Setup (one-time per MIS deployment):
-  □ Provide MIS admin with SPIFFE IDs for CTT (one device SVID per vendor WFM + one WFM SVID)
-  □ Receive cert files from MIS admin and place them in CTT fixture paths (Step 2 above)
-  □ Verify all chains on CTT machine (Step 3 above)
-  □ Confirm CTT machine can reach vendor WFM SBI ports (firewall / network)
-  □ Share CTT's device SPIFFE ID with each WFM vendor (for their allowlist)
-  □ Share CTT's WFM SPIFFE ID + mock WFM URL + MIS CA with each device vendor
-
-Per vendor (each test run):
-  □ WFM vendor confirms they added CTT's SPIFFE ID to their allowlist
-  □ Device vendor confirms their device has MIS-issued SVID + CTT CA imported
-  □ Run WFM Supplier core group → collect HTML report
-  □ Run Device Supplier core group → collect HTML report
-```
-
----
-
-### Path 2 — Vendor WFM with its own SPIFFE infrastructure
-
-The vendor's WFM runs its own MIS. Their SPIFFE admin issues CTT a client SVID
-and provides the trust bundle CA. CTT does **not** need access to their MIS.
-The `ctt-start.sh` menu option 2 walks through this interactively.
-
-**What to ask the vendor's SPIFFE administrator for:**
-
-| File | What it is |
-|---|---|
-| `client-svid-cert.pem` | X.509-SVID for CTT, with SPIFFE URI SAN |
-| `client-svid-key.pem` | Private key for the above cert |
-| `trust-bundle-ca.pem` | Root CA PEM their MIS uses to sign SVIDs |
-
-**What to share with the vendor's WFM admin:**
-
-The SPIFFE ID CTT will present — read it from the cert after they issue it:
-
-```bash
-openssl x509 \
-    -in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem \
-    -text -noout | grep "URI:spiffe"
-```
-
-The WFM admin adds this SPIFFE ID to their WFM's authorized-clients list.
-
-**Verify the chain after copying files:**
-
-```bash
-openssl verify \
-    -CAfile ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem \
-    ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-# -> client-svid-cert.pem: OK
-```
-
-If this fails, the cert and CA came from different sources — check with the
-vendor's SPIFFE admin.
-
----
-
-### Path 3 — When testing with sandbox / Symphony MIS
-
-Use this path when running CTT against the Margo sandbox (Symphony as WFM) in
-a local development environment.
-
-Two sub-options depending on whether the sandbox MIS is available:
-
-| | Path 3A — sandbox mis.sh | Path 3B — ctt-mis.sh |
-|---|---|---|
-| Requires sandbox MIS running | Yes | No |
-| Symphony config changes needed | None | Yes (patch JSON + copy trust bundle) |
-| Cert lifetime | 90 days (MIS-issued) | ~2 years (self-signed) |
 
 Run prerequisites first — this creates the symphony directory structure:
 
@@ -317,14 +77,14 @@ Run prerequisites first — this creates the symphony directory structure:
 sudo -E bash /home/margo/sandbox/scripts/wfm.sh
 # → 1) PreRequisites: Setup
 ```
-
-> **If `$HOME/symphony/` does not exist after prerequisites:** wfm.sh may have
-> installed symphony to `/root/symphony/` (happens if the `-E` flag was not
-> passed or was dropped internally). Fix it with:
-> ```bash
-> sudo mv /root/symphony $HOME/symphony
-> sudo chown -R margo:margo $HOME/symphony
-> ```
+Note:
+    > **If `$HOME/symphony/` does not exist after prerequisites:** wfm.sh may have
+    > installed symphony to `/root/symphony/` (happens if the `-E` flag was not
+    > passed or was dropped internally). Fix it with:
+    > ```bash
+    > sudo mv /root/symphony $HOME/symphony
+    > sudo chown -R margo:margo $HOME/symphony
+    > ```
 
 After prerequisites, Symphony prints the three steps that must be completed
 before starting it:
@@ -338,8 +98,6 @@ Then: Start Symphony via menu option 3
 
 Both sub-paths below satisfy these same three steps — the only difference is
 where the files come from.
-
-#### Path 3A — Using sandbox mis.sh (simpler, recommended)
 
 **Step 1 — Generate identity via sandbox mis.sh:**
 
@@ -475,134 +233,6 @@ sudo docker ps --filter name=symphony-api-container --format "{{.Names}}\t{{.Sta
 # If it shows "Exited", check: sudo docker logs symphony-api-container 2>&1 | tail -20
 ```
 
----
-
-#### Path 3B — Using ctt-mis.sh (no MIS dependency)
-
-`ctt-mis.sh` generates all required certs locally. Symphony is configured to
-use these self-signed certs instead of fetching from a live MIS.
-
-**Step 1 — Run Symphony Prerequisites:**
-
-```bash
-sudo -E bash /home/margo/sandbox/scripts/wfm.sh
-# → 1) PreRequisites: Setup
-```
-
-**Step 2 — Generate all certs via ctt-mis.sh:**
-
-```bash
-bash ctt-runner/ctt-mis.sh
-# Certs land in ~/conformance-identities/
-# CTT device SVID auto-installed to ctt-runner/wfm-supplier/utils/fixtures/miaf/real/
-```
-
-**Step 3 — Place WFM SVID & key in Symphony's certificates directory:**
-
-```bash
-cp ~/conformance-identities/wfm-svid-cert.pem  $HOME/symphony/api/certificates/
-cp ~/conformance-identities/wfm-svid-key.pem   $HOME/symphony/api/certificates/
-```
-
-**Step 4 — Place CTT CA as Symphony's HTTPS CA:**
-
-```bash
-cp ~/conformance-identities/ca-cert.pem  $HOME/symphony/api/mis/https-ca.crt
-```
-
-**Step 5 — Copy CTT trust bundle to Symphony's mis directory:**
-
-```bash
-cp ~/conformance-identities/trust-bundle.json \
-    $HOME/symphony/api/mis/trustbundle.json
-```
-
-**Step 6 — Patch Symphony's MIS config to use static trust bundle:**
-
-This replaces the live MIS endpoint (not reachable when using ctt-mis.sh)
-with the local trust bundle generated above:
-
-```bash
-jq '.bindings[1].config.miaf.mis = {
-  "trustDomain": "margo.org",
-  "trustbundle": {"path": "./mis/trustbundle.json"},
-  "cacheInterval": 60
-}' $HOME/symphony/api/symphony-api-margo.json \
-   > /tmp/symphony-api-margo-ctt.json \
-&& mv /tmp/symphony-api-margo-ctt.json \
-      $HOME/symphony/api/symphony-api-margo.json
-```
-
-**Step 7 — Register CTT's device SPIFFE ID (wfm.sh option 7):**
-
-```bash
-# Print CTT's device SPIFFE ID:
-openssl x509 \
-    -in ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem \
-    -text -noout | grep "URI:spiffe"
-
-sudo -E bash /home/margo/sandbox/scripts/wfm.sh
-# → 7) Manage SPIFFE ID allowlist → 1) ➕ Add SPIFFE IDs
-# → Enter the SPIFFE ID printed above
-```
-
-**Step 8 — Start Symphony:**
-
-```bash
-sudo -E bash /home/margo/sandbox/scripts/wfm.sh
-# → 3) Symphony: Start
-```
-
-**Verify:**
-
-```bash
-openssl verify \
-    -CAfile ~/conformance-identities/ca-cert.pem \
-    ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
-# -> client-svid-cert.pem: OK
-```
-
-> **Restore after testing:** Revert Symphony's MIS config before using real devices:
->
-> ```bash
-> jq '.bindings[1].config.miaf.mis = {
->   "endpoint": "https://mis.margo.org:9443",
->   "caPath": "./mis/https-ca.crt",
->   "cacheInterval": 60
-> }' $HOME/symphony/api/symphony-api-margo.json \
->    > /tmp/restore.json \
-> && mv /tmp/restore.json $HOME/symphony/api/symphony-api-margo.json
-> # Then: wfm.sh → 4) Symphony: Stop → 3) Symphony: Start
-> ```
-
----
-
-### Path 4 — CTT mock WFM and CTT mock device
-
-Use this path for fully self-contained testing — no real WFM and no external
-MIS. `ctt-mis.sh` generates all identities locally. CTT acts as both the
-WFM client (device role) and the WFM server (mock WFM).
-
-```bash
-bash ctt-runner/ctt-mis.sh
-# Generates: CA + WFM SVID + device SVID + trust bundle
-# Auto-installs device SVID to ctt-runner/wfm-supplier/utils/fixtures/miaf/real/
-```
-
-**Via the main menu:**
-
-```bash
-bash ctt-runner/ctt-start.sh
-# Select: 1) WFM Supplier → 1. Setup MIAF Identity → 3
-```
-
-> **If testing against a real WFM without SPIFFE infrastructure:** give
-> `~/conformance-identities/ca-cert.pem` to the WFM admin. They import it as a
-> trusted CA so the WFM accepts CTT's client cert. This requires the vendor WFM
-> to support operator-configurable CA trust (not a Margo spec requirement —
-> confirm with the vendor first).
-
----
 
 ## Phase 2 — Run the conformance suite
 
@@ -688,53 +318,6 @@ in Phase 1 — you do not enter it.
 
 After provisioning, the runner proceeds into the scenario execution loop.
 
-### Watch the output
-
-Each step prints immediately as it runs:
-
-```
-  [wfm-core-cap-1]  Report Device Capabilities
-   ▶  POST   /api/v1/capabilities/<device-id>  [mTLS · X.509-SVID]
-   ⚙  MARGO-WFM-MANAGEMENTINTERFACE-001
-   ✓  PASS  201 Created
-
-  [wfm-core-ds-1]  Retrieve Desired State
-   ▶  GET    /api/v1/deployments  [mTLS · X.509-SVID]
-   ⚙  MARGO-WFM-MANAGEMENTINTERFACE-005
-   ✓  PASS  200 OK
-        ↳ deploymentId = "ctt-multi-component-20261006120000"
-
-  [efd8ad9d]  Desired State — Cache-Control must not be immutable
-   ▶  GET    /api/v1/deployments  [mTLS · X.509-SVID]
-   ✗  FAIL  expected 200 OK  ·  got 200 OK
-        • _headers.cache-control must not contain "immutable" ...
-```
-
-Failures show the exact field, the expected value, and the actual value — so
-you can trace each failure directly to a spec requirement.
-
-### Final summary
-
-At the end you see a pass/fail table per scenario and a list of every failed
-step:
-
-```
-══════════════════════════════════════════════════════════════════════
- CONFORMANCE SUMMARY  ·  Group: core  ·  31 tests
-══════════════════════════════════════════════════════════════════════
-
- Scenario                               Steps  Passed  Failed
- ──────────────────────────────────────────────────────────────────
- WFM Core Capabilities                      4       3       1
- WFM Desired State                          3       3       0
- WFM Multi-Component Deployment             4       3       1
- ...
-
- FAILED TESTS:
-  ✗  efd8ad9d  [WFM Multi-Component Deployment]  Cache-Control immutable
-     GET /api/v1/deployments
-     Expected 200 OK  ·  Got 200 OK
-     • _headers.cache-control must not contain "immutable" (MI-035)
 ```
 
 ### The HTML report
