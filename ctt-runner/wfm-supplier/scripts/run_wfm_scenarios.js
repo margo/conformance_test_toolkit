@@ -1616,7 +1616,6 @@ function writeReport() {
       <td>${htmlEscape(r.scenarioName || r.scenario)}</td>
       <td>${htmlEscape(r.step)}</td>
       <td>${htmlEscape(r.name)}</td>
-      <td>${htmlEscape((r.crIds || []).join(', '))}</td>
       <td>${htmlEscape(r.method)}</td>
       <td>${htmlEscape(r.endpoint)}</td>
       <td>${htmlEscape(r.expected)}</td>
@@ -1657,8 +1656,8 @@ function writeReport() {
     table { border-collapse: collapse; width: 100%; font-size: 13px; margin-bottom: 24px; }
     th, td { border: 1px solid #d7dde5; padding: 7px 9px; text-align: left; vertical-align: top; }
     th { background: #eef2f7; }
-    tr.pass td:nth-child(9) { color: #166534; font-weight: 700; }
-    tr.fail td:nth-child(9), tr.fail td:last-child { color: #b91c1c; font-weight: 700; }
+    tr.pass td:nth-child(8) { color: #166534; font-weight: 700; }
+    tr.fail td:nth-child(8), tr.fail td:last-child { color: #b91c1c; font-weight: 700; }
     .scenario-summary td:nth-child(4) { color: #b91c1c; }
     tr.pass.scenario-summary td:nth-child(4) { color: inherit; }
     .version-warning { margin-bottom: 14px; padding: 10px 14px; border-radius: 4px; background: #dcfce7; color: #166534; border: 1px solid #86efac; font-size: 13px; font-weight: bold; }
@@ -1710,7 +1709,7 @@ function writeReport() {
   <table>
     <thead>
       <tr>
-        <th>Scenario</th><th>Step</th><th>Name</th><th>CR-IDs</th>
+        <th>Scenario</th><th>Step</th><th>Name</th>
         <th>Method</th><th>Endpoint</th><th>Expected</th><th>Actual</th><th>Status</th><th>Failure Reason</th>
       </tr>
     </thead>

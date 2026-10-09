@@ -311,8 +311,23 @@ Two sub-options depending on whether the sandbox MIS is available:
 | Symphony config changes needed | None | Yes (patch JSON + copy trust bundle) |
 | Cert lifetime | 90 days (MIS-issued) | ~2 years (self-signed) |
 
-After running Prerequisites (`sudo -E bash wfm.sh → 1`), Symphony prints
-the three steps that must be completed before starting it:
+Run prerequisites first — this creates the symphony directory structure:
+
+```bash
+sudo -E bash /home/margo/sandbox/scripts/wfm.sh
+# → 1) PreRequisites: Setup
+```
+
+> **If `$HOME/symphony/` does not exist after prerequisites:** wfm.sh may have
+> installed symphony to `/root/symphony/` (happens if the `-E` flag was not
+> passed or was dropped internally). Fix it with:
+> ```bash
+> sudo mv /root/symphony $HOME/symphony
+> sudo chown -R margo:margo $HOME/symphony
+> ```
+
+After prerequisites, Symphony prints the three steps that must be completed
+before starting it:
 
 ```
 1. Place your WFM SVID & Key in:   $HOME/symphony/api/certificates/
@@ -356,10 +371,12 @@ Set variables for the rest of the steps:
 
 ```bash
 WFM_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>
-WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>-<client-id>
-# Example: if wfm-id="wfm", client-id="wfmclient":
+WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-<client-id>
+# The exact directory names depend on the IDs you entered in mis.sh.
+# Check what was created: ls ~/mis-deployment/ | grep x509svid
+# Example: if wfm-id="wfm", client-id="wfm-wfm-client" or "wfmclient":
 #   WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
-#   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfmclient
+#   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfm-wfm-client
 ```
 
 **Step 3 — Place WFM SVID & key in Symphony's certificates directory:**
