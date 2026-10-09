@@ -317,22 +317,23 @@ where the files come from.
 
 #### Path 3A — Using sandbox mis.sh (simpler, recommended)
 
-> **Important:** Run `mis.sh` as your regular user (no `sudo`). Running it with
-> `sudo` causes `$HOME` to resolve to `/root`, placing certs in `/root/mis-deployment/`
-> instead of `$HOME/mis-deployment/` — the paths below will be wrong and Symphony
-> will fail to start with a TLS or cert mismatch error.
+> **Note:** `mis.sh` uses sudo internally, so it always writes output to
+> `/root/mis-deployment/` regardless of how you invoke it. Run the `sudo chown`
+> command in Step 1 immediately after generation to regain access.
 
 **Step 1 — Generate identity via sandbox mis.sh:**
 
 ```bash
-# Run WITHOUT sudo so certs land in $HOME/mis-deployment/
 bash /home/margo/sandbox/scripts/mis.sh
 # Follow prompts to generate WFM SVID + device SVID
+
+# mis.sh writes as root — fix ownership immediately
+sudo chown -R margo:margo /root/mis-deployment
 ```
 
 **Step 2 — Find the output directories from mis.sh:**
 
-mis.sh writes SVIDs into `$HOME/mis-deployment/` in directories named after
+mis.sh writes SVIDs into `/root/mis-deployment/` in directories named after
 the WFM ID and client ID you entered during generation:
 
 ```
@@ -343,17 +344,17 @@ x509svid-<wfm-id>-<client-id> ← CTT's device SVID (client identity)
 Check what was generated:
 
 ```bash
-ls $HOME/mis-deployment/ | grep x509svid
+ls /root/mis-deployment/ | grep x509svid
 ```
 
 Set variables for the rest of the steps:
 
 ```bash
-WFM_SVID_DIR=$HOME/mis-deployment/x509svid-<wfm-id>
-WFM_CLIENT_SVID_DIR=$HOME/mis-deployment/x509svid-<wfm-id>-<client-id>
+WFM_SVID_DIR=/root/mis-deployment/x509svid-<wfm-id>
+WFM_CLIENT_SVID_DIR=/root/mis-deployment/x509svid-<wfm-id>-<client-id>
 # Example: if wfm-id="wfm", client-id="wfm-client":
-#   WFM_SVID_DIR=$HOME/mis-deployment/x509svid-wfm
-#   WFM_CLIENT_SVID_DIR=$HOME/mis-deployment/x509svid-wfm-wfm-client
+#   WFM_SVID_DIR=/root/mis-deployment/x509svid-wfm
+#   WFM_CLIENT_SVID_DIR=/root/mis-deployment/x509svid-wfm-wfm-client
 ```
 
 **Step 3 — Place WFM SVID & key in Symphony's certificates directory:**
@@ -374,7 +375,7 @@ openssl ec  -in $HOME/symphony/api/certificates/payload-key.pem  -pubout   | ope
 **Step 4 — Place MIS HTTPS CA in Symphony's mis directory:**
 
 ```bash
-sudo cp $HOME/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
+sudo cp /root/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
 sudo chown margo:margo $HOME/symphony/api/mis/https-ca.crt
 ```
 
@@ -415,7 +416,7 @@ sudo cp ${WFM_CLIENT_SVID_DIR}/payload-cert.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-cert.pem
 sudo cp ${WFM_CLIENT_SVID_DIR}/payload-key.pem \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/client-svid-key.pem
-sudo cp $HOME/mis-deployment/certs/ca.crt \
+sudo cp /root/mis-deployment/certs/ca.crt \
     ctt-runner/wfm-supplier/utils/fixtures/miaf/real/trust-bundle-ca.pem
 sudo chown margo:margo ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
 sudo chmod 644 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
@@ -432,7 +433,7 @@ openssl verify \
 
 # 2. MIS HTTPS server cert is reachable and chains to the same CA:
 openssl verify \
-    -CAfile $HOME/mis-deployment/certs/https-ca.crt \
+    -CAfile /root/mis-deployment/certs/https-ca.crt \
     <(echo | openssl s_client -connect 127.0.0.1:9443 -quiet 2>/dev/null)
 # → stdin: OK  (if this fails, re-run mis.sh to regenerate certs)
 ```
@@ -810,12 +811,13 @@ Phase 1 — Identity (once per WFM, re-run only if cert expires)
 
   Path 3A — Sandbox / Symphony MIS (mis.sh):
   □ bash /home/margo/sandbox/scripts/mis.sh → 6) Generate SVID (WFM SVID + device SVID)
-  □ ls $HOME/sandbox/scripts/ | grep x509svid   (note the directory names)
-  □ sudo cp x509svid-<wfm-id>/payload-cert.pem + payload-key.pem → $HOME/symphony/api/certificates/
-  □ sudo cp $HOME/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
+  □ sudo chown -R margo:margo /root/mis-deployment
+  □ ls /root/mis-deployment/ | grep x509svid   (note the directory names)
+  □ sudo cp /root/mis-deployment/x509svid-<wfm-id>/payload-cert.pem + payload-key.pem → $HOME/symphony/api/certificates/
+  □ sudo cp /root/mis-deployment/certs/https-ca.crt  $HOME/symphony/api/mis/
   □ sudo -E bash wfm.sh → 7 → 1 → add CTT's device SPIFFE ID
-  □ sudo cp x509svid-<wfm-id>-<client-id>/payload-cert.pem + payload-key.pem → ctt-runner/wfm-supplier/utils/fixtures/miaf/real/
-  □ sudo cp $HOME/mis-deployment/certs/https-ca.crt  → trust-bundle-ca.pem
+  □ sudo cp /root/mis-deployment/x509svid-<wfm-id>-<client-id>/payload-cert.pem + payload-key.pem → ctt-runner/wfm-supplier/utils/fixtures/miaf/real/
+  □ sudo cp /root/mis-deployment/certs/ca.crt → trust-bundle-ca.pem
   □ sudo -E bash wfm.sh → 3) Symphony: Start
 
   Path 3B — Sandbox / Symphony MIS (ctt-mis.sh, no MIS needed):
