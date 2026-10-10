@@ -53,7 +53,10 @@
         "headers": {},
         "expected_status": 201,
         "validations": [],
-        "extract_context": {}
+        "extract_context": {},
+        "accepted_statuses": [
+          200
+        ]
       },
       {
         "id": "wfm-core-cap-2",
@@ -147,7 +150,18 @@
         },
         "headers": {},
         "expected_status": 422,
-        "validations": [],
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
+          }
+        ],
         "extract_context": {}
       },
       {
@@ -190,7 +204,18 @@
         },
         "headers": {},
         "expected_status": 422,
-        "validations": [],
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
+          }
+        ],
         "extract_context": {}
       }
     ]
@@ -316,7 +341,18 @@
           "Accept": "application/json"
         },
         "expected_status": 406,
-        "validations": [],
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#server-cannot-generate-response"
+          }
+        ],
         "extract_context": {}
       }
     ]
@@ -333,7 +369,7 @@
     "steps": [
       {
         "id": "wfm-core-status-1",
-        "name": "Report Deployment Status",
+        "name": "Report Deployment Status For A Deployment The WFM Did Not Assign — Accepted, Or Rejected As A Semantic Error",
         "method": "POST",
         "endpoint": "/api/v1/deployments/wfm-core-test-deployment/status",
         "mtls": true,
@@ -352,7 +388,10 @@
         },
         "headers": {},
         "expected_status": 200,
-        "accepted_statuses": [200],
+        "accepted_statuses": [
+          201,
+          422
+        ],
         "validations": [],
         "extract_context": {}
       }
@@ -425,6 +464,26 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "step-wfm-hi-1.3",
+        "name": "Manifest ETag Is The sha256 Digest Of The Exact Response Body",
+        "crIds": [
+          "MARGO-WFM-MANAGEMENTINTERFACE-015"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "operation": "etag_is_body_digest"
+          }
+        ],
+        "extract_context": {}
       }
     ]
   },
@@ -482,7 +541,10 @@
         "headers": {},
         "expected_status": 201,
         "validations": [],
-        "extract_context": {}
+        "extract_context": {},
+        "accepted_statuses": [
+          200
+        ]
       },
       {
         "id": "efd8ad9d-1a6f-4b12-bf9d-040f11eddec6",
@@ -536,6 +598,28 @@
         }
       },
       {
+        "id": "wfm-mc-manifest-urls",
+        "name": "State Manifest URLs Are Content-Addressed (bundle.url, deployments[].url)",
+        "crIds": [
+          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "operation": "manifest_urls_are_content_addressed"
+          }
+        ],
+        "extract_context": {
+          "bundleDigest": "bundle.digest"
+        }
+      },
+      {
         "id": "e2e5bf11-3015-40cd-8e58-96aceb20bc5e",
         "name": "Fetch The Multi-Component ApplicationDeployment YAML (content-addressed)",
         "method": "GET",
@@ -571,6 +655,103 @@
             "operation": "body_sha256_equals",
             "field": "deploymentDigest",
             "value": "{deploymentDigest}"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-deployment-wrong-digest",
+        "name": "Deployment YAML With A Digest The WFM Does Not Have Returns 404",
+        "crIds": [
+          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#deployment-not-found"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-bundle-fetch",
+        "name": "Download The Deployment Bundle (content-addressed)",
+        "crIds": [
+          "MARGO-WFM-MANAGEMENTINTERFACE-031",
+          "MARGO-WFM-MANAGEMENTINTERFACE-025",
+          "MARGO-WFM-MANAGEMENTINTERFACE-027"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "equals",
+            "value": "application/vnd.margo.bundle.v1+tar+gzip"
+          },
+          {
+            "field": "_headers.etag",
+            "operation": "equals",
+            "value": "\"{bundleDigest}\""
+          },
+          {
+            "field": "_headers.cache-control",
+            "operation": "contains",
+            "value": "private"
+          },
+          {
+            "field": "_headers.cache-control",
+            "operation": "contains",
+            "value": "max-age=31536000"
+          },
+          {
+            "field": "_headers.cache-control",
+            "operation": "contains",
+            "value": "immutable"
+          },
+          {
+            "field": "bundleDigest",
+            "operation": "body_sha256_equals",
+            "value": "{bundleDigest}"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-bundle-wrong-digest",
+        "name": "Bundle With A Digest The WFM Does Not Have Returns 404",
+        "crIds": [
+          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#invalid-bundle"
           }
         ],
         "extract_context": {}
@@ -890,11 +1071,11 @@
     "crIds": [
       "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-003"
     ],
-    "description": "Verifies that after SVID rotation the WFM continues to accept the rotated SVID without re-registration. Both pre- and post-rotation requests must succeed.",
+    "description": "Verifies that after SVID rotation the WFM continues to accept the client without re-registration: a request with the pre-rotation SVID and a request with the re-issued SVID (same SPIFFE ID) must both succeed. Runs only once the CTT's client SVID has been re-issued and installed again through Setup MIAF Identity, which keeps the SVID it replaces; until then both steps are reported as NOT RUN.",
     "steps": [
       {
         "id": "wfm-identity-svid-1",
-        "name": "Authenticate With Current SVID (baseline)",
+        "name": "Authenticate With The Pre-Rotation SVID (baseline)",
         "crIds": [
           "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-003"
         ],
@@ -912,7 +1093,8 @@
             "value": "application/vnd.margo.manifest.v1+json"
           }
         ],
-        "extract_context": {}
+        "extract_context": {},
+        "svid_source": "previous"
       },
       {
         "id": "wfm-identity-svid-2",
@@ -978,13 +1160,20 @@
               }
             ],
             "otelCollector": true,
-            "supportedRuntimes": ["oci"],
-            "supportedDeploymentTypes": ["compose"]
+            "supportedRuntimes": [
+              "oci"
+            ],
+            "supportedDeploymentTypes": [
+              "compose"
+            ]
           }
         },
         "headers": {},
         "expected_status": 200,
-        "accepted_statuses": [200, 201],
+        "accepted_statuses": [
+          200,
+          201
+        ],
         "validations": [],
         "extract_context": {}
       },
@@ -1019,14 +1208,109 @@
               }
             ],
             "otelCollector": true,
-            "supportedRuntimes": ["oci"],
-            "supportedDeploymentTypes": ["compose", "helm"]
+            "supportedRuntimes": [
+              "oci"
+            ],
+            "supportedDeploymentTypes": [
+              "compose",
+              "helm"
+            ]
           }
         },
         "headers": {},
         "expected_status": 200,
-        "accepted_statuses": [200, 201],
+        "accepted_statuses": [
+          200,
+          201
+        ],
         "validations": [],
+        "extract_context": {}
+      }
+    ]
+  },
+  {
+    "id": "wfm-unregister-device",
+    "name": "Device Capabilities — Unregister A Device (DELETE)",
+    "crIds": [
+      "MARGO-WFM-MANAGEMENTINTERFACE-023"
+    ],
+    "description": "DELETE /api/v1/capabilities/{deviceId} removes a device the client registered: 204 the first time, then 404 with the device-not-found problem type because the device no longer exists. Uses its own deviceId so no other scenario's device is touched. Not part of the core group — select the device-unregister group to run it.",
+    "steps": [
+      {
+        "id": "wfm-unreg-1",
+        "name": "Register A Device To Unregister",
+        "method": "PUT",
+        "endpoint": "/api/v1/capabilities/wfm-unregister-test-device",
+        "mtls": true,
+        "headers": {},
+        "request_body": {
+          "properties": {
+            "id": "wfm-unregister-test-device",
+            "vendor": "Conformance Test Suite",
+            "modelNumber": "CTS-WFMUNREG-1",
+            "serialNumber": "SN-WFMUNREG-001",
+            "cpus": [
+              {
+                "cores": 4,
+                "architecture": "arm64"
+              }
+            ],
+            "memory": "16Gi",
+            "storage": "256Gi",
+            "interfaces": [
+              {
+                "type": "ethernet"
+              }
+            ],
+            "peripherals": [],
+            "otelCollector": false,
+            "supportedRuntimes": [
+              "oci"
+            ],
+            "supportedDeploymentTypes": [
+              "helm",
+              "compose"
+            ]
+          }
+        },
+        "expected_status": 201,
+        "accepted_statuses": [
+          200
+        ],
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-unreg-2",
+        "name": "Unregister The Device — 204",
+        "method": "DELETE",
+        "endpoint": "/api/v1/capabilities/wfm-unregister-test-device",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 204,
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-unreg-3",
+        "name": "Unregister The Same Device Again — 404 device-not-found",
+        "method": "DELETE",
+        "endpoint": "/api/v1/capabilities/wfm-unregister-test-device",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#device-not-found"
+          }
+        ],
         "extract_context": {}
       }
     ]

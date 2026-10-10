@@ -619,18 +619,15 @@ build_device_group_scenarios() {
                 # No filter: run every scenario with all its steps
                 $all | map(.steps = (.steps // []))
             else
+                # A scenario runs with the steps the group lists by ID. If the
+                # group lists only the scenario ID, the scenario runs whole.
                 [
                     $all[]
-                    | select(
-                        ((.id? as $id | $ids | index($id)) != null)
-                        or (((.steps? // []) | map(.id? // empty)) as $stepIds
-                            | any($stepIds[]?; . as $stepId | $ids | index($stepId)))
-                    )
-                    | .steps = [
-                        .steps[]?
-                        | select(.id? as $id | $ids | index($id) != null)
-                      ]
-                    | select((.steps | length) > 0)
+                    | ([ .steps[]? | select(.id? as $id | $ids | index($id) != null) ]) as $listed
+                    | if ($listed | length) > 0 then .steps = $listed
+                      elif ((.id? as $id | $ids | index($id)) != null) then .steps = (.steps // [])
+                      else empty
+                      end
                 ]
             end
           ) as $filtered
@@ -749,10 +746,16 @@ run_wfm_scenario_group() {
     local real_dir="$miaf_dir/real"
     # Prefer real/ certs (Symphony SVID, signed by the real trust-bundle CA).
     # Fall back to the test-CA certs in miaf/ when real/ is absent (mock-server runs).
+    rm -f "$cert_dir/svid-previous-cert.pem" "$cert_dir/svid-previous-key.pem"
     if [[ -f "$real_dir/client-svid-cert.pem" && -f "$real_dir/client-svid-key.pem" ]]; then
         cp "$real_dir/client-svid-cert.pem" "$cert_dir/svid-cert.pem"
         cp "$real_dir/client-svid-key.pem"  "$cert_dir/svid-key.pem"
         [[ -f "$real_dir/trust-bundle-ca.pem" ]] && cp "$real_dir/trust-bundle-ca.pem" "$cert_dir/svid-ca.pem"
+        # The SVID in use before the last rotation, kept by Setup MIAF Identity.
+        if [[ -f "$real_dir/previous-client-svid-cert.pem" && -f "$real_dir/previous-client-svid-key.pem" ]]; then
+            cp "$real_dir/previous-client-svid-cert.pem" "$cert_dir/svid-previous-cert.pem"
+            cp "$real_dir/previous-client-svid-key.pem"  "$cert_dir/svid-previous-key.pem"
+        fi
         log "Using real SVID certs (Symphony trust bundle)"
     elif [[ -f "$miaf_dir/client-svid-cert.pem" && -f "$miaf_dir/client-svid-key.pem" ]]; then
         cp "$miaf_dir/client-svid-cert.pem" "$cert_dir/svid-cert.pem"
@@ -1694,6 +1697,23 @@ _wfm_miaf_vendor() {
         return 1
     fi
 
+    # A re-issued SVID for the same identity is a rotation: keep the SVID being
+    # replaced (while the WFM can still accept it), so the SVID Rotation scenario
+    # can show the WFM takes both without the client being registered again.
+    local rotated=0
+    if [[ -f "$real_dir/client-svid-cert.pem" && -f "$real_dir/client-svid-key.pem" ]] \
+        && ! cmp -s "$real_dir/client-svid-cert.pem" "$stage/client-svid-cert.pem"; then
+        if [[ "$(device_spiffe_id "$real_dir/client-svid-cert.pem")" == "$ctt_spiffe_id" ]] \
+            && openssl verify -CAfile "$stage/trust-bundle-ca.pem" "$real_dir/client-svid-cert.pem" >/dev/null 2>&1 \
+            && openssl x509 -in "$real_dir/client-svid-cert.pem" -noout -checkend 0 >/dev/null 2>&1; then
+            cp -f "$real_dir/client-svid-cert.pem" "$real_dir/previous-client-svid-cert.pem"
+            cp -f "$real_dir/client-svid-key.pem"  "$real_dir/previous-client-svid-key.pem"
+            rotated=1
+        else
+            rm -f "$real_dir/previous-client-svid-cert.pem" "$real_dir/previous-client-svid-key.pem"
+        fi
+    fi
+
     local f
     for f in client-svid-cert.pem client-svid-key.pem trust-bundle-ca.pem; do
         mv -f "$stage/$f" "$real_dir/$f"
@@ -1705,6 +1725,15 @@ _wfm_miaf_vendor() {
     echo ""
     echo "  CTT client SVID : $ctt_spiffe_id"
     echo "  WFM it belongs to: ${ctt_spiffe_id%/client/*}"
+    if [[ $rotated -eq 1 ]]; then
+        echo ""
+        echo "  This SVID replaces an earlier one for the same identity. The earlier SVID"
+        echo "  was kept as the pre-rotation SVID — the SVID Rotation scenario will use both."
+    elif [[ ! -f "$real_dir/previous-client-svid-cert.pem" ]]; then
+        echo ""
+        echo "  SVID Rotation scenario: not run until the client SVID is re-issued for this"
+        echo "  same SPIFFE ID and this step is run again with the new SVID."
+    fi
     echo ""
     echo "  ➜  The WFM under test must accept this client: add the CTT client SVID's"
     echo "     SPIFFE ID above to its accepted-client list before running the tests"

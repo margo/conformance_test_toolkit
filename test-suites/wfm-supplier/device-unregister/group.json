@@ -1,0 +1,13 @@
+{
+  "name": "device-unregister",
+  "version": "1.0.0-rc.3",
+  "persona": "wfm-supplier",
+  "description": "DELETE /api/v1/capabilities/{deviceId} — unregister a device (204, then 404 device-not-found). Kept out of the core group: the Symphony sandbox build stopped responding when it received this request.",
+  "FolderPath": [
+    "../test-suites/wfm-supplier/core/test-cases"
+  ],
+  "flexibleOrder": false,
+  "testCases": [
+    "wfm-unregister-device"
+  ]
+}

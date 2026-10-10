@@ -324,6 +324,12 @@ Then select the group. For the full WFM conformance test set:
 Enter the number shown next to `core` in the list. Groups whose version is not
 `1.0.0-rc.3` ask a version-mismatch question before they run.
 
+`core` does not include the `DELETE /api/v1/capabilities/{deviceId}` check
+(unregister a device). That one is in its own group, `device-unregister`, so it
+is only sent when you choose to: the Symphony sandbox build stopped responding
+when it received this request (its service restarts by itself after about a
+minute). Run `device-unregister` against your own WFM as a separate run.
+
 ### Enter your WFM endpoints
 
 The runner will prompt for two URLs:
@@ -393,9 +399,28 @@ ctt-runner/reports/wfm-supplier/wfm-scenario-report-core_<timestamp>.html
 ```
 
 Open it in any browser. It contains:
-- A conformance requirement coverage table (green = at least one passing step covers the CR-ID, red = all steps for that CR-ID failed)
+- A conformance requirement coverage table (green = at least one passing step covers the CR-ID, red = all steps for that CR-ID failed, grey = its steps were not run)
 - A scenario-level summary table
 - A full step-detail table with status, method, endpoint, expected/actual HTTP code, and failure reason
+
+A step shown as `NOT RUN` was not sent because its precondition is missing —
+it is neither a pass nor a failure. Today this applies to the SVID Rotation
+scenario (below).
+
+### SVID Rotation scenario
+
+This scenario checks that the WFM keeps accepting the CTT after its client SVID
+is re-issued, without the client being registered again. It needs two SVIDs for
+the same SPIFFE ID, so it is `NOT RUN` on a first setup. To run it:
+
+1. Complete Phase 1 and run the suite once with the first SVID.
+2. Re-issue the client SVID for the **same** WFM ID and client ID
+   (sandbox: `cd ~/mis-deployment`, then `sudo -E bash ~/sandbox/scripts/mis.sh`
+   → 6) Generate SVID → principal 2, same IDs).
+3. Run Setup MIAF Identity again (Phase 1, Step 7). The CLI installs the new
+   SVID and keeps the one it replaces, and says so.
+4. Run the suite again. The scenario now sends one request with the earlier
+   SVID and one with the new SVID; both must succeed.
 
 This is the artifact you submit as evidence of conformance.
 

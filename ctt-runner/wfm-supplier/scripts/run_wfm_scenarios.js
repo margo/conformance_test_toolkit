@@ -118,6 +118,18 @@ const miafIdentity = (fs.existsSync(svidCertPath) && fs.existsSync(svidKeyPath))
     }
   : null;
 
+// The SVID this suite used before its client SVID was last re-issued, kept by
+// Setup MIAF Identity. Only the SVID Rotation scenario uses it.
+const svidPreviousCertPath = path.join(certDir, 'svid-previous-cert.pem');
+const svidPreviousKeyPath  = path.join(certDir, 'svid-previous-key.pem');
+const previousIdentity = (miafIdentity && fs.existsSync(svidPreviousCertPath) && fs.existsSync(svidPreviousKeyPath))
+  ? {
+      cert: fs.readFileSync(svidPreviousCertPath, 'utf8'),
+      key: fs.readFileSync(svidPreviousKeyPath, 'utf8'),
+      ca: miafIdentity.ca,
+    }
+  : null;
+
 // "Recognition by the WFM Client" (MIAF WFM Identity Profile): the WFM this
 // client may talk to is fixed by its own SVID — a client named
 // spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<wfm-client-id> belongs to
@@ -144,6 +156,26 @@ function recognizeWfm(peerCertificate) {
     return new Error(`WFM presented ${presented || 'no SPIFFE ID'}, expected ${expectedWfmSpiffeId} (the WFM this client SVID belongs to)`);
   }
   return undefined;
+}
+
+// step.svid_source drives the SVID Rotation scenario: "previous" presents the
+// SVID in use before the rotation, "refreshed" the current one. Without a kept
+// previous SVID no rotation has happened, so there is nothing to test — the
+// step is reported as NOT RUN instead of passing on the unrotated SVID.
+// Returns the reason a step cannot run, or ''.
+function svidSourceBlocker(step) {
+  if (!step.svid_source) return '';
+  if (!previousIdentity) {
+    return 'no SVID rotation to test — re-issue the client SVID for the same SPIFFE ID and run Setup MIAF Identity again (it keeps the SVID it replaces)';
+  }
+  const previous = new crypto.X509Certificate(previousIdentity.cert);
+  if (spiffeIdOf(previous.subjectAltName) !== ownSpiffeId) {
+    return 'the kept pre-rotation SVID belongs to a different SPIFFE ID than the current SVID';
+  }
+  if (step.svid_source === 'previous' && new Date(previous.validTo) < new Date()) {
+    return 'the pre-rotation SVID has expired';
+  }
+  return '';
 }
 
 // Identity/certs are loaded above exactly as the normal run does — curl mode exits
@@ -764,8 +796,8 @@ function request(method, url, headers, bodyText, mtls) {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
-        const body = Buffer.concat(chunks).toString('utf8');
-        resolve({ status: res.statusCode, headers: res.headers, body });
+        const rawBody = Buffer.concat(chunks);
+        resolve({ status: res.statusCode, headers: res.headers, body: rawBody.toString('utf8'), rawBody });
       });
     });
 
@@ -990,6 +1022,12 @@ async function fetchTrustBundleMode(argv) {
 // operation name from any scenario JSON's "validations" array — no other
 // code needs to change, since runStep() already loops over "validations" and
 // calls this function generically for each entry.
+// The exact bytes of a response body — digests are computed over these, never
+// over a re-encoded string (a bundle archive is binary).
+function exactBody(responseSource) {
+  return responseSource._rawBody ?? Buffer.from(responseSource._body ?? '', 'utf8');
+}
+
 function validate(responseSource, validation) {
   // Field-less validations (the bundle_* semantic checks below) carry no `field`.
   const actual =
@@ -1050,8 +1088,7 @@ function validate(responseSource, validation) {
       // sha256 of the exact serialized JSON response body.
       const rawEtag = getField(responseSource, '_headers.etag');
       if (rawEtag == null) return 'ETag header is missing';
-      const body = responseSource._body ?? '';
-      const bodyDigest = 'sha256:' + crypto.createHash('sha256').update(body, 'utf8').digest('hex');
+      const bodyDigest = 'sha256:' + crypto.createHash('sha256').update(exactBody(responseSource)).digest('hex');
       const normalised = String(rawEtag).replace(/^W\//, '').replace(/^"|"$/g, '');
       return normalised === bodyDigest
         ? ''
@@ -1063,13 +1100,26 @@ function validate(responseSource, validation) {
       // URL. `validation.value` is the expected digest (usually a {context} var
       // such as {deploymentDigest}); compared hex-to-hex, ignoring an optional
       // "sha256:" prefix on either side.
-      const body = responseSource._body ?? '';
-      const actualHex = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
+      const actualHex = crypto.createHash('sha256').update(exactBody(responseSource)).digest('hex');
       const expectedHex = String(expected ?? '').replace(/^sha256:/, '').toLowerCase();
       if (!expectedHex) return `${validation.field ?? 'digest'} expected value is empty`;
       return actualHex === expectedHex
         ? ''
         : `served body sha256 (${actualHex}) does not match the manifest digest (${expectedHex}) (MI-025)`;
+    }
+    case 'manifest_urls_are_content_addressed': {
+      // rc.3 State Manifest: bundle.url is /api/v1/bundles/{bundle.digest} and
+      // each deployments[].url is /api/v1/deployments/{deploymentId}/{digest}.
+      const problems = [];
+      const bundle = responseSource.bundle;
+      if (bundle && bundle.url !== `/api/v1/bundles/${bundle.digest}`) {
+        problems.push(`bundle.url is ${JSON.stringify(bundle.url)}, expected "/api/v1/bundles/${bundle.digest}"`);
+      }
+      (responseSource.deployments || []).forEach((ref, i) => {
+        const wanted = `/api/v1/deployments/${ref.deploymentId}/${ref.digest}`;
+        if (ref.url !== wanted) problems.push(`deployments[${i}].url is ${JSON.stringify(ref.url)}, expected "${wanted}"`);
+      });
+      return problems.join(' | ');
     }
     case 'has_application_description_layer': {
       // AR-002 (the one part every package MUST have, regardless of vendor):
@@ -1251,14 +1301,16 @@ function printStepResult(step, result, newContext, bodyText) {
   }
 }
 
-function printScenarioSummary(passed, total) {
-  const status = passed === total ? '✓ all passed' : `✗ ${total - passed} failed`;
+function printScenarioSummary(passed, total, skipped) {
+  const failed = total - passed - skipped;
+  const status = failed > 0 ? `✗ ${failed} failed` : skipped > 0 ? `⏭ ${skipped} not run` : '✓ all passed';
   console.log(`\n  Scenario result: ${passed}/${total} steps  ${status}`);
 }
 
 function printFinalSummary(allResults, scenarioResultsList, reportPath) {
   const totalPassed = allResults.filter((r) => r.passed).length;
-  const totalFailed = allResults.length - totalPassed;
+  const totalSkipped = allResults.filter((r) => r.skipped).length;
+  const totalFailed = allResults.length - totalPassed - totalSkipped;
 
   console.log('\n' + THICK_LINE);
   const grpLabel = groupName ? `Group: ${groupName}  ·  ` : '';
@@ -1273,24 +1325,32 @@ function printFinalSummary(allResults, scenarioResultsList, reportPath) {
 
   // Per-scenario table
   const nameW = Math.max(28, ...scenarioResultsList.map((s) => s.name.length));
-  const header = ` ${'Scenario'.padEnd(nameW)}  ${'Steps'.padStart(5)}  ${'Passed'.padStart(6)}  ${'Failed'.padStart(6)}`;
+  const header = ` ${'Scenario'.padEnd(nameW)}  ${'Steps'.padStart(5)}  ${'Passed'.padStart(6)}  ${'Failed'.padStart(6)}  ${'Not run'.padStart(7)}`;
   console.log('');
   console.log(header);
   console.log(' ' + THIN_LINE.slice(0, header.length - 1));
   for (const s of scenarioResultsList) {
-    const fail = s.total - s.passed;
-    const failStr = fail > 0 ? String(fail) : ' 0';
+    const fail = s.total - s.passed - s.skipped;
     console.log(
-      ` ${s.name.padEnd(nameW)}  ${String(s.total).padStart(5)}  ${String(s.passed).padStart(6)}  ${failStr.padStart(6)}`
+      ` ${s.name.padEnd(nameW)}  ${String(s.total).padStart(5)}  ${String(s.passed).padStart(6)}  ${String(fail).padStart(6)}  ${String(s.skipped).padStart(7)}`
     );
   }
   console.log(' ' + THIN_LINE.slice(0, header.length - 1));
   console.log(
-    ` ${'TOTAL'.padEnd(nameW)}  ${String(allResults.length).padStart(5)}  ${String(totalPassed).padStart(6)}  ${String(totalFailed).padStart(6)}`
+    ` ${'TOTAL'.padEnd(nameW)}  ${String(allResults.length).padStart(5)}  ${String(totalPassed).padStart(6)}  ${String(totalFailed).padStart(6)}  ${String(totalSkipped).padStart(7)}`
   );
 
+  const notRun = allResults.filter((r) => r.skipped);
+  if (notRun.length > 0) {
+    console.log('\n NOT RUN:');
+    for (const r of notRun) {
+      console.log(`\n  ⏭  ${r.step}  [${r.scenario}]  ${r.name}`);
+      console.log(`     • ${r.reason}`);
+    }
+  }
+
   // List failed steps
-  const failed = allResults.filter((r) => !r.passed);
+  const failed = allResults.filter((r) => !r.passed && !r.skipped);
   if (failed.length > 0) {
     console.log('\n FAILED TESTS:');
     for (const r of failed) {
@@ -1306,10 +1366,11 @@ function printFinalSummary(allResults, scenarioResultsList, reportPath) {
   const relReport = path.relative(process.cwd(), reportPath);
   console.log(` Report: ${relReport}`);
   console.log('');
+  const notRunNote = totalSkipped > 0 ? `  (${totalSkipped} not run)` : '';
   if (totalFailed === 0) {
-    console.log(` ✅  ALL ${totalPassed} TESTS PASSED`);
+    console.log(` ✅  ALL ${totalPassed} EXECUTED TESTS PASSED${notRunNote}`);
   } else {
-    console.log(` ❌  ${totalFailed} of ${allResults.length} TESTS FAILED`);
+    console.log(` ❌  ${totalFailed} of ${allResults.length} TESTS FAILED${notRunNote}`);
   }
   console.log(THICK_LINE + '\n');
 }
@@ -1348,12 +1409,13 @@ async function performHTTPStep(step) {
     // mtls_wrong_server_ca: true → MIAF-002 negative test: present real client SVID
     // but verify the WFM's server cert against the wrong CA (device self-signed CA).
     // The WFM's SVID cannot chain to the device CA → TLS handshake fails → transport error.
+    const ownIdentity = step.svid_source === 'previous' ? previousIdentity : miafIdentity;
     const identity = step.mtls_wrong_server_ca
-      ? { cert: miafIdentity.cert, key: miafIdentity.key, ca: caCertificate }
-      : miafIdentity;
+      ? { cert: ownIdentity.cert, key: ownIdentity.key, ca: caCertificate }
+      : ownIdentity;
     const response = await request(method, url, headers, bodyText, identity);
     const parsed = parseBody(response.body);
-    const responseSource = { ...parsed, _headers: response.headers, _body: response.body };
+    const responseSource = { ...parsed, _headers: response.headers, _body: response.body, _rawBody: response.rawBody };
     return { method, endpoint, bodyText, response, responseSource };
   }
 
@@ -1377,7 +1439,7 @@ async function performHTTPStep(step) {
 
   const response = await request(method, url, headers, bodyText);
   const parsed = parseBody(response.body);
-  const responseSource = { ...parsed, _headers: response.headers, _body: response.body };
+  const responseSource = { ...parsed, _headers: response.headers, _body: response.body, _rawBody: response.rawBody };
   return { method, endpoint, bodyText, response, responseSource };
 }
 
@@ -1505,6 +1567,29 @@ function runValidations(responseSource, validations) {
 // printStepResult(), so failures are visible in the console output as soon
 // as they happen rather than only in a report generated at the very end.
 async function runStep(scenario, step) {
+  const blocker = svidSourceBlocker(step);
+  if (blocker) {
+    const resultEntry = {
+      scenario: scenario.id,
+      scenarioName: scenario.name,
+      step: step.id,
+      name: step.name,
+      crIds: (step.crIds && step.crIds.length ? step.crIds : scenario.crIds) || [],
+      method: (step.method || 'GET').toUpperCase(),
+      endpoint: substitute(step.endpoint || ''),
+      expected: step.expected_status,
+      actual: '-',
+      passed: false,
+      skipped: true,
+      reason: blocker,
+    };
+    results.push(resultEntry);
+    console.log('');
+    console.log(`  [${step.id}]  ${step.name}`);
+    console.log(`   ⏭  NOT RUN  ${blocker}`);
+    return 'skipped';
+  }
+
   // fresh_cert: temporarily replace the global signing identity with a brand-new,
   // never-onboarded certificate so the WFM sees an unregistered signer.
   let savedCertState = null;
@@ -1681,13 +1766,14 @@ function htmlEscape(value) {
 // step tags it, but only counts as "passing" if every such step passed.
 function writeReport() {
   const passed = results.filter((r) => r.passed).length;
-  const failed = results.length - passed;
+  const skipped = results.filter((r) => r.skipped).length;
+  const failed = results.length - passed - skipped;
   const grpLabel = groupName ? htmlEscape(groupName) : 'WFM Scenario';
 
   const rows = results
     .map(
       (r) => `
-    <tr class="${r.passed ? 'pass' : 'fail'}">
+    <tr class="${r.passed ? 'pass' : r.skipped ? 'skip' : 'fail'}">
       <td>${htmlEscape(r.scenarioName || r.scenario)}</td>
       <td>${htmlEscape(r.step)}</td>
       <td>${htmlEscape(r.name)}</td>
@@ -1695,7 +1781,7 @@ function writeReport() {
       <td>${htmlEscape(r.endpoint)}</td>
       <td>${htmlEscape(r.expected)}</td>
       <td>${htmlEscape(r.actual)}</td>
-      <td>${htmlEscape(r.passed ? 'PASS' : 'FAIL')}</td>
+      <td>${htmlEscape(r.passed ? 'PASS' : r.skipped ? 'NOT RUN' : 'FAIL')}</td>
       <td>${htmlEscape(r.reason)}</td>
     </tr>`
     )
@@ -1704,13 +1790,14 @@ function writeReport() {
   // Per-scenario summary rows for HTML
   const scenarioRows = scenarioResults
     .map((s) => {
-      const f = s.total - s.passed;
+      const f = s.total - s.passed - s.skipped;
       return `
     <tr class="${f === 0 ? 'pass' : 'fail'}">
       <td>${htmlEscape(s.name)}</td>
       <td>${s.total}</td>
       <td>${s.passed}</td>
       <td>${f}</td>
+      <td>${s.skipped}</td>
     </tr>`;
     })
     .join('\n');
@@ -1733,6 +1820,7 @@ function writeReport() {
     th { background: #eef2f7; }
     tr.pass td:nth-child(8) { color: #166534; font-weight: 700; }
     tr.fail td:nth-child(8), tr.fail td:last-child { color: #b91c1c; font-weight: 700; }
+    tr.skip td:nth-child(8), tr.skip td:last-child { color: #6b7280; font-weight: 700; }
     .scenario-summary td:nth-child(4) { color: #b91c1c; }
     tr.pass.scenario-summary td:nth-child(4) { color: inherit; }
     .version-warning { margin-bottom: 14px; padding: 10px 14px; border-radius: 4px; background: #dcfce7; color: #166534; border: 1px solid #86efac; font-size: 13px; font-weight: bold; }
@@ -1753,21 +1841,25 @@ function writeReport() {
       : ''
   }
   <div class="summary ${failed === 0 ? 'all-pass' : 'has-fail'}">
-    ${failed === 0 ? '✅' : '❌'} ${passed} passed, ${failed} failed, ${results.length} total
+    ${failed === 0 ? '✅' : '❌'} ${passed} passed, ${failed} failed${skipped > 0 ? `, ${skipped} not run` : ''}, ${results.length} total
   </div>
 
   ${(() => {
     const all = new Set();
     const covered = new Set();
+    const executed = new Set();
     for (const r of results) {
       for (const c of r.crIds || []) {
         all.add(c);
         if (r.passed) covered.add(c);
+        if (!r.skipped) executed.add(c);
       }
     }
     if (all.size === 0) return '';
+    // green = a passing step covers it, grey = every step for it was not run, red = failing
+    const chip = (c) => (covered.has(c) ? ['#dcfce7', '#166534'] : !executed.has(c) ? ['#f3f4f6', '#6b7280'] : ['#fee2e2', '#b91c1c']);
     const list = [...all].sort().map((c) =>
-      `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 6px;border-radius:3px;font-size:12px;background:${covered.has(c) ? '#dcfce7' : '#fee2e2'};color:${covered.has(c) ? '#166534' : '#b91c1c'}">${htmlEscape(c)}</span>`
+      `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 6px;border-radius:3px;font-size:12px;background:${chip(c)[0]};color:${chip(c)[1]}">${htmlEscape(c)}</span>`
     ).join('');
     return `<div class="meta">Conformance requirements exercised: <strong>${covered.size} / ${all.size}</strong> passing</div><div style="margin-bottom:18px">${list}</div>`;
   })()}
@@ -1775,7 +1867,7 @@ function writeReport() {
   <h2>Scenario Summary</h2>
   <table>
     <thead>
-      <tr><th>Scenario</th><th>Total</th><th>Passed</th><th>Failed</th></tr>
+      <tr><th>Scenario</th><th>Total</th><th>Passed</th><th>Failed</th><th>Not run</th></tr>
     </thead>
     <tbody class="scenario-summary">${scenarioRows}</tbody>
   </table>
@@ -1813,19 +1905,21 @@ function writeReport() {
     printScenarioHeader(scenario, i + 1, total);
 
     let scenarioPassed = 0;
+    let scenarioSkipped = 0;
     for (const step of scenario.steps || []) {
-      const ok = await runStep(scenario, step);
-      if (ok) scenarioPassed++;
+      const outcome = await runStep(scenario, step);
+      if (outcome === 'skipped') scenarioSkipped++;
+      else if (outcome) scenarioPassed++;
     }
 
     const stepCount = (scenario.steps || []).length;
-    scenarioResults.push({ name: scenario.name, passed: scenarioPassed, total: stepCount });
-    printScenarioSummary(scenarioPassed, stepCount);
+    scenarioResults.push({ name: scenario.name, passed: scenarioPassed, skipped: scenarioSkipped, total: stepCount });
+    printScenarioSummary(scenarioPassed, stepCount, scenarioSkipped);
   }
 
   writeReport();
   printFinalSummary(results, scenarioResults, reportFile);
 
-  const failed = results.filter((r) => !r.passed).length;
+  const failed = results.filter((r) => !r.passed && !r.skipped).length;
   process.exit(failed > 0 ? 1 : 0);
 })();
