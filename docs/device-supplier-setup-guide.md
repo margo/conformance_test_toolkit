@@ -104,7 +104,7 @@ MIS  ──issues SVIDs──►  mock WFM server  (MIAF TLS identity, port 3003
 > real vendor conformance testing, use the CA from whichever MIS the vendor's
 > device is enrolled in.
 
-### Path 1 — Centralized MIS (recommended)
+### Path 1 — Centralized MIS
 
 **Step 1 — Generate SVIDs via your MIS**
 
@@ -168,43 +168,6 @@ certs expire.
 
 ---
 
-### Path 2 — CTT self-signed CA (offline / no MIS)
-
-Use this path when no MIS is available. The CTT generates its own CA and
-issues all certs itself — no external dependency, but SPIFFE IDs are
-self-signed and not interoperable with a real MIS trust domain.
-
-```bash
-bash ctt-runner/ctt-start.sh
-# Select: 2) Device Supplier → 1) Setup Identity
-```
-
-Or directly:
-
-```bash
-cd ctt-runner/device-supplier
-bash generate-certs.sh ./certs localhost
-```
-
-**What this generates in `ctt-runner/device-supplier/certs/`:**
-
-| File | What it is | Used by |
-|---|---|---|
-| `ca-cert.pem` | Mock WFM CA | Test runner + any real device-agent (to trust the mock WFM) |
-| `server-cert.pem` / `server-key.pem` | Mock WFM TLS cert (port 3001) | `bin/server` |
-| `device-cert.pem` / `device-key.pem` | EC P-256 device identity (RFC 9421) | Test runner signing |
-| `device-ec384-cert.pem` / `device-ec384-key.pem` | EC P-384 (MI-012 test) | Test runner |
-| `device-rsa2048-cert.pem` / `device-rsa2048-key.pem` | RSA-2048 (MI-014 test) | Test runner |
-| `device-weakkey-cert.pem` / `device-weakkey-key.pem` | RSA-1024 weak key | Test runner — negative test |
-| `svid-cert.pem` / `svid-key.pem` | CTT-signed X.509-SVID (mTLS) | Test runner MIAF mTLS steps |
-| `svid-ca.pem` | Same as `ca-cert.pem` | Test runner — trusts mock WFM's cert |
-| `untrusted-server-cert.pem` / `untrusted-server-key.pem` | Cert from a different CA | MI-018 negative test |
-
-**Cert validity:** ~2 years (825 days). Re-run only when certs expire or
-the server hostname changes.
-
----
-
 ## Phase 2 — Start the mock WFM server
 
 The CTT CLI builds the binaries automatically on first run if not already
@@ -219,37 +182,6 @@ The server starts on two ports:
 - **Port 3001** — plain TLS (legacy, not used by current conformance tests)
 - **Port 3003** — MIAF mTLS with the SVIDs from Phase 1
 
-Or start manually:
-
-### With MIS SVIDs (Path 1)
-
-Pass the MIAF cert env vars so the server activates port 3003 with the real
-MIS-issued SVID:
-
-```bash
-cd ctt-runner/device-supplier
-MIAF_SERVER_CERT="certs/miaf-server-cert.pem" \
-MIAF_SERVER_KEY="certs/miaf-server-key.pem" \
-MIAF_TRUST_CA="certs/svid-ca.pem" \
-./bin/server
-```
-
-The server will log two listeners on startup:
-
-```
-[mock-wfm] TLS  listener on :3001  (server-cert.pem — mock CA, RFC 9421 steps)
-[mock-wfm] mTLS listener on :3003  (miaf-server-cert.pem — MIS SVID, mTLS steps)
-```
-
-### With CTT self-signed CA (Path 2)
-
-```bash
-cd ctt-runner/device-supplier
-./bin/server
-```
-
-Port 3003 will use the CTT-generated `svid-cert.pem` as the server identity
-instead of a real MIS SVID.
 
 ### Via the interactive menu
 
@@ -263,24 +195,6 @@ The menu will prompt for MIAF cert paths if you want to use MIS SVIDs.
 ---
 
 ## Phase 3 — Run the conformance suite
-
-### Directly (recommended for CI / scripting)
-
-```bash
-cd ctt-runner/device-supplier
-./bin/run_tests \
-    -url      "https://localhost:3001/v1alpha2/margo" \
-    -miaf-url "https://localhost:3003/v1alpha2/margo" \
-    -file     "../../test-suites/device-supplier/core/test-cases/device-supplier.json" \
-    -ctt-margo-version "1.0.0-rc.3" \
-    -flexible-order
-```
-
-`-url` → port 3001 (RFC 9421 signed calls, mock CA cert)  
-`-miaf-url` → port 3003 (MIAF mTLS calls, MIS SVID)
-
-Replace `localhost` with the machine's IP if running runner and server on
-different hosts.
 
 ### Via the interactive menu
 
@@ -326,45 +240,7 @@ Available Device Test Groups:
 For a first run, select `core`. It covers the full set of required
 conformance scenarios for the device-agent role.
 
-### Watch the output
-
-Each step prints immediately:
-
 ```
-=== SCENARIO: Capabilities Reporting ===
-
-  [step-2.1]  Report Capabilities with POST
-   ▶  PUT    /api/v1/capabilities/device-001  [signed]
-   ⚙  MARGO-DEV-MANAGEMENTINTERFACE-016
-   ✓  PASS  201 Created
-
-  [step-2.2]  Report Capabilities with PUT (update)
-   ▶  PUT    /api/v1/capabilities/device-001  [signed]
-   ✓  PASS  200 OK
-
-  [step-neg-1]  Request without signature is rejected
-   ▶  POST   /api/v1/capabilities/device-001  [unsigned]
-   ✓  PASS  401 Unauthorized
-
-=== SCENARIO: Desired State Retrieval ===
-  ...
-```
-
-### Final summary and report
-
-```
-══════════════════════════════════════════════════════════════════════
- Device Conformance Summary  ·  Group: core  ·  104 tests
-══════════════════════════════════════════════════════════════════════
-
- Scenario                               Steps  Passed  Failed
- Capabilities Reporting                     8       8       0
- Desired State — Manifest Validation       12      12       0
- Deployment Status Reporting                6       6       0
- ...
- TOTAL                                    104     102       2
-```
-
 The HTML report is written to two locations:
 
 ```
