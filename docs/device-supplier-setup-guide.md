@@ -113,7 +113,7 @@ Use your MIS to generate a WFM SVID and a client/device SVID.
 For the Margo sandbox MIS (cloned to `~/sandbox` in Prerequisites):
 
 ```bash
-# Generate SVIDs — follow prompts to create a WFM SVID and a client SVID
+# Generate SVIDs — follow prompts to generate the certs and create a WFM and a WFM-client SVID
 bash ~/sandbox/scripts/mis.sh
 sudo chown -R $USER:$USER ~/mis-deployment
 ```
@@ -123,6 +123,9 @@ SVID cert/key pair, a client SVID cert/key pair, and the MIS CA cert, then
 copy them to the CTT machine before Step 2.
 
 **Step 2 — Place SVIDs into the CTT cert directory**
+ls ~/mis-deployment/ | grep x509svid
+x509svid-<wfm-id>            ← Symphony's WFM SVID (server identity)
+x509svid-<wfm-id>-<client-id> ← CTT's device SVID (client identity)
 
 The SVIDs must be on the CTT machine before this step. Two scenarios:
 
@@ -136,6 +139,16 @@ bash ctt-runner/ctt-start.sh
 # CLI auto-detects ~/mis-deployment/x509svid-* and asks for confirmation
 ```
 
+Set variables for the rest of the steps:
+
+WFM_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>
+WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-<client-id>
+# The exact directory names depend on the IDs you entered in mis.sh.
+# Check what was created: ls ~/mis-deployment/ | grep x509svid
+# Example: if wfm-id="wfm", client-id="wfm-wfm-client" or "wfmclient":
+#   WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
+#   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfm-wfm-client
+
 **MIS on a different machine** (vendor setup):
 Copy the SVID files to the CTT machine first, then run the CLI and provide explicit paths when prompted:
 
@@ -146,11 +159,6 @@ scp <mis-dir>/x509svid-<wfm-id>/payload-key.pem    ctt-host:~/wfm-svid-key.pem
 scp <mis-dir>/x509svid-<client-id>/payload-cert.pem ctt-host:~/client-svid-cert.pem
 scp <mis-dir>/x509svid-<client-id>/payload-key.pem  ctt-host:~/client-svid-key.pem
 scp <mis-dir>/certs/ca.crt                          ctt-host:~/mis-ca.crt
-
-# On the CTT machine — run the CLI and enter those paths when prompted
-bash ctt-runner/ctt-start.sh
-# Select: 2) Device Supplier → 1) Setup Identity
-```
 
 All certs land in `ctt-runner/device-supplier/certs/`.
 
