@@ -130,6 +130,7 @@ The SVIDs must be on the CTT machine before this step. Two scenarios:
 `~/mis-deployment/` is already local — go straight to the CLI:
 
 ```bash
+cd ~/workspace/conformance_test_toolkit
 bash ctt-runner/ctt-start.sh
 # Select: 2) Device Supplier → 1) Setup Identity
 # CLI auto-detects ~/mis-deployment/x509svid-* and asks for confirmation
