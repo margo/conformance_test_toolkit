@@ -57,7 +57,7 @@ device-agent](#testing-a-real-device-agent) below.
 | jq | any | group file parsing; `apt install jq` / `brew install jq` |
 | bash | 4+ | macOS ships bash 3 — install bash 5 via Homebrew |
 
-Clone the repo and check out the conformance branch:
+**1. Clone the CTT repo:**
 
 ```bash
 mkdir -p ~/workspace && cd ~/workspace
@@ -66,7 +66,17 @@ cd conformance_test_toolkit
 git checkout feature/multi-persona-conformance
 ```
 
-Then verify tooling:
+**2. Clone the Margo sandbox** (provides `mis.sh` — the MIS used for SVID generation):
+
+```bash
+cd ~
+git clone https://github.com/eclipse-margo/margo.git sandbox
+```
+
+> If the sandbox is already cloned elsewhere, note the path — you will need
+> `mis.sh` from `<sandbox>/scripts/mis.sh` in Phase 1.
+
+**3. Verify tooling:**
 
 ```bash
 go version      # need 1.24+
@@ -100,20 +110,23 @@ MIS  ──issues SVIDs──►  mock WFM server  (MIAF TLS identity, port 3003
 
 Use your MIS to generate a WFM SVID and a client/device SVID.
 
-For the Margo sandbox MIS:
+For the Margo sandbox MIS (cloned to `~/sandbox` in Prerequisites):
 
 ```bash
 # Verify MIS is running
 docker ps --filter name=margo-identity-service --format "{{.Status}}"
-# → Up N minutes   (if not: bash ~/sandbox/scripts/mis.sh docker start-docker)
+# → Up N minutes
+# If not running:
+bash ~/sandbox/scripts/mis.sh docker start-docker
 
-# Generate SVIDs (follow prompts: WFM SVID + client SVID)
+# Generate SVIDs — follow prompts to create a WFM SVID and a client SVID
 bash ~/sandbox/scripts/mis.sh
 sudo chown -R $USER:$USER ~/mis-deployment
 ```
 
-For a vendor-provided MIS: follow the vendor's MIS procedure to obtain a WFM
-SVID cert/key pair, a client SVID cert/key pair, and the MIS CA cert.
+For a vendor-provided or external MIS: use your MIS tooling to obtain a WFM
+SVID cert/key pair, a client SVID cert/key pair, and the MIS CA cert, then
+copy them to the CTT machine before Step 2.
 
 **Step 2 — Place SVIDs into the CTT cert directory**
 
