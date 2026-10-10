@@ -113,12 +113,6 @@ Use your MIS to generate a WFM SVID and a client/device SVID.
 For the Margo sandbox MIS (cloned to `~/sandbox` in Prerequisites):
 
 ```bash
-# Verify MIS is running
-docker ps --filter name=margo-identity-service --format "{{.Status}}"
-# → Up N minutes
-# If not running:
-bash ~/sandbox/scripts/mis.sh docker start-docker
-
 # Generate SVIDs — follow prompts to create a WFM SVID and a client SVID
 bash ~/sandbox/scripts/mis.sh
 sudo chown -R $USER:$USER ~/mis-deployment
@@ -606,7 +600,7 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 | 401 on all requests (port 3001) | Request not signed (RFC 9421) | Device-agent must HTTP-sign every request on port 3001 |
 | Sandbox device-agent fails to connect | `config.yaml` WFM URL still points at Symphony | Set `wfm.sbiUrl: https://<ctt-host>:3003/v1alpha2/margo` |
 | Device-agent connects but WFM log is silent | Mock WFM server not running | Start `bin/server` with MIAF env vars before the device-agent connects |
-| `container 'margo-identity-service' is not running` | MIS container stopped | `bash ~/sandbox/scripts/mis.sh docker start-docker` |
+| `container 'margo-identity-service' is not running` | MIS container stopped | Re-run `bash ~/sandbox/scripts/mis.sh` and follow prompts |
 | `~/mis-deployment/` dirs still owned by root | `mis.sh` runs as sudo | `sudo chown -R $USER:$USER ~/mis-deployment` |
 | `cp: cannot create regular file 'certs/svid-key.pem': Permission denied` | Files in `certs/` are root-owned or mode 400 | `sudo chown -R $USER:$USER certs/ && chmod -R u+w certs/` then re-copy |
 | Go build fails: module not found | Go module cache issue | `go mod download` from `ctt-runner/device-supplier/` |
