@@ -2598,7 +2598,7 @@
           {
             "field": "_raw",
             "operation": "contains",
-            "value": "/sample-apps/app-a/compose.yaml"
+            "value": "repository: oci://registry.example.com/margo-ctt/sample-app-a"
           }
         ],
         "extract_context": {},
@@ -2732,7 +2732,7 @@
           {
             "field": "_raw",
             "operation": "contains",
-            "value": "/sample-apps/app-b/compose.yaml"
+            "value": "repository: oci://registry.example.com/margo-ctt/sample-app-b"
           }
         ],
         "extract_context": {},

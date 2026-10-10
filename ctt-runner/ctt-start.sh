@@ -320,7 +320,9 @@ select_device_group() {
         for i in "${!groups[@]}"; do
             local metadata="${group_metadata[$i]}"
             IFS='|' read -r name version desc count <<< "$metadata"
-            printf "  %d) %-15s (v%s) - %d tests\n" "$((i+1))" "$name" "$version" "$count"
+            local tests_label="$count selected scenarios"
+            [[ "$count" -eq 0 ]] && tests_label="all scenarios"
+            printf "  %d) %-22s (%s) - %s\n" "$((i+1))" "$name" "v${version#v}" "$tests_label"
         done
         echo ""
     } >&2
@@ -1170,31 +1172,14 @@ execute_device_tests() {
     
     log "📋 Test Scenarios: $(basename "$test_scenarios")"
     
-    # Check if run_tests.go exists
-    local run_tests_go="$CONFORMANCE_DIR/device-supplier/run_tests.go"
-    if [[ ! -f "$run_tests_go" ]]; then
-        error "Device test runner not found: $run_tests_go"
-    fi
-    
     cd "$CONFORMANCE_DIR/device-supplier"
-    
-    # Check if Go is installed
-    if ! command -v go &> /dev/null; then
-        error "Go not found. Install from https://golang.org/doc/install"
+
+    if ! device_identity_ready "./certs"; then
+        error "MIAF identity not found in $CONFORMANCE_DIR/device-supplier/certs. Run: ctt-start.sh → Device Supplier → Setup Identity"
     fi
-    
-    # Build mock server if not already built
-    if [[ ! -f "bin/server" ]]; then
-        log "📦 Building mock WFM server..."
-        go build -o bin/server ./scripts/cmd/device-supplier || error "Failed to build mock server"
-    fi
-    
-    # Build test runner if not already built
-    if [[ ! -f "bin/run_tests" ]]; then
-        log "📦 Building device test runner..."
-        go build -o bin/run_tests . || error "Failed to build test runner"
-    fi
-    
+
+    device_prepare_runtime
+
     # Copy test scenarios from Data-Generator or use custom scenarios
     log "📋 Staging test scenarios..."
     mkdir -p ./device-scenarios
@@ -1207,49 +1192,17 @@ execute_device_tests() {
         cp "$test_scenarios" ./device-scenarios/test-scenarios.json
     fi
     
-    # Clean up any stale server process on port 3001
-    if [[ -f /tmp/wfm-server.pid ]]; then
-        local old_pid=$(cat /tmp/wfm-server.pid)
-        if kill -0 $old_pid 2>/dev/null; then
-            log "⛔ Stopping previous server instance (PID: $old_pid)..."
-            kill -15 $old_pid 2>/dev/null
-            sleep 1
-        fi
-        rm -f /tmp/wfm-server.pid
-    fi
-    
-    # Also check if anything is listening on port 3001 and kill it
-    if command -v lsof &> /dev/null; then
-        local pid_on_port=$(lsof -ti :3001 2>/dev/null)
-        if [[ -n "$pid_on_port" ]]; then
-            log "⛔ Stopping process on port 3001 (PID: $pid_on_port)..."
-            kill -15 $pid_on_port 2>/dev/null
-            sleep 1
-        fi
-    fi
-    
+    device_stop_stale_server
+
     # Repair ownership on cert paths that sudo-based setup may have left as root
     local current_user
     current_user=$(id -un)
     sudo chown -R "${current_user}:${current_user}" "./certs" 2>/dev/null || true
     sudo chown -R "${current_user}:${current_user}" "${HOME}/.docker" 2>/dev/null || true
 
-    # Start mock server in background with MIAF mTLS enabled
     log "🚀 Starting Mock WFM Server (background)..."
-    local cli_cert_dir="./certs"
-    MIAF_SERVER_CERT="$cli_cert_dir/server-cert.pem" \
-    MIAF_SERVER_KEY="$cli_cert_dir/server-key.pem" \
-    MIAF_TRUST_CA="$cli_cert_dir/svid-ca.pem" \
-    ./bin/server > /tmp/wfm-server.log 2>&1 &
-    local server_pid=$!
-    echo $server_pid > /tmp/wfm-server.pid
-    sleep 2  # Wait for server to initialize
-
-    # Verify server started
-    if ! kill -0 $server_pid 2>/dev/null; then
-        error "Failed to start mock server. Check /tmp/wfm-server.log"
-    fi
-    success "Mock WFM Server started (PID: $server_pid)"
+    device_launch_server "./certs"
+    success "Mock WFM Server started (PID: $(cat /tmp/wfm-server.pid))"
 
     # Run tests against mock server
     log "▶️  Running Device Conformance Tests (as device agent)..."
@@ -1923,49 +1876,73 @@ device_generate_certs() {
         fi
     done
 
+    # The spec ties the two identities together: the client SVID must be
+    # <WFM SPIFFE ID>/client/<wfm-client-id>.
+    local wfm_spiffe_id client_spiffe_id
+    wfm_spiffe_id=$(device_spiffe_id "$stage/miaf-server-cert.pem")
+    client_spiffe_id=$(device_spiffe_id "$stage/svid-cert.pem")
+    if [[ -z "$wfm_spiffe_id" || "$wfm_spiffe_id" == *"/client/"* || "$client_spiffe_id" != "$wfm_spiffe_id/client/"* ]]; then
+        rm -rf "$stage"
+        warn "The client SVID is not a client of the WFM SVID:"
+        warn "  WFM SVID    : ${wfm_spiffe_id:-no SPIFFE ID}"
+        warn "  Client SVID : ${client_spiffe_id:-no SPIFFE ID}"
+        warn "Expected the client to be <WFM SPIFFE ID>/client/<client-id>. Check which one is the WFM"
+        warn "and which is the client, and that both were generated for the same WFM ID."
+        warn "Identity setup aborted — existing certs in $cert_dir were left untouched."
+        return 1
+    fi
+
     for f in miaf-server-cert.pem miaf-server-key.pem svid-cert.pem svid-key.pem svid-ca.pem; do
         mv -f "$stage/$f" "$cert_dir/$f"
     done
     rm -rf "$stage"
 
-    # Ensure manifests/ symlink — server reads ./manifests/assertions.json at startup
-    if [[ ! -e "$device_dir/manifests" ]]; then
-        ln -s utils/manifests "$device_dir/manifests"
-    fi
-
     echo ""
     success "Identity setup complete — both SVIDs verified against the MIS CA."
     echo ""
-    echo "  Certs: $cert_dir"
+    echo "  Certs       : $cert_dir"
+    echo "  WFM SVID    : $wfm_spiffe_id"
+    echo "  Client SVID : $client_spiffe_id"
     echo ""
-    echo "  ➜  Share $cert_dir/svid-ca.pem with the vendor — their device must trust this CA."
+    echo "  ➜  A real device tested against this mock WFM must trust the same MIS CA"
+    echo "     ($cert_dir/svid-ca.pem) and hold an SVID of the form"
+    echo "     $wfm_spiffe_id/client/<client-id>."
     echo ""
 }
 
-device_start_server() {
-    local device_dir="$CONFORMANCE_DIR/device-supplier"
-    local cert_dir="$device_dir/certs"
-
-    # Check certs exist
-    if [[ ! -f "$cert_dir/miaf-server-cert.pem" || ! -f "$cert_dir/svid-ca.pem" ]]; then
-        warn "MIAF certs not found at $cert_dir. Please run 'Setup Identity' first (option 1)."
-        return 1
-    fi
-
-    cd "$device_dir"
-
-    # Check Go is installed
+# Builds both device-supplier binaries from the current source (so a stale
+# bin/ never outlives a 'git pull') and links the folders the mock WFM reads
+# at runtime. Run from the device-supplier directory.
+device_prepare_runtime() {
     if ! command -v go &> /dev/null; then
         error "Go not found. Install from https://golang.org/doc/install"
     fi
 
-    # Build mock server if needed
-    if [[ ! -f "bin/server" ]]; then
-        log "📦 Building mock WFM server..."
-        go build -o bin/server ./scripts/cmd/device-supplier || error "Failed to build mock server"
-    fi
+    log "📦 Building mock WFM server and test runner..."
+    go build -o bin/server ./scripts/cmd/device-supplier || error "Failed to build mock server"
+    go build -o bin/run_tests ./scripts || error "Failed to build test runner"
 
-    # Stop any stale server on port 3001
+    local dir
+    for dir in manifests sample-apps; do
+        [[ -e "$dir" ]] || ln -s "utils/$dir" "$dir"
+    done
+}
+
+# True when the MIS-issued identity from 'Setup Identity' is in place.
+device_identity_ready() {
+    local cert_dir="$1" f
+    for f in miaf-server-cert.pem miaf-server-key.pem svid-cert.pem svid-key.pem svid-ca.pem; do
+        [[ -f "$cert_dir/$f" ]] || return 1
+    done
+}
+
+# Prints the SPIFFE ID (URI SAN) of a certificate.
+device_spiffe_id() {
+    openssl x509 -in "$1" -noout -ext subjectAltName 2>/dev/null | grep -o 'spiffe://[^, ]*' | head -1
+}
+
+# Stops any mock WFM left over from an earlier run.
+device_stop_stale_server() {
     if [[ -f /tmp/wfm-server.pid ]]; then
         local old_pid
         old_pid=$(cat /tmp/wfm-server.pid)
@@ -1978,49 +1955,74 @@ device_start_server() {
     fi
 
     if command -v lsof &> /dev/null; then
-        local pid_on_port
-        pid_on_port=$(lsof -ti :3001 2>/dev/null || true)
-        if [[ -n "$pid_on_port" ]]; then
-            log "⛔ Stopping process on port 3001 (PID: $pid_on_port)..."
-            kill -15 "$pid_on_port" 2>/dev/null
-            sleep 1
-        fi
+        local port pid_on_port
+        for port in 3001 3003; do
+            pid_on_port=$(lsof -ti ":$port" -sTCP:LISTEN 2>/dev/null || true)
+            if [[ -n "$pid_on_port" ]]; then
+                log "⛔ Stopping process on port $port (PID: $pid_on_port)..."
+                kill -15 $pid_on_port 2>/dev/null
+                sleep 1
+            fi
+        done
     fi
+}
 
-    # Start server in background (must run from device_dir so it finds ./data, ./manifests, ./certs)
-    log "🚀 Starting Mock WFM Server..."
-    (cd "$device_dir" && \
-        MIAF_SERVER_CERT="$cert_dir/server-cert.pem" \
-        MIAF_SERVER_KEY="$cert_dir/server-key.pem" \
-        MIAF_TRUST_CA="$cert_dir/svid-ca.pem" \
-        exec ./bin/server) > /tmp/wfm-server.log 2>&1 &
+# Starts the mock WFM in the background: the Management Interface on the mTLS
+# port (3003) with the MIS-issued WFM SVID, trusting only the MIS CA. nohup
+# keeps it running after the menu or the terminal session closes.
+# Run from the device-supplier directory.
+device_launch_server() {
+    local cert_dir="$1"
+    MIAF_SERVER_CERT="$cert_dir/miaf-server-cert.pem" \
+    MIAF_SERVER_KEY="$cert_dir/miaf-server-key.pem" \
+    MIAF_TRUST_CA="$cert_dir/svid-ca.pem" \
+        nohup ./bin/server > /tmp/wfm-server.log 2>&1 &
     local server_pid=$!
-    echo $server_pid > /tmp/wfm-server.pid
+    echo "$server_pid" > /tmp/wfm-server.pid
     sleep 2
 
     if ! kill -0 "$server_pid" 2>/dev/null; then
-        error "Failed to start mock server. Check /tmp/wfm-server.log"
+        rm -f /tmp/wfm-server.pid
+        tail -5 /tmp/wfm-server.log >&2
+        error "Failed to start mock server. Full log: /tmp/wfm-server.log"
+    fi
+}
+
+device_start_server() {
+    local device_dir="$CONFORMANCE_DIR/device-supplier"
+    local cert_dir="$device_dir/certs"
+
+    if ! device_identity_ready "$cert_dir"; then
+        warn "MIAF identity not found at $cert_dir. Please run 'Setup Identity' first (option 1)."
+        return 1
     fi
 
-    # Detect host IP for URL display
+    cd "$device_dir"
+    device_prepare_runtime
+    device_stop_stale_server
+
+    log "🚀 Starting Mock WFM Server..."
+    device_launch_server "$cert_dir"
+
     local host_ip
     host_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
     local server_host="${host_ip:-localhost}"
-    local mock_url="https://${server_host}:3001/v1alpha2/margo"
 
     echo ""
-    success "Mock WFM Server is running (PID: $server_pid)"
+    success "Mock WFM Server is running (PID: $(cat /tmp/wfm-server.pid))"
     echo ""
-    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-    echo "║  Mock WFM Server is ready (MIAF/rc.3 — mTLS + X.509-SVID identity)         ║"
-    echo "╠══════════════════════════════════════════════════════════════════════════════╣"
-    printf "║  WFM URL  : %-63s║\n" "$mock_url"
-    printf "║  CA Cert  : %-63s║\n" "$cert_dir/ca-cert.pem"
-    echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+    echo "  Mock WFM (Margo rc.3 — mTLS with X.509-SVID)"
+    echo "  ─────────────────────────────────────────────────────────────────────"
+    echo "  Management Interface : https://${server_host}:3003/v1alpha2/margo"
+    echo "  WFM SPIFFE ID        : $(device_spiffe_id "$cert_dir/miaf-server-cert.pem")"
+    echo "  Trusted CA (MIS)     : $cert_dir/svid-ca.pem"
+    echo "  Health / telemetry   : https://${server_host}:3001/health"
+    echo "  Server log           : /tmp/wfm-server.log"
     echo ""
-    echo "  ➜  The CTT runner simulates the device-agent — no external device-agent needed."
-    echo "  ➜  Device identity is established via MIAF (mTLS + X.509-SVID), not onboarding."
-    echo "  ➜  Select 'Run Tests' (option 3) to execute conformance scenarios."
+    echo "  ➜  Option 3 (Run Tests) runs the CTT's own device-agent against this server."
+    echo "  ➜  To test a real device: point it at the Management Interface URL above."
+    echo "     Its SVID must be issued by the same MIS, as"
+    echo "     <WFM SPIFFE ID>/client/<wfm-client-id>, and it must accept the WFM SPIFFE ID."
     echo ""
 }
 
@@ -2034,17 +2036,6 @@ device_run_tests() {
     fi
 
     cd "$device_dir"
-
-    # Check Go is installed
-    if ! command -v go &> /dev/null; then
-        error "Go not found. Install from https://golang.org/doc/install"
-    fi
-
-    # Build test runner if needed
-    if [[ ! -f "bin/run_tests" ]]; then
-        log "📦 Building device test runner..."
-        go build -o bin/run_tests . || error "Failed to build test runner"
-    fi
 
     # Group selection
     echo ""
@@ -2095,12 +2086,13 @@ device_run_tests() {
     read -p "Enter Mock WFM Server URL [$default_url]: " wfm_url < /dev/tty
     wfm_url="${wfm_url:-$default_url}"
     echo ""
-    read -p "Enter MIAF mTLS URL for mtls:true steps [$default_miaf_url]: " miaf_url < /dev/tty
+    read -p "Enter Management Interface (mTLS) URL [$default_miaf_url]: " miaf_url < /dev/tty
     miaf_url="${miaf_url:-$default_miaf_url}"
-    [[ "$miaf_url" != "$wfm_url" ]] && extra_flags+=("-miaf-url" "$miaf_url")
+    extra_flags+=("-miaf-url" "$miaf_url")
 
-    log "▶️  Running Device Conformance Tests against: $wfm_url"
-    [[ "$miaf_url" != "$wfm_url" ]] && log "   MIAF mTLS URL: $miaf_url"
+    log "▶️  Running Device Conformance Tests"
+    log "   Mock WFM (health):           $wfm_url"
+    log "   Management Interface (mTLS): $miaf_url"
     echo ""
 
     local test_result=0
@@ -2151,16 +2143,18 @@ device_stop_server() {
         rm -f /tmp/wfm-server.pid
     fi
 
-    # Also clear anything still on port 3001
+    # Also clear anything still listening on the mock WFM ports
     if command -v lsof &> /dev/null; then
-        local pid_on_port
-        pid_on_port=$(lsof -ti :3001 2>/dev/null || true)
-        if [[ -n "$pid_on_port" ]]; then
-            log "⛔ Stopping remaining process on port 3001 (PID: $pid_on_port)..."
-            kill -15 "$pid_on_port" 2>/dev/null
-            sleep 1
-            stopped=1
-        fi
+        local port pid_on_port
+        for port in 3001 3003; do
+            pid_on_port=$(lsof -ti ":$port" -sTCP:LISTEN 2>/dev/null || true)
+            if [[ -n "$pid_on_port" ]]; then
+                log "⛔ Stopping remaining process on port $port (PID: $pid_on_port)..."
+                kill -15 $pid_on_port 2>/dev/null
+                sleep 1
+                stopped=1
+            fi
+        done
     fi
 
     if [[ $stopped -eq 0 ]]; then
@@ -2173,7 +2167,8 @@ device_export_sandbox_identity() {
     local cert_dir="$device_dir/certs"
 
     if [[ ! -f "$cert_dir/ca-cert.pem" || ! -f "$cert_dir/ca-key.pem" ]]; then
-        warn "CTT CA not found at $cert_dir. Please run 'Setup Identity' first (option 1)."
+        warn "This option is for the self-signed setup only: it needs the CTT's own CA (ca-cert.pem, ca-key.pem) in $cert_dir."
+        warn "With a MIS-issued identity (Setup Identity), the device uses the SVID its MIS issued — see the details printed by option 2."
         return 1
     fi
 
@@ -2289,12 +2284,12 @@ run_device_flow() {
         echo "│  Mock WFM Server: $server_status"
         echo "├─────────────────────────────────────────────────────────────────────────┤"
         echo "│  Run steps in order:                                                     │"
-        echo "│    1. Setup Identity         (copy MIS-issued SVIDs, run once per setup)  │"
-        echo "│    2. Start Mock WFM Server  (mTLS on :3001, MIAF endpoint on :3003)     │"
+        echo "│    1. Setup Identity         (copy MIS-issued SVIDs, run once per setup) │"
+        echo "│    2. Start Mock WFM Server  (Management Interface, mTLS on :3003)       │"
         echo "│    3. Run Tests              (select group, CTT simulates device-agent)  │"
         echo "│    4. Stop Mock WFM Server                                               │"
         echo "│    5. Export Identity for Sandbox Device-Agent                           │"
-        echo "│         (connect a real sandbox device to the mock WFM for integration)  │"
+        echo "│         (self-signed setup only; not needed with a MIS-issued identity)  │"
         echo "│                                                                          │"
         echo "│  B) Back to main menu                                                    │"
         echo "└─────────────────────────────────────────────────────────────────────────┘"

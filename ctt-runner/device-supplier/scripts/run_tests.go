@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -29,8 +28,8 @@ const (
 // WFMServer is the mock WFM server base URL; defaults below, overridable via -url.
 var WFMServer = "https://localhost:3001/v1alpha2/margo"
 
-// MIAFServer is the MIAF mTLS base URL for mtls:true steps; set via -miaf-url.
-// When empty, mtls:true steps fall back to WFMServer (backward-compatible).
+// MIAFServer is the MIAF mTLS base URL for mtls:true steps; set via -miaf-url,
+// otherwise the same as WFMServer.
 var MIAFServer = ""
 
 // ClaimedAppVersion is the artifact/app version under test, set via -claimed-app-version.
@@ -170,9 +169,10 @@ func main() {
 	clientIDFlag := flag.String("client-id", "", "Pre-existing clientId to seed {clientId} with instead of onboarding fresh. Lets you run scenario files one at a time by hand: run onboarding.json first, copy the clientId it prints, then pass it here for subsequent files.")
 	verboseFlag := flag.Bool("verbose", false, "Print the full JSON response body (plus response headers) for every step. Useful when running one scenario file at a time by hand to inspect exactly what the server returned.")
 	claimedAppVersionFlag := flag.String("claimed-app-version", "unknown", "Claimed App Version — the artifact/app version under test, from the selected group's group.json")
-	cttMargoVersionFlag := flag.String("ctt-margo-version", "1.0.0-rc.2", "CTT Margo Version — the Margo spec version this conformance tool validates against")
+	cttMargoVersionFlag := flag.String("ctt-margo-version", "1.0.0-rc.3", "CTT Margo Version — the Margo spec version this conformance tool validates against")
 	flag.Parse()
 	WFMServer = *urlFlag
+	MIAFServer = *urlFlag
 	if *miafURLFlag != "" {
 		MIAFServer = *miafURLFlag
 	}
@@ -199,10 +199,11 @@ func main() {
 ║              Device Supplier Conformance Test Runner                         ║
 ║                   Data-Driven Test Framework                                 ║
 ║                                                                              ║
-║  Testing against: ` + WFMServer + `                                 ║
-║  Spec: Margo Management Interface API 1.0.0-rc.2                            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 	`)
+	fmt.Printf("Mock WFM (health):        %s\n", WFMServer)
+	fmt.Printf("Management Interface/mTLS: %s\n", MIAFServer)
+	fmt.Printf("Spec: Margo Workload Management API %s\n", CTTMargoVersion)
 	fmt.Printf("Claimed App Version: %s  ·  CTT Margo Version: %s\n", ClaimedAppVersion, CTTMargoVersion)
 	if ClaimedAppVersion != "unknown" && ClaimedAppVersion != CTTMargoVersion {
 		fmt.Printf("\033[32m⚠ Version Mismatch: Claimed App Version (%s) differs from CTT Margo Version (%s)\033[0m\n", ClaimedAppVersion, CTTMargoVersion)
@@ -710,32 +711,14 @@ func resolveCertificateValue(value string) (string, error) {
 	return value, nil
 }
 
+// ensureCertificates checks that this runner's MIAF identity is in place. It
+// never generates certificates: the SVIDs come from the MIS (Setup Identity).
 func ensureCertificates() error {
-	requiredFiles := []string{
-		"ca-cert.pem",
-		"ca-key.pem",
-		"server-cert.pem",
-		"server-key.pem",
-		"device-key.pem",
-		"device-cert.pem",
-	}
-
-	for _, fileName := range requiredFiles {
+	for _, fileName := range []string{"svid-cert.pem", "svid-key.pem", "svid-ca.pem"} {
 		if _, err := os.Stat(filepath.Join(certDir, fileName)); err != nil {
-			if os.IsNotExist(err) {
-				fmt.Println("🔐 Required certs missing, generating them with generate-certs.sh...")
-				cmd := exec.Command("bash", "generate-certs.sh", certDir, "localhost")
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				if runErr := cmd.Run(); runErr != nil {
-					return fmt.Errorf("generate-certs.sh failed: %w", runErr)
-				}
-				return nil
-			}
-			return fmt.Errorf("failed to inspect %s: %w", filepath.Join(certDir, fileName), err)
+			return fmt.Errorf("%s not found — run 'Setup Identity' first: %w", filepath.Join(certDir, fileName), err)
 		}
 	}
-
 	return nil
 }
 

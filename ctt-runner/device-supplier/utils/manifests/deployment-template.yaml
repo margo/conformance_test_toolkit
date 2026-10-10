@@ -1,16 +1,15 @@
-apiVersion: margo.org/v1alpha1
-kind: ApplicationDeployment
+id: {{deploymentId}}
 metadata:
-  name: {{deploymentId}}
-  annotations:
-    id: {{deploymentId}}
+  name: ctt-compose-sample
+  namespace: margo-ctt
+  deviceId: {{deviceId}}
 spec:
-  appPackageRef:
-    id: compose-sample
+  applicationId: ctt-compose-sample
   deploymentProfile:
     type: compose
     components:
       - name: compose-sample
         properties:
-          packageLocation: https://raw.githubusercontent.com/nginx-proxy/nginx-proxy/refs/heads/main/docker-compose.yml
+          repository: {{repository}}
+          revision: {{revision}}
           wait: true

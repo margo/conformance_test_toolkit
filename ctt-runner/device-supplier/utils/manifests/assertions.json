@@ -213,7 +213,8 @@
           "minItems": 1,
           "itemsType": "string",
           "itemsEnum": [
-            "oci"
+            "oci",
+            "custom"
           ],
           "description": "properties.supportedRuntimes is required and must contain at least one supported runtime"
         },
@@ -226,7 +227,8 @@
           "itemsType": "string",
           "itemsEnum": [
             "helm",
-            "compose"
+            "compose",
+            "custom"
           ],
           "description": "properties.supportedDeploymentTypes is required and must contain at least one supported deployment type"
         }

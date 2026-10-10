@@ -93,6 +93,10 @@ func mtlsClient() (*http.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load SVID from %s/%s: %w", certPath, keyPath, err)
 	}
+	ownLeaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("parse SVID %s: %w", certPath, err)
+	}
 	caPEM, err := os.ReadFile(caPath)
 	if err != nil {
 		return nil, fmt.Errorf("read trust bundle CA %s: %w", caPath, err)
@@ -121,11 +125,37 @@ func mtlsClient() (*http.Client, error) {
 				if err != nil {
 					return fmt.Errorf("parse server certificate: %w", err)
 				}
-				_, err = leaf.Verify(x509.VerifyOptions{Roots: pool})
-				return err
+				if _, err = leaf.Verify(x509.VerifyOptions{Roots: pool}); err != nil {
+					return err
+				}
+				return recognizeWFM(leaf, ownLeaf)
 			},
 		}},
 	}, nil
+}
+
+// recognizeWFM applies "Recognition by the WFM Client" (WFM Identity Profile):
+// the server's SPIFFE ID must be exactly spiffe://<trust-domain>/margo/wfm/<wfm-id>,
+// with trust domain and wfm-id taken from this client's own SVID
+// (spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<wfm-client-id>).
+func recognizeWFM(server, own *x509.Certificate) error {
+	if len(own.URIs) != 1 || own.URIs[0].Scheme != "spiffe" {
+		return fmt.Errorf("client SVID must carry exactly one spiffe:// URI SAN")
+	}
+	ownID := own.URIs[0].String()
+	i := strings.LastIndex(ownID, "/client/")
+	if i < 0 {
+		return fmt.Errorf("client SVID %s is not a WFM Client identity (expected .../margo/wfm/<wfm-id>/client/<wfm-client-id>)", ownID)
+	}
+	expected := ownID[:i]
+	if len(server.URIs) != 1 || server.URIs[0].String() != expected {
+		got := "no SPIFFE ID"
+		if len(server.URIs) == 1 {
+			got = server.URIs[0].String()
+		}
+		return fmt.Errorf("server presented %s, expected the WFM %s", got, expected)
+	}
+	return nil
 }
 
 // loadPrivateKey loads and parses a PEM private key from path.

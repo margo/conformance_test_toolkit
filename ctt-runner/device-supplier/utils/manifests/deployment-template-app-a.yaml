@@ -1,16 +1,15 @@
-apiVersion: margo.org/v1alpha1
-kind: ApplicationDeployment
+id: {{deploymentId}}
 metadata:
-  name: {{deploymentId}}
-  annotations:
-    id: {{deploymentId}}
+  name: ctt-sample-app-a
+  namespace: margo-ctt
+  deviceId: {{deviceId}}
 spec:
-  appPackageRef:
-    id: sample-app-a
+  applicationId: ctt-sample-app-a
   deploymentProfile:
     type: compose
     components:
       - name: sample-app-a
         properties:
-          packageLocation: {{packageLocation}}
+          repository: oci://registry.example.com/margo-ctt/sample-app-a
+          revision: 1.0.0
           wait: true

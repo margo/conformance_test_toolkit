@@ -97,6 +97,9 @@ type ClientData struct {
 	Capabilities    map[string]interface{} `json:"capabilities,omitempty"`
 	DeploymentsData []string               `json:"deployments,omitempty"`
 	ManifestVersion int                    `json:"manifest_version,omitempty"`
+	// DeviceID is the device this client's deployments are assigned to
+	// (ApplicationDeployment metadata.deviceId). MIAF clients only.
+	DeviceID string `json:"device_id,omitempty"`
 	// NegativeFixture, when set, makes GET /deployments serve a deliberately
 	// spec-violating manifest for this client (see negative_fixtures.go). It is
 	// set only via the test-control endpoint; "" means serve a conformant
@@ -750,7 +753,6 @@ func sha256Hex(data []byte) string {
 type sampleApp struct {
 	TemplateFile    string
 	ComponentName   string
-	PackageLocation string // path on this server, combined with the request's baseURL
 }
 
 const (
@@ -762,30 +764,42 @@ var sampleApps = map[string]sampleApp{
 	sampleAppADeploymentID: {
 		TemplateFile:    "manifests/deployment-template-app-a.yaml",
 		ComponentName:   "sample-app-a",
-		PackageLocation: "/v1alpha2/margo/sample-apps/app-a/compose.yaml",
 	},
 	sampleAppBDeploymentID: {
 		TemplateFile:    "manifests/deployment-template-app-b.yaml",
 		ComponentName:   "sample-app-b",
-		PackageLocation: "/v1alpha2/margo/sample-apps/app-b/compose.yaml",
 	},
 }
 
-// requestBaseURL derives scheme+host from the incoming request so
-// packageLocation URLs we generate point back at whatever address the
-// caller actually used to reach us (works for localhost, LAN IP, or a real
-// hostname alike) instead of a hardcoded guess.
 func requestBaseURL(r *http.Request) string {
 	return "https://" + r.Host
 }
 
-func buildDeploymentYAML(clientID, deploymentID, baseURL string) []byte {
-	_ = clientID
+// The default deployment's component is an OCI reference (rc.3 has no
+// packageLocation). The placeholder below is schema-valid but not pullable;
+// set CTT_SAMPLE_REPOSITORY / CTT_SAMPLE_REVISION to an artifact the device
+// under test can reach to exercise a real installation.
+const (
+	defaultSampleRepository = "oci://registry.example.com/margo-ctt/compose-sample"
+	defaultSampleRevision   = "1.0.0"
+)
+
+func envOr(name, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// buildDeploymentYAML renders the ApplicationDeployment for deploymentID,
+// assigned to deviceID. The output is a pure function of its inputs and the
+// process environment, so the digest in the manifest always matches what the
+// content-addressed endpoints serve.
+func buildDeploymentYAML(deviceID, deploymentID, baseURL string) []byte {
+	_ = baseURL
 	templateFile := "manifests/deployment-template.yaml"
-	packageLocation := ""
 	if app, ok := sampleApps[deploymentID]; ok {
 		templateFile = app.TemplateFile
-		packageLocation = baseURL + app.PackageLocation
 	}
 
 	templateBytes, err := os.ReadFile(templateFile)
@@ -793,11 +807,12 @@ func buildDeploymentYAML(clientID, deploymentID, baseURL string) []byte {
 		log.Printf("[DeploymentYAML] Warning: could not read %s: %v — using empty manifest", templateFile, err)
 		return []byte{}
 	}
-	result := strings.ReplaceAll(string(templateBytes), "{{deploymentId}}", deploymentID)
-	if packageLocation != "" {
-		result = strings.ReplaceAll(result, "{{packageLocation}}", packageLocation)
-	}
-	return []byte(result)
+	return []byte(strings.NewReplacer(
+		"{{deploymentId}}", deploymentID,
+		"{{deviceId}}", deviceID,
+		"{{repository}}", envOr("CTT_SAMPLE_REPOSITORY", defaultSampleRepository),
+		"{{revision}}", envOr("CTT_SAMPLE_REVISION", defaultSampleRevision),
+	).Replace(string(templateBytes)))
 }
 
 func buildBundleArchive(clientID string, deploymentIDs []string, baseURL string) ([]byte, error) {
@@ -1663,6 +1678,11 @@ func ensureTLSCertificates() (certFile, keyFile string, err error) {
 			log.Printf("⚠ Failed to generate CA-signed cert (%v)", err)
 			return "", "", err
 		}
+	} else if miafCert, miafKey := os.Getenv("MIAF_SERVER_CERT"), os.Getenv("MIAF_SERVER_KEY"); miafCert != "" && miafKey != "" {
+		// No legacy CA to sign a dedicated certificate with: this port (health,
+		// telemetry status) presents the WFM SVID as well.
+		log.Printf("✓ Using the WFM SVID for the main port")
+		return miafCert, miafKey, nil
 	} else {
 		log.Printf("⚠ CA files not available, server certificates should be pre-generated")
 	}

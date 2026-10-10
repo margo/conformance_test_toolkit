@@ -17,8 +17,8 @@ device-agent that exercises every required protocol flow against it.
  ctt-runner/device-supplier/
  ┌───────────────────────────────────────────────────────────┐
  │  bin/server   ←  Mock WFM Server                         │
- │  port 3001    ←  RFC 9421 signed calls                   │
- │  port 3003    ←  MIAF mTLS (X.509-SVID) calls            │
+ │  port 3003    ←  Management Interface, mTLS (X.509-SVID)  │
+ │  port 3001    ←  health / telemetry status only           │
  └──────────────────────────┬────────────────────────────────┘
                              │ HTTPS / mTLS
  ┌──────────────────────────▼────────────────────────────────┐
@@ -32,14 +32,15 @@ device-agent that exercises every required protocol flow against it.
    conformance-report-<timestamp>.html
 ```
 
-The mock WFM is a full spec implementation: it signs responses with the right
-headers, enforces mTLS, serves desired-state manifests and bundles with correct
-ETag / digest, and validates every request body for structure and semantics.
+The mock WFM implements the rc.3 Management Interface: it enforces mTLS and
+accepts only SVIDs that belong to its own WFM identity, serves desired-state
+manifests, bundles and deployments with correct ETag / digest, validates every
+request body, and returns errors as RFC 9457 problem details.
 
 The test runner acts as the device-agent, making every call the spec requires —
-happy-path calls AND deliberately broken ones (missing signature, wrong cert,
-bad enum, untrusted CA) — so that the mock WFM can validate it rejects the bad
-calls correctly and the device-agent code handles the right responses.
+happy-path calls AND deliberately broken ones (bad enum, missing field, wrong
+digest) — and checks the mock WFM's answer to each one. Requests to the
+Management Interface that are not authenticated by mTLS are rejected.
 
 **If you want to test your real device-agent**: start the mock WFM server,
 point your device-agent at it, and observe how it behaves. The mock WFM logs
@@ -52,8 +53,8 @@ device-agent](#testing-a-real-device-agent) below.
 
 | Tool | Version | Notes |
 |---|---|---|
-| Go | 1.24+ | compiles `bin/server` and `bin/run_tests`; `apt install golang-go` or [golang.org](https://golang.org/doc/install) |
-| OpenSSL | 1.1+ | certificate generation; usually pre-installed |
+| Go | 1.21+ (1.24 used) | compiles `bin/server` and `bin/run_tests`. Install from [go.dev](https://go.dev/doc/install), or `apt install golang-go` on Ubuntu 24.04. An older Go (1.21–1.23) downloads the 1.24 toolchain by itself on the first build, which needs internet access. |
+| OpenSSL | 1.1+ | certificate checks; usually pre-installed |
 | jq | any | group file parsing; `apt install jq` / `brew install jq` |
 | bash | 4+ | macOS ships bash 3 — install bash 5 via Homebrew |
 
@@ -70,7 +71,7 @@ git checkout feature/multi-persona-conformance
 
 ```bash
 cd ~
-git clone https://github.com/eclipse-margo/margo.git sandbox
+git clone https://github.com/margo/sandbox.git sandbox
 ```
 
 > If the sandbox is already cloned elsewhere, note the path — you will need
@@ -79,7 +80,7 @@ git clone https://github.com/eclipse-margo/margo.git sandbox
 **3. Verify tooling:**
 
 ```bash
-go version      # need 1.24+
+go version      # 1.21 or newer
 openssl version
 jq --version
 ```
@@ -104,7 +105,7 @@ MIS  ──issues SVIDs──►  mock WFM server  (MIAF TLS identity, port 3003
 > real vendor conformance testing, use the CA from whichever MIS the vendor's
 > device is enrolled in.
 
-### Path 1 — Centralized MIS
+### Centralized MIS
 
 **Step 1 — Generate SVIDs via MIS**
 
@@ -113,39 +114,62 @@ Use MIS to generate a WFM SVID and a client/device SVID.
 For the Margo sandbox MIS (cloned to `~/sandbox` in Prerequisites):
 
 ```bash
-# Generate SVIDs — follow prompts to generate the certs and create a WFM and a WFM-client SVID
-bash ~/sandbox/scripts/mis.sh
+sudo -E bash ~/sandbox/scripts/mis.sh
+# In the mis.sh menu — first time on this machine, in this order, in one session:
+#   1) PreRequisites: Setup
+#   3) Factory Bootstrap: Generate Root CAs
+#   4) Margo Identity Service: Install
+#   6) Generate SVID      ← run it twice: once for the WFM (principal 1),
+#                            once for the WFM client (principal 2)
+
 sudo chown -R $USER:$USER ~/mis-deployment
 ```
+
+If the MIS is already installed and you only need new SVIDs, start `mis.sh`
+from inside `~/mis-deployment` so the SVID folders are written there:
+
+```bash
+cd ~/mis-deployment
+sudo -E bash ~/sandbox/scripts/mis.sh      # → 6) Generate SVID, twice as above
+sudo chown -R $USER:$USER ~/mis-deployment
+```
+
+> `mis.sh` writes each SVID folder into the directory it is working in and
+> prints it as `Output Dir`. That is `~/mis-deployment` in both flows above. If
+> yours printed a different folder, give that folder to the CLI in Step 3.
+
+The client SVID must be generated for the **same WFM ID** as the WFM SVID. Its
+SPIFFE ID is then `<WFM SPIFFE ID>/client/<client-id>`, which is what the spec
+requires and what both the mock WFM and the test runner check.
+
 **Step 2 — Find the output directories from mis.sh:**
 
-mis.sh writes SVIDs into `~/mis-deployment/` in directories named after the WFM ID and client ID you entered during generation:
+mis.sh names the SVID directories after the WFM ID and client ID you entered during generation:
 
 ```
 x509svid-WFM_ID              ← WFM SVID (server identity)
 x509svid-WFM_ID-CLIENT_ID    ← CTT device SVID (client identity)
 ```
 
-Check what was generated and set variables for the rest of the steps:
+Check what was generated:
 
 ```bash
 ls ~/mis-deployment/ | grep x509svid
-
-WFM_SVID_DIR=~/mis-deployment/x509svid-WFM_ID
-WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-WFM_ID-CLIENT_ID
 # The exact directory names depend on the IDs you entered in mis.sh.
-# Example: if wfm-id="wfm", client-id="wfm-wfm-client" or "wfmclient":
-#   WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
-#   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfm-wfm-client
+# Example with wfm-id="wfm" and client-id="wfm-client":
+#   x509svid-wfm
+#   x509svid-wfm-wfm-client
 ```
 
-
+You do not need to copy these by hand — the CTT CLI lists them and copies the
+right files in Step 3.
 
 For a vendor-provided or external MIS: use your MIS tooling to obtain a WFM
 SVID cert/key pair, a client SVID cert/key pair, and the MIS CA cert, then
-copy them to the CTT machine before Step 2.
+copy them to the CTT machine before Step 3.
 
-**Step 2 — Place SVIDs into the CTT cert directory**
+**Step 3 — Place SVIDs into the CTT cert directory**
+
 The SVIDs must be on the CTT machine before this step. Two scenarios:
 
 **MIS on the same machine as CTT** (sandbox setup):
@@ -214,34 +238,39 @@ openssl verify -CAfile certs/svid-ca.pem certs/svid-cert.pem
 # → certs/svid-cert.pem: OK
 ```
 
-**SVID validity:** MIS issues SVIDs with a ~90-day TTL. Re-run both steps when
-certs expire.
+**SVID validity:** MIS issues SVIDs with a ~90-day TTL. Re-run Steps 1 and 3
+when certs expire.
 
 ---
 
 ## Phase 2 — Start the mock WFM server
 
-The CTT CLI builds the binaries automatically on first run if not already
-present. Use option 2:
+The CTT CLI builds the binaries from the current source every time it starts
+the server (a few seconds; ~1 minute the very first time). Use option 2:
 
 ```bash
+cd ~/workspace/conformance_test_toolkit
 bash ctt-runner/ctt-start.sh
 # Select: 2) Device Supplier → 2) Start Mock WFM Server
 ```
 
-The server starts on two ports:
-- **Port 3001** — plain TLS (legacy, not used by current conformance tests)
-- **Port 3003** — MIAF mTLS with the SVIDs from Phase 1
+The CLI prints what a device needs to connect:
 
-
-### Via the interactive menu
-
-```bash
-bash ctt-runner/ctt-start.sh
-# Select: 2) Device Supplier → 2) Run scenario group tests
+```
+  Management Interface : https://<ctt-host-ip>:3003/v1alpha2/margo
+  WFM SPIFFE ID        : spiffe://<trust-domain>/margo/wfm/<wfm-id>
+  Trusted CA (MIS)     : .../ctt-runner/device-supplier/certs/svid-ca.pem
+  Health / telemetry   : https://<ctt-host-ip>:3001/health
+  Server log           : /tmp/wfm-server.log
 ```
 
-The menu will prompt for MIAF cert paths if you want to use MIS SVIDs.
+The server listens on two ports:
+- **Port 3003** — the Margo Management Interface, mTLS with the SVIDs from Phase 1.
+  This is the only port a device talks to.
+- **Port 3001** — health and telemetry status. Management Interface requests sent
+  here are rejected with `403`, because they are not authenticated by mTLS.
+
+The server keeps running after you leave the menu. Stop it with option 4.
 
 ---
 
@@ -249,22 +278,38 @@ The menu will prompt for MIAF cert paths if you want to use MIS SVIDs.
 
 ### Via the interactive menu
 
+The mock WFM server must already be running (Phase 2).
+
 ```bash
+cd ~/workspace/conformance_test_toolkit
 bash ctt-runner/ctt-start.sh
-# Select: 2) Device Supplier → 2) Run scenario group tests
+# Select: 2) Device Supplier → 3) Run Tests
 ```
 
 The menu will:
-1. Build `bin/server` and `bin/run_tests` (Go compile, ~10s first time, cached after)
-2. Kill any stale server on port 3001/3003
-3. Start the mock WFM server in the background
-4. Prompt for the mock WFM URL and MIAF mTLS URL
-5. Prompt for a test group selection
-6. Run all scenarios and print results as they execute
-7. Stop the mock server
-8. Write the HTML report
+1. Prompt for a test group selection
+2. Prompt for the two server URLs
+3. Run all scenarios and print results as they execute
+4. Write the HTML report
 
-### URLs to enter (interactive menu)
+The server is left running afterwards; stop it with option 4 when you are done.
+
+### Select a test group
+
+```
+📋 Available Device Test Groups:
+  1) bronze                 (v1.0.0) - 5 selected scenarios
+  2) core                   (v1.0.0-rc.3) - all scenarios
+  3) device-conformance     (v1.0.0-rc.3) - 13 selected scenarios
+  ...
+```
+
+Select `core` (enter its number from the list — `2` above). It runs the full
+set of rc.3 device-supplier scenarios; the other groups are subsets of it.
+Groups whose version is not `1.0.0-rc.3` show a version-mismatch question
+before they run.
+
+### URLs to enter
 
 ```
 Enter Mock WFM Server URL [https://192.168.x.x:3001/v1alpha2/margo]:
@@ -273,25 +318,16 @@ Enter Mock WFM Server URL [https://192.168.x.x:3001/v1alpha2/margo]:
 Press Enter to use the default (auto-detected from your machine's IP).
 
 ```
-Enter MIAF mTLS URL for mtls:true steps [https://192.168.x.x:3003/v1alpha2/margo]:
+Enter Management Interface (mTLS) URL [https://192.168.x.x:3003/v1alpha2/margo]:
 ```
 
-Press Enter. The mock server listens on 3001 for RFC 9421 steps and 3003 for
-MIAF mTLS steps — these are separate ports.
+Press Enter. All conformance steps go to the mTLS port (3003); port 3001 is
+only used for the health check and telemetry status.
 
-### Select a test group
+A full `core` run takes about 5 minutes. Two steps of the optional
+observability scenario wait up to 2 minutes each for telemetry from a real
+device and are reported as skipped when none arrives.
 
-```
-Available Device Test Groups:
-  1) core        v1.0.0-rc.3  — Generic/positive/negative/edge coverage ...
-  2) silver      v1.0.0-rc.3  — ...
-  3) gold        v1.0.0-rc.3  — ...
-```
-
-For a first run, select `core`. It covers the full set of required
-conformance scenarios for the device-agent role.
-
-```
 The HTML report is written to two locations:
 
 ```
@@ -329,95 +365,81 @@ handles the sandbox device-agent correctly, vendors can use it with confidence.
 With the sandbox MIS, both the mock WFM and the real device-agent use SVIDs
 from the **same MIS** — no cert exchange between teams, no trust-bundle
 configuration on the device side. The device-agent continues to talk to MIS
-the same way it does in production; the only change is the WFM URL.
+the same way it does in production; the only changes are the WFM URL and,
+if the mock WFM has its own WFM ID, one allowlist entry.
 
-#### Step 1 — Complete Phase 1 (Path 1) above
+#### Step 1 — Complete Phase 1 and Phase 2 above
 
-Make sure the mock WFM has its MIS-issued SVID in `certs/miaf-server-cert.pem`
-and the MIS CA in `certs/svid-ca.pem` before continuing.
+Use the **same WFM SVID** the sandbox device-agent was enrolled for (the WFM ID
+it uses with Symphony) as the mock WFM's identity in Phase 1. The device's own
+SVID is `<WFM SPIFFE ID>/client/<client-id>`; the mock WFM only accepts clients
+of its own WFM ID, and the device only accepts the WFM its SVID belongs to.
 
-#### Step 2 — Issue a device SVID for the sandbox device-agent
+Then start the mock WFM (Phase 2) and note the two values the CLI prints:
+
+```
+  Management Interface : https://<ctt-host-ip>:3003/v1alpha2/margo
+  WFM SPIFFE ID        : spiffe://<trust-domain>/margo/wfm/<wfm-id>
+```
+
+#### Step 2 — Check the device-agent's SVID and allowlist
 
 The sandbox device-agent already has an SVID from the MIS (used when it talks
-to Symphony). Use that same SVID — no new cert is needed. Confirm it is in
-place on the device-agent machine:
+to Symphony). Use that same SVID — no new cert is needed. Confirm its SPIFFE ID
+starts with the WFM SPIFFE ID from Step 1:
+
+```bash
+# On the device-agent machine. The cert is the file that miaf.x509.certPath
+# points to in ~/sandbox/poc/device/agent/config/config.yaml.
+openssl x509 -in <path-to-device-svid-cert> -noout -ext subjectAltName
+# → URI:spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<client-id>
+```
+
+The device-agent only talks to WFMs on its SPIFFE ID allowlist. If the mock WFM
+uses the same WFM SVID as Symphony, it is already on the list. Otherwise add the
+WFM SPIFFE ID from Step 1:
 
 ```bash
 # On the device-agent machine:
-openssl x509 \
-    -in ~/sandbox/poc/device/agent/config/identity/client-svid-cert.pem \
-    -text -noout | grep "URI:spiffe"
+sudo -E bash ~/sandbox/scripts/device-agent.sh
+# → 11) Manage SPIFFE ID allowlist → add the WFM SPIFFE ID
 ```
 
-If the SVID is expired or missing, re-generate it on the MIS machine:
+If the device SVID is expired or missing, generate a new one with `mis.sh`
+(Phase 1, Step 1 — option 6, principal 2, same WFM ID) and install it on the
+device-agent machine the same way it was installed for Symphony.
+
+#### Step 3 — Point the sandbox device-agent at the mock WFM
+
+`device-agent.sh` writes the WFM URL into the agent's config from
+`device-agent.env` every time it starts the agent, so change it there (editing
+`config.yaml` by hand is overwritten on the next start):
 
 ```bash
-# On the MIS / CTT machine:
-bash /home/margo/sandbox/scripts/mis.sh
-# Follow prompts — enter the vendor WFM ID and device ID
-
-sudo chown -R $USER:$USER ~/mis-deployment
-# Then find the output dir:
-ls ~/mis-deployment/ | grep x509svid
+# On the device-agent machine, in ~/sandbox/scripts/device-agent.env:
+export WFM_HOST=<ctt-host-ip>     # the CTT machine from Step 1
+export WFM_PORT=3003              # the mock WFM's mTLS port
 ```
 
-Then copy the files to the device-agent machine:
+Leave all MIAF / MIS settings unchanged — the device-agent continues to use
+the same MIS as before.
 
-```bash
-DEVICE_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>-<device-id>
-scp ${DEVICE_SVID_DIR}/payload-cert.pem \
-    <agent-host>:~/sandbox/poc/device/agent/config/identity/client-svid-cert.pem
-scp ${DEVICE_SVID_DIR}/payload-key.pem \
-    <agent-host>:~/sandbox/poc/device/agent/config/identity/client-svid-key.pem
-```
-
-#### Step 3 — Start the mock WFM server with MIS SVIDs
-
-On the CTT machine:
-
-```bash
-cd ctt-runner/device-supplier
-MIAF_SERVER_CERT="certs/miaf-server-cert.pem" \
-MIAF_SERVER_KEY="certs/miaf-server-key.pem" \
-MIAF_TRUST_CA="certs/svid-ca.pem" \
-./bin/server
-```
-
-Note the machine's IP from the startup banner — you will need it in Step 4.
-
-#### Step 4 — Update the sandbox device-agent config
-
-On the device-agent machine, open
-`~/sandbox/poc/device/agent/config/config.yaml` and change only the WFM URL
-to point at the CTT mock WFM's MIAF port:
-
-```yaml
-wfm:
-  sbiUrl: https://<ctt-host-ip>:3003/v1alpha2/margo
-```
-
-Leave all MIAF / MIS config unchanged — the device-agent continues to use
-the same MIS as before. The mock WFM trusts any SVID whose chain validates
-against the MIS CA (`svid-ca.pem`).
-
-Replace `<ctt-host-ip>` with the IP of the CTT machine from Step 3.
-
-#### Step 5 — Restart the sandbox device-agent
+#### Step 4 — Restart the sandbox device-agent
 
 ```bash
 # On the device-agent machine:
-bash ~/sandbox/scripts/device-agent.sh docker stop-docker
-bash ~/sandbox/scripts/device-agent.sh docker start-docker
+sudo -E bash ~/sandbox/scripts/device-agent.sh docker stop-docker
+sudo -E bash ~/sandbox/scripts/device-agent.sh docker start-docker
 ```
 
 For K3s:
 
 ```bash
-bash ~/sandbox/scripts/device-agent.sh k3s stop-k3s
-bash ~/sandbox/scripts/device-agent.sh k3s start-k3s
+sudo -E bash ~/sandbox/scripts/device-agent.sh k3s stop-k3s
+sudo -E bash ~/sandbox/scripts/device-agent.sh k3s start-k3s
 ```
 
-#### Step 6 — Watch the mock WFM logs
+#### Step 5 — Watch the mock WFM logs
 
 Back on the CTT machine:
 
@@ -426,14 +448,29 @@ tail -f /tmp/wfm-server.log
 ```
 
 You should see the sandbox device-agent connecting over mTLS, presenting its
-MIS-issued SVID, and making capability reports and desired-state polls.
+MIS-issued SVID, and making capability reports and desired-state polls. A
+device whose SVID is not accepted shows up as a `TLS handshake error` line that
+names the reason.
+
+The mock WFM assigns every new client one sample deployment. Its component
+points at a placeholder OCI reference that cannot be pulled, so a device is
+expected to report that deployment as `failed`. To test a real installation,
+stop the mock WFM, export an artifact your device can pull, and start it again:
+
+```bash
+export CTT_SAMPLE_REPOSITORY=oci://<registry>/<path>   # e.g. a compose package in your Harbor
+export CTT_SAMPLE_REVISION=<version>                    # e.g. 1.0.0
+bash ctt-runner/ctt-start.sh    # → 2) Device Supplier → 2) Start Mock WFM Server
+```
 
 #### What the mock WFM does with the real device-agent
 
-The mock WFM accepts any device whose SVID chains to the MIS CA:
+The mock WFM accepts a device whose SVID chains to the MIS CA and belongs to
+this WFM:
 
-- Validates the mTLS client cert chains to `MIAF_TRUST_CA` (`svid-ca.pem`)
+- Validates the mTLS client cert chains to the MIS CA (`svid-ca.pem`)
 - Extracts the device's SPIFFE ID from the cert's `Subject Alternative Name URI`
+  and checks it is `<WFM SPIFFE ID>/client/<client-id>`
 - Creates a client record keyed by SPIFFE ID
 - Serves a desired-state manifest and tracks deployment status
 - Enforces all spec requirements (correct headers, ETag, digest, content-type)
@@ -443,19 +480,15 @@ response from the WFM) will be visible in the logs.
 
 #### Restoring the sandbox device-agent to its normal config
 
-After integration testing, restore `config.yaml` to point back at Symphony:
+After integration testing, point the device-agent back at Symphony and restart it:
 
 ```bash
-# On the device-agent machine:
-WFM_HOST=symphony.machine   # or your real WFM hostname
-WFM_PORT=8084
+# On the device-agent machine, in ~/sandbox/scripts/device-agent.env:
+export WFM_HOST=symphony.machine   # or your real WFM hostname
+export WFM_PORT=8084
 
-sed -i "s|sbiUrl:.*|sbiUrl: https://$WFM_HOST:$WFM_PORT/v1alpha2/margo|" \
-    ~/sandbox/poc/device/agent/config/config.yaml
-
-# Re-enable the real MIS endpoint by editing config.yaml:
-# - uncomment  miaf.mis.endpoint and miaf.mis.caPath
-# - comment out miaf.mis.trustBundle
+sudo -E bash ~/sandbox/scripts/device-agent.sh docker stop-docker
+sudo -E bash ~/sandbox/scripts/device-agent.sh docker start-docker
 ```
 
 ---
@@ -463,20 +496,20 @@ sed -i "s|sbiUrl:.*|sbiUrl: https://$WFM_HOST:$WFM_PORT/v1alpha2/margo|" \
 ### Integration with any device-agent (generic)
 
 The same approach works for any custom device-agent, not just the Margo sandbox.
-The mock WFM trusts any client cert whose chain validates against `MIAF_TRUST_CA`
-(the MIS CA). If your device-agent already has a MIS-issued SVID, no cert
-generation is needed — just start the mock WFM with `MIAF_TRUST_CA` pointing
-at the shared MIS CA and point your device at port 3003.
+Give the mock WFM the WFM SVID of the WFM ID your device is enrolled for and the
+CA of the MIS that issued your device's SVID (Phase 1), start it (Phase 2), and
+point your device at port 3003.
 
 ```
-MIAF mTLS URL: https://<mock-wfm-host>:3003/v1alpha2/margo
-Client cert:   <your-device-svid-cert.pem>   (MIS-issued, any SPIFFE ID)
+Management Interface URL: https://<mock-wfm-host>:3003/v1alpha2/margo
+Client cert:   <your-device-svid-cert.pem>   (<WFM SPIFFE ID>/client/<client-id>)
 Client key:    <your-device-svid-key.pem>
 Trust CA:      ctt-runner/device-supplier/certs/svid-ca.pem  (MIS CA)
+WFM identity:  the WFM SPIFFE ID printed when the mock WFM starts
 ```
 
 If your device-agent does **not** have a MIS-issued SVID yet, issue one
-via `mis.sh` as shown in Phase 1, Path 1, Steps 2–3 above.
+via `mis.sh` as shown in Phase 1, Step 1 above.
 
 The mock WFM logs every request to `/tmp/wfm-server.log`. Watch it while your
 device-agent runs to see exactly what it sends and what the WFM validates:
@@ -491,17 +524,12 @@ tail -f /tmp/wfm-server.log
 
 | Cert type | Validity | Renewal |
 |---|---|---|
-| RFC 9421 certs (`server-cert.pem`, `device-*.pem`) | ~2 years (825 days) | Re-run `generate-certs.sh` |
-| MIS SVIDs (`miaf-server-cert.pem`, `svid-cert.pem`) | ~90 days (MIS default TTL) | Re-run Steps 2–3 from Phase 1 Path 1 |
-| MIS CA (`svid-ca.pem`) | Long-lived (MIS CA cert) | Rare; re-copy from `~/mis-deployment/certs/ca.crt` if MIS CA rotates |
+| MIS SVIDs (`miaf-server-cert.pem`, `svid-cert.pem`) | ~90 days (MIS default TTL) | Re-run Steps 1 and 3 from Phase 1 |
+| MIS CA (`svid-ca.pem`) | Long-lived (MIS CA cert) | Rare; re-run Step 3 from Phase 1 if the MIS CA rotates |
 
 Check expiry:
 
 ```bash
-# RFC 9421 server cert
-openssl x509 -in ctt-runner/device-supplier/certs/server-cert.pem \
-    -noout -enddate
-
 # MIS SVID (mock WFM server identity)
 openssl x509 -in ctt-runner/device-supplier/certs/miaf-server-cert.pem \
     -noout -enddate
@@ -517,21 +545,23 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `bin/server: no such file` | Not built yet | `go build -o bin/server ./scripts/cmd/device-supplier` from `ctt-runner/device-supplier/` |
-| `Failed to start mock server. Check /tmp/wfm-server.log` | Port 3001 or 3003 in use | `lsof -ti :3001 \| xargs kill` then retry |
-| `x509: certificate signed by unknown authority` on port 3003 | `MIAF_TRUST_CA` not set or wrong CA | Set `MIAF_TRUST_CA=certs/svid-ca.pem` when starting `bin/server`; ensure `svid-ca.pem` is the MIS CA |
-| `openssl verify` fails on `svid-cert.pem` / `svid-ca.pem` | `generate-certs.sh` run after MIS copy, overwriting MIS certs | Re-copy: `cp ~/mis-deployment/certs/ca.crt certs/svid-ca.pem` and re-copy SVID files from `~/mis-deployment/` |
-| `x509: certificate has expired` (MIS SVID) | SVID older than 90 days | Re-run `mis.sh`, `sudo chown -R $USER:$USER ~/mis-deployment`, and re-copy cert/key files |
-| `x509: certificate has expired` (RFC 9421) | Certs older than 825 days | Re-run `generate-certs.sh` |
-| mTLS handshake fails on port 3003 | Device SVID not issued by the same MIS CA | Verify `openssl verify -CAfile certs/svid-ca.pem certs/svid-cert.pem` returns OK |
-| 401 on all requests (port 3001) | Request not signed (RFC 9421) | Device-agent must HTTP-sign every request on port 3001 |
-| Sandbox device-agent fails to connect | `config.yaml` WFM URL still points at Symphony | Set `wfm.sbiUrl: https://<ctt-host>:3003/v1alpha2/margo` |
-| Device-agent connects but WFM log is silent | Mock WFM server not running | Start `bin/server` with MIAF env vars before the device-agent connects |
-| `container 'margo-identity-service' is not running` | MIS container stopped | Re-run `bash ~/sandbox/scripts/mis.sh` and follow prompts |
-| `~/mis-deployment/` dirs still owned by root | `mis.sh` runs as sudo | `sudo chown -R $USER:$USER ~/mis-deployment` |
-| `cp: cannot create regular file 'certs/svid-key.pem': Permission denied` | Files in `certs/` are root-owned or mode 400 | `sudo chown -R $USER:$USER certs/ && chmod -R u+w certs/` then re-copy |
-| Go build fails: module not found | Go module cache issue | `go mod download` from `ctt-runner/device-supplier/` |
-| Report not generated | Test runner exited non-zero | Check `ctt-runner/reports/device-supplier/test-execution.log` |
+| `MIAF identity not found ... Please run 'Setup Identity' first` | Phase 1 Step 3 not done in this checkout | Run option 1) Setup Identity |
+| Setup Identity: `... was not issued by the given MIS CA` | SVIDs and CA come from different MIS setups | Give the folder (or CA file) that belongs to the MIS that issued the SVIDs; nothing was changed in `certs/` |
+| Setup Identity: `Missing file: ...` | Folder does not hold all five files | Check the folder; for a flat folder use the file names shown in Phase 1 |
+| `Failed to build mock server` / `Failed to build test runner` | Go missing, or no internet for the first build | Install Go (Prerequisites); the first build downloads the Go toolchain and modules |
+| `Failed to start mock server` | The last log lines are printed with the error | Read them; full log in `/tmp/wfm-server.log` |
+| `cannot use the WFM SVID: ... is not a WFM identity` | The cert chosen as WFM SVID is a client SVID (or not an SVID) | Re-run Setup Identity and pick the WFM SVID folder for "WFM SVID" |
+| Every step fails: `server presented ..., expected the WFM ...` | Client SVID was generated for a different WFM ID than the WFM SVID | Generate the client SVID for the same WFM ID (Phase 1 Step 1), re-run Setup Identity |
+| Every step fails: `x509: certificate signed by unknown authority` | `svid-ca.pem` is not the CA that issued the WFM SVID | Re-run Setup Identity with the right MIS folder |
+| Every step fails with `403` (or a certificate error naming port 3001) | The Management Interface (mTLS) URL was pointed at port 3001 | Press Enter at the URL prompts to use the defaults (mTLS on 3003) |
+| `x509: certificate has expired` | SVID older than its TTL (~90 days) | Generate new SVIDs (Phase 1 Step 1) and re-run Setup Identity |
+| Device: `TLS handshake error ... is not a client of this WFM` in `/tmp/wfm-server.log` | Device SVID belongs to a different WFM ID | Give the mock WFM the WFM SVID of the device's WFM ID, or issue the device an SVID under the mock WFM's ID |
+| Device: `TLS handshake error ... unknown certificate authority` | Device SVID issued by a different MIS than `svid-ca.pem` | Use the CA of the MIS that issued the device's SVID |
+| Sandbox device-agent keeps talking to Symphony | `WFM_HOST` / `WFM_PORT` in `device-agent.env` unchanged | Set them to the CTT host and `3003`, then restart the device-agent |
+| Sandbox device-agent refuses the mock WFM | Mock WFM's SPIFFE ID not on the device's allowlist | `device-agent.sh` → 11) Manage SPIFFE ID allowlist |
+| `container 'margo-identity-service' is not running` from `mis.sh` | MIS not installed/started, or `mis.sh` run without `sudo` | `sudo -E bash ~/sandbox/scripts/mis.sh` → 4) Margo Identity Service: Install |
+| `~/mis-deployment/` owned by root | `mis.sh` runs as root | `sudo chown -R $USER:$USER ~/mis-deployment` (optional — Setup Identity can read root-owned folders) |
+| Report not generated | Test runner stopped early | Check `ctt-runner/reports/device-supplier/test-execution.log` |
 
 ---
 
@@ -539,25 +569,27 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 
 ```
 Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
-  □ Verify MIS is running: docker ps --filter name=margo-identity-service
-  □ Generate SVIDs: bash ~/sandbox/scripts/mis.sh  (follow prompts for WFM + client SVID)
+  □ Generate SVIDs: sudo -E bash ~/sandbox/scripts/mis.sh
+                    (first time: 1, 3, 4, then 6 twice — WFM, then WFM client for the same WFM ID)
   □ Fix ownership:  sudo chown -R $USER:$USER ~/mis-deployment
   □ Copy to CTT:    ctt-start.sh → 2) Device Supplier → 1) Setup Identity
                     (enter the folder holding the SVIDs — default ~/mis-deployment; root-owned folders are fine)
-  □ Verify: openssl verify -CAfile certs/svid-ca.pem certs/miaf-server-cert.pem → OK
+  □ The CLI must end with: Identity setup complete — both SVIDs verified against the MIS CA
 
-Phase 2 — CTT self-test (CTT simulates device-agent against mock WFM)
-  □ ctt-start.sh → 2) Device Supplier → 2) Start Mock WFM Server  (auto-builds on first run)
-  □ ctt-start.sh → 2) Device Supplier → 3) Run Tests → core
+Phase 2 — Start the mock WFM
+  □ ctt-start.sh → 2) Device Supplier → 2) Start Mock WFM Server  (builds from source each time)
+  □ Note the Management Interface URL and WFM SPIFFE ID it prints
+
+Phase 3 — CTT self-test (CTT simulates device-agent against mock WFM)
+  □ ctt-start.sh → 2) Device Supplier → 3) Run Tests → core → Enter, Enter at the URL prompts
   □ Open report: ctt-runner/reports/device-supplier/conformance-report-<ts>.html
 
-Phase 3 — Integration test with real sandbox device-agent (optional)
-  □ Start mock WFM as in Phase 2
-  □ On device-agent machine: edit config/config.yaml
-      → wfm.sbiUrl: https://<ctt-host>:3003/v1alpha2/margo
+Integration test with a real sandbox device-agent (optional)
+  □ Mock WFM uses the WFM SVID of the device's WFM ID, and is running (Phase 2)
+  □ On device-agent machine: device-agent.env → WFM_HOST=<ctt-host>, WFM_PORT=3003
       → leave all miaf / mis config unchanged (device keeps using its own MIS SVID)
-  □ Use device-agent.sh option 11 to add mock WFM SPIFFE ID to device's authorized.json
+  □ If the mock WFM has its own WFM ID: device-agent.sh option 11 → add its SPIFFE ID
   □ Restart device-agent (docker stop-docker / start-docker)
   □ Watch CTT mock WFM logs: tail -f /tmp/wfm-server.log
-  □ Restore config.yaml to point back at Symphony when done
+  □ Set WFM_HOST / WFM_PORT back to Symphony and restart when done
 ```

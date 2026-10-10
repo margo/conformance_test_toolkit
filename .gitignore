@@ -19,3 +19,13 @@ device-supplier/device-scenarios/test-scenarios.json
 # Compiled test binaries dropped in the working dir
 device-supplier/device-supplier
 device-supplier/server
+
+# device-supplier runtime output created by ctt-start.sh — never commit.
+# certs holds the MIS-issued SVIDs and their private keys.
+ctt-runner/device-supplier/bin/
+ctt-runner/device-supplier/certs
+ctt-runner/device-supplier/data/
+ctt-runner/device-supplier/manifests
+ctt-runner/device-supplier/sample-apps
+ctt-runner/device-supplier/device-scenarios/
+ctt-runner/device-supplier/reports/
