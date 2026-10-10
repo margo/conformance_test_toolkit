@@ -1777,6 +1777,43 @@ run_wfm_flow() {
     done
 }
 
+# True if the file exists; checks with sudo when its directory is not accessible to the current user.
+_device_identity_file_exists() {
+    [[ -f "$1" ]] && return 0
+    local dir="${1%/*}"
+    [[ -r "$dir" && -x "$dir" ]] && return 1
+    sudo test -f "$1"
+}
+
+# Copies one identity file so the current user owns it; uses sudo only when the source is not readable.
+_device_copy_identity_file() {
+    local src="$1" dst="$2" mode="$3"
+    if ! _device_identity_file_exists "$src"; then
+        warn "Missing file: $src"
+        return 1
+    fi
+    if [[ -r "$src" ]]; then
+        cp "$src" "$dst" || return 1
+    else
+        sudo cp "$src" "$dst" || return 1
+        sudo chown "$(id -u):$(id -g)" "$dst" || return 1
+    fi
+    chmod "$mode" "$dst"
+}
+
+# Prompts for a folder, expands a leading ~ and strips a trailing slash. Result in REPLY.
+_device_read_dir() {
+    local prompt="$1" default="$2" answer
+    if [[ -n "$default" ]]; then
+        read -r -p "  $prompt [$default]: " answer < /dev/tty
+    else
+        read -r -p "  $prompt: " answer < /dev/tty
+    fi
+    answer="${answer:-$default}"
+    answer="${answer/#\~/$HOME}"
+    REPLY="${answer%/}"
+}
+
 device_generate_certs() {
     local device_dir="$CONFORMANCE_DIR/device-supplier"
     local cert_dir="$device_dir/certs"
@@ -1787,69 +1824,109 @@ device_generate_certs() {
     echo "    1. A WFM SVID    — mock WFM's mTLS server identity (port 3003)"
     echo "    2. A Client SVID — CTT test runner's mTLS client identity"
     echo ""
-    echo "  For the Margo sandbox MIS (cloned to ~/sandbox):"
-    echo "    bash ~/sandbox/scripts/mis.sh"
-    echo "    sudo chown -R \$USER:\$USER ~/mis-deployment"
+    echo "  Then point this step at the folder that holds them. Accepted layouts:"
+    echo "    • MIS output folder (e.g. ~/mis-deployment from the sandbox mis.sh):"
+    echo "        x509svid-*/payload-cert.pem, x509svid-*/payload-key.pem, certs/ca.crt"
+    echo "    • A flat folder with:"
+    echo "        wfm-svid-cert.pem, wfm-svid-key.pem,"
+    echo "        client-svid-cert.pem, client-svid-key.pem, mis-ca.crt"
     echo ""
-    echo "  If sandbox is not at ~/sandbox, adjust the path to mis.sh accordingly."
-    echo ""
+    echo "  The folder may be owned by root — sudo is used only when needed to read it."
     echo "  ⚠  The CA used here MUST match the CA trusted by the vendor's device."
     echo "  ────────────────────────────────────────────────────────────────────────"
     echo ""
 
-    # --- WFM SVID cert + key ---
-    local wfm_cert="" wfm_key=""
+    _device_read_dir "Folder containing the SVIDs" "$HOME/mis-deployment"
+    local src_dir="$REPLY"
+    if [[ ! -d "$src_dir" ]] && ! sudo test -d "$src_dir"; then
+        warn "Folder not found: $src_dir"
+        return 1
+    fi
 
-    # Try sandbox auto-detect (x509svid-<wfm-id> is prefix of x509svid-<wfm-id>-<client-id>)
-    local default_mis_dir="$HOME/mis-deployment"
-    if ls -d "$default_mis_dir"/x509svid-* &>/dev/null; then
-        local svid_dirs=() auto_wfm="" auto_client=""
-        while IFS= read -r d; do svid_dirs+=("$d"); done < <(ls -d "$default_mis_dir"/x509svid-* 2>/dev/null)
-        for d1 in "${svid_dirs[@]}"; do
-            for d2 in "${svid_dirs[@]}"; do
-                [[ "$d2" == "${d1}-"* ]] && auto_wfm="$d1" && auto_client="$d2"
+    local wfm_cert wfm_key client_cert client_key ca_cert
+
+    if _device_identity_file_exists "$src_dir/wfm-svid-cert.pem"; then
+        wfm_cert="$src_dir/wfm-svid-cert.pem"
+        wfm_key="$src_dir/wfm-svid-key.pem"
+        client_cert="$src_dir/client-svid-cert.pem"
+        client_key="$src_dir/client-svid-key.pem"
+        ca_cert="$src_dir/mis-ca.crt"
+    else
+        local find_cmd=(find "$src_dir" -mindepth 1 -maxdepth 1 -type d -name 'x509svid-*')
+        [[ -r "$src_dir" && -x "$src_dir" ]] || find_cmd=(sudo "${find_cmd[@]}")
+        local svid_dirs=()
+        mapfile -t svid_dirs < <("${find_cmd[@]}" 2>/dev/null | sort)
+
+        local wfm_dir client_dir
+        if (( ${#svid_dirs[@]} >= 2 )); then
+            echo ""
+            echo "  SVID folders found in $src_dir:"
+            local i
+            for i in "${!svid_dirs[@]}"; do
+                echo "    $((i + 1))) ${svid_dirs[$i]##*/}"
             done
-        done
-        if [[ -n "$auto_wfm" && -n "$auto_client" ]]; then
-            echo "  Auto-detected from ~/mis-deployment:"
-            echo "    WFM SVID:    ${auto_wfm##*/}"
-            echo "    Client SVID: ${auto_client##*/}"
-            local confirm
-            read -p "  Use these? [Y/n]: " confirm < /dev/tty
-            if [[ "${confirm:-Y}" =~ ^[Yy]$ ]]; then
-                wfm_cert="${auto_wfm}/payload-cert.pem"
-                wfm_key="${auto_wfm}/payload-key.pem"
-                local client_cert="${auto_client}/payload-cert.pem"
-                local client_key="${auto_client}/payload-key.pem"
+            echo ""
+            # Sorted order puts x509svid-<wfm-id> ahead of x509svid-<wfm-id>-<client-id>.
+            local wfm_n client_n
+            read -r -p "  Which one is the WFM SVID?    [1]: " wfm_n    < /dev/tty
+            read -r -p "  Which one is the Client SVID? [2]: " client_n < /dev/tty
+            wfm_n="${wfm_n:-1}"
+            client_n="${client_n:-2}"
+            if [[ ! "$wfm_n" =~ ^[0-9]+$ || ! "$client_n" =~ ^[0-9]+$ ]] \
+                || (( wfm_n < 1 || wfm_n > ${#svid_dirs[@]} )) \
+                || (( client_n < 1 || client_n > ${#svid_dirs[@]} )) \
+                || (( wfm_n == client_n )); then
+                warn "Invalid selection — pick two different numbers from the list."
+                return 1
             fi
+            wfm_dir="${svid_dirs[$((wfm_n - 1))]}"
+            client_dir="${svid_dirs[$((client_n - 1))]}"
+            ca_cert="$src_dir/certs/ca.crt"
+        else
+            echo ""
+            echo "  No known layout found in $src_dir."
+            echo "  Enter the folders holding payload-cert.pem / payload-key.pem for each SVID:"
+            _device_read_dir "WFM SVID folder" "";    wfm_dir="$REPLY"
+            _device_read_dir "Client SVID folder" ""; client_dir="$REPLY"
+            read -r -p "  MIS CA cert file: " ca_cert < /dev/tty
+            ca_cert="${ca_cert/#\~/$HOME}"
         fi
+        wfm_cert="$wfm_dir/payload-cert.pem"
+        wfm_key="$wfm_dir/payload-key.pem"
+        client_cert="$client_dir/payload-cert.pem"
+        client_key="$client_dir/payload-key.pem"
     fi
 
-    # Fall back to explicit paths (works for any MIS)
-    if [[ -z "$wfm_cert" ]]; then
-        echo "  Enter paths to the SVID files your MIS produced:"
-        read -p "  WFM SVID cert:    " wfm_cert    < /dev/tty ; wfm_cert="${wfm_cert/#\~/$HOME}"
-        read -p "  WFM SVID key:     " wfm_key     < /dev/tty ; wfm_key="${wfm_key/#\~/$HOME}"
-        read -p "  Client SVID cert: " client_cert < /dev/tty ; client_cert="${client_cert/#\~/$HOME}"
-        read -p "  Client SVID key:  " client_key  < /dev/tty ; client_key="${client_key/#\~/$HOME}"
+    mkdir -p "$cert_dir" 2>/dev/null || sudo mkdir -p "$cert_dir" || return 1
+    [[ -w "$cert_dir" ]] || sudo chown -R "$(id -u):$(id -g)" "$cert_dir/" || return 1
+
+    # Stage and verify first, so a bad or incomplete set never replaces a working identity.
+    local stage
+    stage="$(mktemp -d "$cert_dir/.identity.XXXXXX")" || return 1
+    if ! { _device_copy_identity_file "$wfm_cert"    "$stage/miaf-server-cert.pem" 644 \
+        && _device_copy_identity_file "$wfm_key"     "$stage/miaf-server-key.pem"  600 \
+        && _device_copy_identity_file "$client_cert" "$stage/svid-cert.pem"        644 \
+        && _device_copy_identity_file "$client_key"  "$stage/svid-key.pem"         600 \
+        && _device_copy_identity_file "$ca_cert"     "$stage/svid-ca.pem"          644; }; then
+        rm -rf "$stage"
+        warn "Identity setup aborted — existing certs in $cert_dir were left untouched."
+        return 1
     fi
 
-    # --- CA cert ---
-    local default_ca="$default_mis_dir/certs/ca.crt"
-    local ca_cert
-    read -p "  MIS CA cert [${default_ca}]: " ca_cert < /dev/tty
-    ca_cert="${ca_cert:-$default_ca}"
-    ca_cert="${ca_cert/#\~/$HOME}"
+    local f
+    for f in miaf-server-cert.pem svid-cert.pem; do
+        if ! openssl verify -CAfile "$stage/svid-ca.pem" "$stage/$f" >/dev/null 2>&1; then
+            rm -rf "$stage"
+            warn "$f was not issued by the given MIS CA ($ca_cert)."
+            warn "Identity setup aborted — existing certs in $cert_dir were left untouched."
+            return 1
+        fi
+    done
 
-    # Copy everything into place
-    sudo chown -R "${USER}:${USER}" "$default_mis_dir" 2>/dev/null || true
-    mkdir -p "$cert_dir"
-    cp "$wfm_cert"    "$cert_dir/miaf-server-cert.pem"
-    cp "$wfm_key"     "$cert_dir/miaf-server-key.pem"
-    cp "$client_cert" "$cert_dir/svid-cert.pem"
-    cp "$client_key"  "$cert_dir/svid-key.pem"
-    cp "$ca_cert"     "$cert_dir/svid-ca.pem"
-    chmod 644 "$cert_dir/svid-ca.pem"
+    for f in miaf-server-cert.pem miaf-server-key.pem svid-cert.pem svid-key.pem svid-ca.pem; do
+        mv -f "$stage/$f" "$cert_dir/$f"
+    done
+    rm -rf "$stage"
 
     # Ensure manifests/ symlink — server reads ./manifests/assertions.json at startup
     if [[ ! -e "$device_dir/manifests" ]]; then
@@ -1857,7 +1934,7 @@ device_generate_certs() {
     fi
 
     echo ""
-    success "Identity setup complete!"
+    success "Identity setup complete — both SVIDs verified against the MIS CA."
     echo ""
     echo "  Certs: $cert_dir"
     echo ""
