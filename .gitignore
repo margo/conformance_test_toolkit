@@ -29,3 +29,11 @@ ctt-runner/device-supplier/manifests
 ctt-runner/device-supplier/sample-apps
 ctt-runner/device-supplier/device-scenarios/
 ctt-runner/device-supplier/reports/
+
+# wfm-supplier per-run copies made by ctt-start.sh — never commit.
+# svid-key.pem is a copy of the CTT's client SVID private key.
+ctt-runner/wfm-supplier/utils/certs/device.key
+ctt-runner/wfm-supplier/utils/certs/device-cert.pem
+ctt-runner/wfm-supplier/utils/certs/svid-cert.pem
+ctt-runner/wfm-supplier/utils/certs/svid-key.pem
+ctt-runner/wfm-supplier/utils/certs/svid-ca.pem

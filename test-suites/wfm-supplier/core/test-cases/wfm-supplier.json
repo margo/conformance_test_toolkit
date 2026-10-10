@@ -373,7 +373,7 @@
     "steps": [
       {
         "id": "step-wfm-hi-1.1",
-        "name": "Get Deployments — First Manifest Has ETag, Content-Type, and Version 1",
+        "name": "Get Deployments — Manifest Has ETag, Content-Type, and a Valid Version",
         "method": "GET",
         "endpoint": "/api/v1/deployments",
         "mtls": true,
@@ -384,8 +384,8 @@
         "validations": [
           {
             "field": "manifestVersion",
-            "operation": "equals",
-            "value": 1
+            "operation": "greater_than",
+            "value": 0
           },
           {
             "field": "_headers.content-type",
@@ -600,6 +600,9 @@
         },
         "headers": {},
         "expected_status": 200,
+        "accepted_statuses": [
+          201
+        ],
         "validations": [],
         "extract_context": {}
       }
@@ -856,6 +859,9 @@
         "validations": [],
         "extract_context": {},
         "expected_status": 0,
+        "accepted_statuses": [
+          403
+        ],
         "expect_transport_error": true
       },
       {

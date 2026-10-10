@@ -118,6 +118,34 @@ const miafIdentity = (fs.existsSync(svidCertPath) && fs.existsSync(svidKeyPath))
     }
   : null;
 
+// "Recognition by the WFM Client" (MIAF WFM Identity Profile): the WFM this
+// client may talk to is fixed by its own SVID — a client named
+// spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<wfm-client-id> belongs to
+// the WFM spiffe://<trust-domain>/margo/wfm/<wfm-id>, and the server's SVID
+// must carry exactly that SPIFFE ID.
+function spiffeIdOf(subjectAltName) {
+  const match = /URI:(spiffe:\/\/[^,\s]+)/.exec(subjectAltName || '');
+  return match ? match[1] : null;
+}
+
+const ownSpiffeId = miafIdentity ? spiffeIdOf(new crypto.X509Certificate(miafIdentity.cert).subjectAltName) : null;
+const expectedWfmSpiffeId =
+  ownSpiffeId && ownSpiffeId.includes('/client/') ? ownSpiffeId.slice(0, ownSpiffeId.lastIndexOf('/client/')) : null;
+
+function recognizeWfm(peerCertificate) {
+  if (!expectedWfmSpiffeId) {
+    return new Error(
+      `this suite's SVID (${ownSpiffeId || 'no SPIFFE ID'}) is not a WFM Client identity — ` +
+      'expected spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<wfm-client-id>'
+    );
+  }
+  const presented = spiffeIdOf(peerCertificate.subjectaltname);
+  if (presented !== expectedWfmSpiffeId) {
+    return new Error(`WFM presented ${presented || 'no SPIFFE ID'}, expected ${expectedWfmSpiffeId} (the WFM this client SVID belongs to)`);
+  }
+  return undefined;
+}
+
 // Identity/certs are loaded above exactly as the normal run does — curl mode exits
 // here, before anything below that depends on a scenarios file (a bare top-level
 // `return` is valid because Node wraps this file in a function).
@@ -616,6 +644,14 @@ const CONTEXT_FALLBACKS = {
 
 function substitute(value) {
   if (typeof value === 'string') {
+    // A value that is exactly one placeholder keeps the context value's own
+    // type — a number extracted from a response is sent back as a number
+    // (e.g. adoptedManifestVersion), not as its string form.
+    const whole = /^\{([^}]+)\}$/.exec(value);
+    if (whole) {
+      const raw = context[whole[1]];
+      if (raw !== undefined && raw !== null && typeof raw !== 'string') return raw;
+    }
     return value.replace(/\{([^}]+)\}/g, (_, key) => {
       const val = context[key];
       if (val !== undefined && val !== null && val !== '') return String(val);
@@ -713,10 +749,10 @@ function request(method, url, headers, bodyText, mtls) {
       headers,
       ca: (mtls && mtls.ca) || caCertificate,
       rejectUnauthorized: !!(mtls && mtls.ca),
-      // X.509-SVIDs carry only a SPIFFE URI SAN, never a DNS/IP SAN, so standard
-      // hostname verification always fails. Skip hostname check but keep CA chain
-      // verification — this is the correct approach for SPIFFE-based mTLS.
-      ...(mtls && mtls.ca ? { checkServerIdentity: () => undefined } : {}),
+      // X.509-SVIDs carry only a SPIFFE URI SAN, never a DNS/IP SAN, so the
+      // server is identified by its SPIFFE ID instead of its hostname, on top
+      // of the CA chain verification.
+      ...(mtls && mtls.ca ? { checkServerIdentity: (_host, cert) => recognizeWfm(cert) } : {}),
       timeout: 30000,
     };
     if (mtls) {
@@ -1387,7 +1423,7 @@ async function performOrasStep(step) {
     // Raw OCI Distribution "Listing Tags" endpoint — AR-010 checks the exact
     // {name, tags[]} JSON shape, which `oras repo tags` re-formats away.
     const [host, ...rest] = repo.split('/');
-    const response = await request('GET', `https://${host}/v2/${rest.join('/')}/tags/list`, {}, '');
+    const response = await registryGet(host, `https://${host}/v2/${rest.join('/')}/tags/list`);
     const responseSource = { ...parseBody(response.body), _headers: response.headers, _body: response.body };
     return { method: 'GET', endpoint: ref, bodyText: '', response, responseSource };
   }
@@ -1395,6 +1431,37 @@ async function performOrasStep(step) {
   const response = { status: transportError ? 0 : status, headers: {}, body, transportError };
   const responseSource = { ...parseBody(body), _headers: {}, _body: body };
   return { method: 'ORAS', endpoint: ref, bodyText: '', response, responseSource };
+}
+
+// GET against an OCI registry, following the standard token flow: a 401 with a
+// "WWW-Authenticate: Bearer realm=...,service=...,scope=..." challenge means
+// "fetch a token from realm, then retry". Uses the credentials `docker login` /
+// `oras login` stored for this host when there are any, otherwise an anonymous
+// token (enough for a public repository).
+async function registryGet(host, url) {
+  const first = await request('GET', url, {}, '');
+  const challenge = first.headers['www-authenticate'] || '';
+  if (first.status !== 401 || !/^Bearer /i.test(challenge)) return first;
+
+  const params = Object.fromEntries([...challenge.matchAll(/(\w+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
+  if (!params.realm) return first;
+  const tokenUrl = new URL(params.realm);
+  if (params.service) tokenUrl.searchParams.set('service', params.service);
+  if (params.scope) tokenUrl.searchParams.set('scope', params.scope);
+
+  const tokenHeaders = {};
+  try {
+    const dockerConfig = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '', '.docker', 'config.json'), 'utf8'));
+    const stored = dockerConfig.auths && dockerConfig.auths[host] && dockerConfig.auths[host].auth;
+    if (stored) tokenHeaders.Authorization = `Basic ${stored}`;
+  } catch (_) {
+    // no stored credentials — anonymous token
+  }
+
+  const tokenResponse = await request('GET', tokenUrl.toString(), tokenHeaders, '');
+  const token = (parseBody(tokenResponse.body) || {}).token || (parseBody(tokenResponse.body) || {}).access_token;
+  if (!token) return first;
+  return request('GET', url, { Authorization: `Bearer ${token}` }, '');
 }
 
 // Runs a list of validations against a response, returning an array of failure messages.
@@ -1512,10 +1579,16 @@ async function runStep(scenario, step) {
 
     const assertionFailures = [];
 
-    // expect_transport_error: true — a TLS/network rejection IS the passing outcome.
+    // expect_transport_error: true — a TLS rejection IS the passing outcome (or
+    // an explicit HTTP rejection listed in accepted_statuses). Not being able to
+    // reach the server at all proves nothing about how it handles TLS.
     if (step.expect_transport_error) {
       if (!response.transportError) {
-        assertionFailures.push(`expected a transport error (TLS rejection) but got HTTP ${response.status}`);
+        if (!(step.accepted_statuses || []).includes(response.status)) {
+          assertionFailures.push(`expected the connection to be rejected but got HTTP ${response.status}`);
+        }
+      } else if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|timed out/i.test(response.transportError)) {
+        assertionFailures.push(`could not reach the WFM (${response.transportError}) — the TLS behaviour was not tested`);
       }
     } else {
       // A step passes if the actual status matches expected OR any of the accepted alternatives.
@@ -1542,10 +1615,12 @@ async function runStep(scenario, step) {
       }
     }
 
+    // Context is taken from any response with the expected status, even when one
+    // of its validations failed: the IDs it carries are still real, and later
+    // steps should test the WFM with them instead of failing on placeholders.
     let newContext = {};
-    if (assertionFailures.length === 0 && !step.expect_transport_error) {
-      const primaryMatch = response.status === step.expected_status;
-      if (primaryMatch) newContext = extractContext(responseSource, step.extract_context);
+    if (!step.expect_transport_error && !pollTimedOut && response.status === step.expected_status) {
+      newContext = extractContext(responseSource, step.extract_context);
     }
 
     const passed = assertionFailures.length === 0 && (step.expect_transport_error || !response.transportError);

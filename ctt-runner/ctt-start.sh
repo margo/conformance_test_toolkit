@@ -1534,13 +1534,14 @@ wfm_setup_miaf_identity() {
     while true; do
         echo ""
         echo "┌─────────────────────────────────────────────────────────────────────────┐"
-        echo "│  MIAF Identity Setup — Which WFM are you testing against?               │"
+        echo "│  MIAF Identity Setup — Where does the CTT's client SVID come from?      │"
         echo "├─────────────────────────────────────────────────────────────────────────┤"
-        echo "│  1) Margo sandbox / Symphony   (CTT generates identity; you add it to  │"
-        echo "│                                 Symphony via its CLI option 7)          │"
-        echo "│  2) Vendor WFM (own SPIFFE)    (vendor's admin issues CTT a SVID)      │"
-        echo "│  3) Self-contained / no WFM    (CTT mock WFM; all certs self-signed)   │"
-        echo "│  B) Back                                                                 │"
+        echo "│  1) CTT-generated identity    (ctt-mis.sh; you make the WFM trust it —  │"
+        echo "│                                sandbox Symphony without a running MIS)  │"
+        echo "│  2) MIS-issued identity       (sandbox mis.sh or your own MIS issued the│"
+        echo "│                                CTT a client SVID; copy it from a folder)│"
+        echo "│  3) Self-contained / no WFM   (CTT mock WFM; all certs self-signed)     │"
+        echo "│  B) Back                                                                │"
         echo "└─────────────────────────────────────────────────────────────────────────┘"
         echo ""
         read -p "Select option (1-3 or B): " miaf_choice < /dev/tty
@@ -1587,65 +1588,127 @@ _wfm_miaf_symphony() {
         && echo "  Device SPIFFE ID: ${device_spiffe_id}" \
         && echo "  (Add this to Symphony via wfm.sh → option 7)"
     echo ""
-    echo "  Before starting Symphony, complete the manual Symphony-side"
-    echo "  config steps in docs/wfm-supplier-setup-guide.md → Path 1."
+    echo "  Before starting Symphony, configure it to trust this identity"
+    echo "  (WFM SVID, CA and trust bundle from ctt-mis.sh). The setup guide"
+    echo "  covers the MIS-issued identity instead — option 2 of this menu."
     echo "════════════════════════════════════════════════════════════════"
 }
 
 _wfm_miaf_vendor() {
     local real_dir="$CONFORMANCE_DIR/wfm-supplier/utils/fixtures/miaf/real"
-    mkdir -p "$real_dir"
 
     echo ""
     echo "════════════════════════════════════════════════════════════════"
-    echo "  Vendor WFM — SPIFFE Identity Setup"
+    echo "  MIS-issued identity for the CTT (acting as a WFM client)"
     echo "════════════════════════════════════════════════════════════════"
     echo ""
-    echo "  The vendor's SPIFFE administrator must issue CTT a client SVID."
-    echo "  Ask them for three files, then enter the paths below."
+    echo "  The MIS of the WFM under test must have issued the CTT a client SVID"
+    echo "  for that WFM:  <WFM SPIFFE ID>/client/<client-id>"
     echo ""
-    echo "  Files needed from the vendor's SPIFFE admin:"
-    echo "    client-svid-cert.pem  — CTT's X.509-SVID (SPIFFE URI SAN)"
-    echo "    client-svid-key.pem   — private key for the above cert"
-    echo "    trust-bundle-ca.pem   — root CA their MIS uses to sign SVIDs"
+    echo "  Point this step at the folder that holds it. Accepted layouts:"
+    echo "    • MIS output folder (e.g. ~/mis-deployment from the sandbox mis.sh):"
+    echo "        x509svid-*/payload-cert.pem, x509svid-*/payload-key.pem, certs/ca.crt"
+    echo "    • A flat folder with:"
+    echo "        client-svid-cert.pem, client-svid-key.pem, trust-bundle-ca.pem"
+    echo ""
+    echo "  The folder may be owned by root — sudo is used only when needed to read it."
     echo ""
 
-    local cert_path key_path ca_path
-    read -p "  Path to client SVID cert  : " cert_path < /dev/tty
-    [[ -f "$cert_path" ]] || { warn "File not found: $cert_path"; return 1; }
-
-    read -p "  Path to client SVID key   : " key_path < /dev/tty
-    [[ -f "$key_path" ]] || { warn "File not found: $key_path"; return 1; }
-
-    read -p "  Path to trust bundle CA   : " ca_path < /dev/tty
-    [[ -f "$ca_path" ]] || { warn "File not found: $ca_path"; return 1; }
-
-    cp "$cert_path" "$real_dir/client-svid-cert.pem"
-    cp "$key_path"  "$real_dir/client-svid-key.pem"
-    cp "$ca_path"   "$real_dir/trust-bundle-ca.pem"
-
-    echo ""
-    if openssl verify -CAfile "$real_dir/trust-bundle-ca.pem" \
-            "$real_dir/client-svid-cert.pem" >/dev/null 2>&1; then
-        success "Chain verified — identity installed to ${real_dir}/"
-    else
-        warn "Chain verify failed — cert and CA may be from different sources. Check with vendor's SPIFFE admin."
+    _device_read_dir "Folder containing the client SVID" "$HOME/mis-deployment"
+    local src_dir="$REPLY"
+    if [[ ! -d "$src_dir" ]] && ! sudo test -d "$src_dir"; then
+        warn "Folder not found: $src_dir"
+        return 1
     fi
 
-    # Show the SPIFFE ID so the user can share it with the vendor's WFM admin
-    local ctt_spiffe_id=""
-    ctt_spiffe_id=$(openssl x509 \
-        -in "$real_dir/client-svid-cert.pem" \
-        -text -noout 2>/dev/null \
-        | grep -oE 'URI:spiffe://[^[:space:]]+' | head -1 | sed 's/URI://')
+    local cert_path key_path ca_path
+    if _device_identity_file_exists "$src_dir/client-svid-cert.pem"; then
+        cert_path="$src_dir/client-svid-cert.pem"
+        key_path="$src_dir/client-svid-key.pem"
+        ca_path="$src_dir/trust-bundle-ca.pem"
+    else
+        local find_cmd=(find "$src_dir" -mindepth 1 -maxdepth 1 -type d -name 'x509svid-*')
+        [[ -r "$src_dir" && -x "$src_dir" ]] || find_cmd=(sudo "${find_cmd[@]}")
+        local svid_dirs=()
+        mapfile -t svid_dirs < <("${find_cmd[@]}" 2>/dev/null | sort)
+
+        if (( ${#svid_dirs[@]} >= 1 )); then
+            echo ""
+            echo "  SVID folders found in $src_dir:"
+            local i
+            for i in "${!svid_dirs[@]}"; do
+                echo "    $((i + 1))) ${svid_dirs[$i]##*/}"
+            done
+            echo ""
+            # Sorted order puts x509svid-<wfm-id> ahead of x509svid-<wfm-id>-<client-id>.
+            local default_n=$(( ${#svid_dirs[@]} >= 2 ? 2 : 1 )) client_n
+            read -r -p "  Which one is the CTT's client SVID? [$default_n]: " client_n < /dev/tty
+            client_n="${client_n:-$default_n}"
+            if [[ ! "$client_n" =~ ^[0-9]+$ ]] || (( client_n < 1 || client_n > ${#svid_dirs[@]} )); then
+                warn "Invalid selection — pick a number from the list."
+                return 1
+            fi
+            cert_path="${svid_dirs[$((client_n - 1))]}/payload-cert.pem"
+            key_path="${svid_dirs[$((client_n - 1))]}/payload-key.pem"
+            ca_path="$src_dir/certs/ca.crt"
+        else
+            echo ""
+            echo "  No known layout found in $src_dir. Enter the three files:"
+            read -r -p "  Path to client SVID cert  : " cert_path < /dev/tty
+            read -r -p "  Path to client SVID key   : " key_path < /dev/tty
+            read -r -p "  Path to MIS CA cert       : " ca_path < /dev/tty
+            cert_path="${cert_path/#\~/$HOME}"
+            key_path="${key_path/#\~/$HOME}"
+            ca_path="${ca_path/#\~/$HOME}"
+        fi
+    fi
+
+    mkdir -p "$real_dir" 2>/dev/null || sudo mkdir -p "$real_dir" || return 1
+    [[ -w "$real_dir" ]] || sudo chown -R "$(id -u):$(id -g)" "$real_dir/" || return 1
+
+    # Stage and verify first, so a bad or incomplete set never replaces a working identity.
+    local stage
+    stage="$(mktemp -d "$real_dir/.identity.XXXXXX")" || return 1
+    if ! { _device_copy_identity_file "$cert_path" "$stage/client-svid-cert.pem" 644 \
+        && _device_copy_identity_file "$key_path"  "$stage/client-svid-key.pem"  600 \
+        && _device_copy_identity_file "$ca_path"   "$stage/trust-bundle-ca.pem"  644; }; then
+        rm -rf "$stage"
+        warn "Identity setup aborted — existing certs in $real_dir were left untouched."
+        return 1
+    fi
+
+    if ! openssl verify -CAfile "$stage/trust-bundle-ca.pem" "$stage/client-svid-cert.pem" >/dev/null 2>&1; then
+        rm -rf "$stage"
+        warn "The client SVID was not issued by the given MIS CA ($ca_path)."
+        warn "Identity setup aborted — existing certs in $real_dir were left untouched."
+        return 1
+    fi
+
+    local ctt_spiffe_id
+    ctt_spiffe_id=$(device_spiffe_id "$stage/client-svid-cert.pem")
+    if [[ "$ctt_spiffe_id" != *"/client/"* ]]; then
+        rm -rf "$stage"
+        warn "That is not a client SVID: ${ctt_spiffe_id:-no SPIFFE ID}"
+        warn "Expected <WFM SPIFFE ID>/client/<client-id> — pick the client SVID, not the WFM's own."
+        warn "Identity setup aborted — existing certs in $real_dir were left untouched."
+        return 1
+    fi
+
+    local f
+    for f in client-svid-cert.pem client-svid-key.pem trust-bundle-ca.pem; do
+        mv -f "$stage/$f" "$real_dir/$f"
+    done
+    rm -rf "$stage"
 
     echo ""
-    echo "  ─────────────────────────────────────────────────────────────"
-    echo "  Share this SPIFFE ID with the vendor's WFM admin so they can"
-    echo "  authorize CTT as a client in their WFM's allowlist:"
+    success "Identity setup complete — client SVID verified against the MIS CA."
     echo ""
-    [[ -n "$ctt_spiffe_id" ]] && echo "     ${ctt_spiffe_id}"
-    echo "  ─────────────────────────────────────────────────────────────"
+    echo "  CTT client SVID : $ctt_spiffe_id"
+    echo "  WFM it belongs to: ${ctt_spiffe_id%/client/*}"
+    echo ""
+    echo "  ➜  The WFM under test must accept this client: add the CTT client SVID's"
+    echo "     SPIFFE ID above to its accepted-client list before running the tests"
+    echo "     (Symphony: wfm.sh → 7) Manage SPIFFE ID allowlist)."
     echo ""
 }
 
