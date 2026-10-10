@@ -1869,7 +1869,7 @@ device_start_server() {
 
     # Check certs exist
     if [[ ! -f "$cert_dir/miaf-server-cert.pem" || ! -f "$cert_dir/svid-ca.pem" ]]; then
-        warn "MIAF certs not found at $cert_dir. Please run 'Generate Certificates' first (option 1)."
+        warn "MIAF certs not found at $cert_dir. Please run 'Setup Identity' first (option 1)."
         return 1
     fi
 
@@ -2094,7 +2094,7 @@ device_export_sandbox_identity() {
     local cert_dir="$device_dir/certs"
 
     if [[ ! -f "$cert_dir/ca-cert.pem" || ! -f "$cert_dir/ca-key.pem" ]]; then
-        warn "CTT CA not found at $cert_dir. Please run 'Generate Certificates' first (option 1)."
+        warn "CTT CA not found at $cert_dir. Please run 'Setup Identity' first (option 1)."
         return 1
     fi
 
@@ -2210,7 +2210,7 @@ run_device_flow() {
         echo "│  Mock WFM Server: $server_status"
         echo "├─────────────────────────────────────────────────────────────────────────┤"
         echo "│  Run steps in order:                                                     │"
-        echo "│    1. Generate Certificates  (TLS + SVID certs, run once per setup)      │"
+        echo "│    1. Setup Identity         (copy MIS-issued SVIDs, run once per setup)  │"
         echo "│    2. Start Mock WFM Server  (mTLS on :3001, MIAF endpoint on :3003)     │"
         echo "│    3. Run Tests              (select group, CTT simulates device-agent)  │"
         echo "│    4. Stop Mock WFM Server                                               │"

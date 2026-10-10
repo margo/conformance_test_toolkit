@@ -115,15 +115,35 @@ sudo chown -R $USER:$USER ~/mis-deployment
 For a vendor-provided MIS: follow the vendor's MIS procedure to obtain a WFM
 SVID cert/key pair, a client SVID cert/key pair, and the MIS CA cert.
 
-**Step 2 — Copy SVIDs to CTT via the CLI**
+**Step 2 — Place SVIDs into the CTT cert directory**
+
+The SVIDs must be on the CTT machine before this step. Two scenarios:
+
+**MIS on the same machine as CTT** (sandbox setup):
+`~/mis-deployment/` is already local — go straight to the CLI:
 
 ```bash
 bash ctt-runner/ctt-start.sh
-# Select: 2) Device Supplier → 1) Generate Certificates
+# Select: 2) Device Supplier → 1) Setup Identity
+# CLI auto-detects ~/mis-deployment/x509svid-* and asks for confirmation
 ```
 
-The CLI auto-detects sandbox MIS output (`~/mis-deployment/x509svid-*`) and
-confirms before copying. For any other MIS it prompts for explicit cert paths.
+**MIS on a different machine** (vendor setup):
+Copy the SVID files to the CTT machine first, then run the CLI and provide explicit paths when prompted:
+
+```bash
+# On the MIS machine — copy files to CTT machine
+scp <mis-dir>/x509svid-<wfm-id>/payload-cert.pem   ctt-host:~/wfm-svid-cert.pem
+scp <mis-dir>/x509svid-<wfm-id>/payload-key.pem    ctt-host:~/wfm-svid-key.pem
+scp <mis-dir>/x509svid-<client-id>/payload-cert.pem ctt-host:~/client-svid-cert.pem
+scp <mis-dir>/x509svid-<client-id>/payload-key.pem  ctt-host:~/client-svid-key.pem
+scp <mis-dir>/certs/ca.crt                          ctt-host:~/mis-ca.crt
+
+# On the CTT machine — run the CLI and enter those paths when prompted
+bash ctt-runner/ctt-start.sh
+# Select: 2) Device Supplier → 1) Setup Identity
+```
+
 All certs land in `ctt-runner/device-supplier/certs/`.
 
 **Verify:**
@@ -149,7 +169,7 @@ self-signed and not interoperable with a real MIS trust domain.
 
 ```bash
 bash ctt-runner/ctt-start.sh
-# Select: 2) Device Supplier → 1) Generate Certificates
+# Select: 2) Device Supplier → 1) Setup Identity
 ```
 
 Or directly:
@@ -588,8 +608,8 @@ Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
   □ Verify MIS is running: docker ps --filter name=margo-identity-service
   □ Generate SVIDs: bash ~/sandbox/scripts/mis.sh  (follow prompts for WFM + client SVID)
   □ Fix ownership:  sudo chown -R $USER:$USER ~/mis-deployment
-  □ Copy to CTT:    ctt-start.sh → 2) Device Supplier → 1) Generate Certificates
-                    Enter MIS deployment directory when prompted (default: ~/mis-deployment)
+  □ Copy to CTT:    ctt-start.sh → 2) Device Supplier → 1) Setup Identity
+                    (same machine: auto-detects ~/mis-deployment; different machine: enter explicit paths)
   □ Verify: openssl verify -CAfile certs/svid-ca.pem certs/miaf-server-cert.pem → OK
 
 Phase 2 — CTT self-test (CTT simulates device-agent against mock WFM)
