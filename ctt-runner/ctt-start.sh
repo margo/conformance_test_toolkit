@@ -1780,29 +1780,76 @@ run_wfm_flow() {
 device_generate_certs() {
     local device_dir="$CONFORMANCE_DIR/device-supplier"
     local cert_dir="$device_dir/certs"
+    local sandbox_mis="/home/margo/sandbox/scripts/mis.sh"
 
-    log "🔐 Generating TLS certificates for Mock WFM Server..."
+    echo ""
+    echo "  Identity Setup — MIAF SVIDs"
+    echo "  ─────────────────────────────────────────────────────────────────────"
+    echo "  The mock WFM and CTT test runner each need an X.509-SVID from a MIS."
+    echo "  Generate a WFM SVID and a client SVID using your MIS, then enter"
+    echo "  the directory where the SVIDs were written."
+    echo ""
 
-    if [[ ! -f "$device_dir/generate-certs.sh" ]]; then
-        error "generate-certs.sh not found in: $device_dir"
+    # Offer to run sandbox mis.sh if available
+    if [[ -f "$sandbox_mis" ]]; then
+        local run_sandbox
+        read -p "  Run sandbox mis.sh now to generate SVIDs? [Y/n]: " run_sandbox < /dev/tty
+        if [[ "${run_sandbox:-Y}" =~ ^[Yy]$ ]]; then
+            bash "$sandbox_mis"
+        fi
     fi
 
-    # Detect host IP (same logic as generate-certs.sh default)
-    local host_ip
-    host_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
-    local server_host="${host_ip:-localhost}"
+    # Ask for MIS deployment directory (where x509svid-* dirs were written)
+    local default_mis_dir="$HOME/mis-deployment"
+    local mis_dir
+    read -p "  MIS deployment directory [${default_mis_dir}]: " mis_dir < /dev/tty
+    mis_dir="${mis_dir:-$default_mis_dir}"
+    mis_dir="${mis_dir/#\~/$HOME}"
 
-    cd "$device_dir"
-    bash generate-certs.sh "$cert_dir" "$server_host" || error "Certificate generation failed"
+    sudo chown -R "${USER}:${USER}" "$mis_dir" 2>/dev/null || true
+
+    # Auto-detect WFM and client SVID dirs.
+    # MIS names them x509svid-<wfm-id> and x509svid-<wfm-id>-<client-id>
+    # → the WFM dir name is a strict prefix of the client dir name
+    local wfm_dir="" client_dir=""
+    local svid_dirs=()
+    while IFS= read -r d; do svid_dirs+=("$d"); done < <(ls -d "$mis_dir"/x509svid-* 2>/dev/null)
+
+    if [[ ${#svid_dirs[@]} -lt 2 ]]; then
+        error "Expected at least 2 x509svid-* directories in $mis_dir, found ${#svid_dirs[@]}. Generate both a WFM SVID and a client SVID first."
+    fi
+
+    for d1 in "${svid_dirs[@]}"; do
+        for d2 in "${svid_dirs[@]}"; do
+            [[ "$d2" == "${d1}-"* ]] && wfm_dir="$d1" && client_dir="$d2"
+        done
+    done
+
+    if [[ -z "$wfm_dir" || -z "$client_dir" ]]; then
+        error "Could not auto-detect WFM vs client SVID dirs. Dirs found: ${svid_dirs[*]##*/}"
+    fi
+
+    mkdir -p "$cert_dir"
+    cp "${wfm_dir}/payload-cert.pem"    "$cert_dir/miaf-server-cert.pem"
+    cp "${wfm_dir}/payload-key.pem"     "$cert_dir/miaf-server-key.pem"
+    cp "${client_dir}/payload-cert.pem" "$cert_dir/svid-cert.pem"
+    cp "${client_dir}/payload-key.pem"  "$cert_dir/svid-key.pem"
+    cp "$mis_dir/certs/ca.crt"          "$cert_dir/svid-ca.pem"
+    chmod 644 "$cert_dir/svid-ca.pem"
+
+    # Ensure manifests/ symlink — server reads ./manifests/assertions.json at startup
+    if [[ ! -e "$device_dir/manifests" ]]; then
+        ln -s utils/manifests "$device_dir/manifests"
+    fi
 
     echo ""
-    success "Certificates generated successfully!"
+    success "Identity setup complete!"
     echo ""
-    echo "  Certificate directory          : $cert_dir"
-    echo "  CA cert (give to device-agent) : $cert_dir/ca-cert.pem"
-    echo "  Device certificate             : $cert_dir/device-cert.pem"
+    echo "  WFM SVID:    ${wfm_dir##*/}"
+    echo "  Device SVID: ${client_dir##*/}"
+    echo "  Certs:       $cert_dir"
     echo ""
-    echo "  ➜  Copy ca-cert.pem to your device-agent machine so it can trust the mock WFM."
+    echo "  ➜  Give vendors $cert_dir/svid-ca.pem — their device must trust this CA."
     echo ""
 }
 
@@ -1811,8 +1858,8 @@ device_start_server() {
     local cert_dir="$device_dir/certs"
 
     # Check certs exist
-    if [[ ! -f "$cert_dir/ca-cert.pem" ]]; then
-        warn "Certificates not found at $cert_dir. Please run 'Generate Certificates' first (option 1)."
+    if [[ ! -f "$cert_dir/miaf-server-cert.pem" || ! -f "$cert_dir/svid-ca.pem" ]]; then
+        warn "MIAF certs not found at $cert_dir. Please run 'Generate Certificates' first (option 1)."
         return 1
     fi
 
