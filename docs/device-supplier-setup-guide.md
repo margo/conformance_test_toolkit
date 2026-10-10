@@ -143,11 +143,11 @@ Set variables for the rest of the steps:
 
 WFM_SVID_DIR=~/mis-deployment/x509svid-<wfm-id>
 WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-<client-id>
-# The exact directory names depend on the IDs you entered in mis.sh.
-# Check what was created: ls ~/mis-deployment/ | grep x509svid
-# Example: if wfm-id="wfm", client-id="wfm-wfm-client" or "wfmclient":
-#   WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
-#   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfm-wfm-client
+- The exact directory names depend on the IDs you entered in mis.sh.
+- Check what was created: ls ~/mis-deployment/ | grep x509svid
+- Example: if wfm-id="wfm", client-id="wfm-wfm-client" or "wfmclient":
+-   WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
+-   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfm-wfm-client
 
 **MIS on a different machine** (vendor setup):
 Copy the SVID files to the CTT machine first, then run the CLI and provide explicit paths when prompted:
