@@ -117,23 +117,29 @@ For the Margo sandbox MIS (cloned to `~/sandbox` in Prerequisites):
 bash ~/sandbox/scripts/mis.sh
 sudo chown -R $USER:$USER ~/mis-deployment
 ```
-Step 2 — Find the output directories from mis.sh:
+**Step 2 — Find the output directories from mis.sh:**
 
-mis.sh writes SVIDs into ~/mis-deployment/ in directories named after the WFM ID and client ID you entered during generation:
+mis.sh writes SVIDs into `~/mis-deployment/` in directories named after the WFM ID and client ID you entered during generation:
 
-x509svid-<wfm-id>            ← Symphony's WFM SVID (server identity)
-x509svid-<wfm-id>-<client-id> ← CTT's device SVID (client identity)
+```
+x509svid-WFM_ID              ← WFM SVID (server identity)
+x509svid-WFM_ID-CLIENT_ID    ← CTT device SVID (client identity)
+```
 
-Set variables for the rest of the steps:
+Check what was generated and set variables for the rest of the steps:
 
-WFM_SVID_DIR = ~/mis-deployment/x509svid-<wfm-id>
-WFM_CLIENT_SVID_DIR = ~/mis-deployment/x509svid-<client-id>
-  #The exact directory names depend on the IDs you entered in mis.sh.
-  #Check what was created: ls ~/mis-deployment/ | grep x509svid
-  #Example: if wfm-id="wfm", client-id="wfm-wfm-client" or "wfmclient":
-  #WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
-  #WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfm-wfm-client
-  
+```bash
+ls ~/mis-deployment/ | grep x509svid
+
+WFM_SVID_DIR=~/mis-deployment/x509svid-WFM_ID
+WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-WFM_ID-CLIENT_ID
+# The exact directory names depend on the IDs you entered in mis.sh.
+# Example: if wfm-id="wfm", client-id="wfm-wfm-client" or "wfmclient":
+#   WFM_SVID_DIR=~/mis-deployment/x509svid-wfm
+#   WFM_CLIENT_SVID_DIR=~/mis-deployment/x509svid-wfm-wfm-client
+```
+
+
 
 For a vendor-provided or external MIS: use your MIS tooling to obtain a WFM
 SVID cert/key pair, a client SVID cert/key pair, and the MIS CA cert, then
@@ -157,12 +163,28 @@ bash ctt-runner/ctt-start.sh
 Copy the SVID files to the CTT machine first, then run the CLI and provide explicit paths when prompted:
 
 ```bash
-# On the MIS machine — copy files to CTT machine
-scp <mis-dir>/x509svid-<wfm-id>/payload-cert.pem   ctt-host:~/wfm-svid-cert.pem
-scp <mis-dir>/x509svid-<wfm-id>/payload-key.pem    ctt-host:~/wfm-svid-key.pem
-scp <mis-dir>/x509svid-<client-id>/payload-cert.pem ctt-host:~/client-svid-cert.pem
-scp <mis-dir>/x509svid-<client-id>/payload-key.pem  ctt-host:~/client-svid-key.pem
-scp <mis-dir>/certs/ca.crt                          ctt-host:~/mis-ca.crt
+# On the MIS machine — copy files to the CTT machine into ~/vendor-certs/
+scp MIS_DIR/x509svid-WFM_ID/payload-cert.pem          CTT_HOST:~/vendor-certs/wfm-svid-cert.pem
+scp MIS_DIR/x509svid-WFM_ID/payload-key.pem           CTT_HOST:~/vendor-certs/wfm-svid-key.pem
+scp MIS_DIR/x509svid-WFM_ID-CLIENT_ID/payload-cert.pem CTT_HOST:~/vendor-certs/client-svid-cert.pem
+scp MIS_DIR/x509svid-WFM_ID-CLIENT_ID/payload-key.pem  CTT_HOST:~/vendor-certs/client-svid-key.pem
+scp MIS_DIR/certs/ca.crt                               CTT_HOST:~/vendor-certs/mis-ca.crt
+```
+
+Then on the CTT machine, run the CLI. Since `~/mis-deployment/` is not present, the CLI will ask for explicit paths — enter the paths where you copied the files above:
+
+```bash
+cd ~/workspace/conformance_test_toolkit
+bash ctt-runner/ctt-start.sh
+# Select: 2) Device Supplier → 1) Setup Identity
+#
+# CLI prompts (enter the paths copied above):
+#   WFM SVID cert:    ~/vendor-certs/wfm-svid-cert.pem
+#   WFM SVID key:     ~/vendor-certs/wfm-svid-key.pem
+#   Client SVID cert: ~/vendor-certs/client-svid-cert.pem
+#   Client SVID key:  ~/vendor-certs/client-svid-key.pem
+#   MIS CA cert:      ~/vendor-certs/mis-ca.crt
+```
 
 All certs land in `ctt-runner/device-supplier/certs/`.
 
