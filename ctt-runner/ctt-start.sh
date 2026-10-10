@@ -1780,61 +1780,73 @@ run_wfm_flow() {
 device_generate_certs() {
     local device_dir="$CONFORMANCE_DIR/device-supplier"
     local cert_dir="$device_dir/certs"
-    local sandbox_mis="/home/margo/sandbox/scripts/mis.sh"
 
     echo ""
-    echo "  Identity Setup — MIAF SVIDs"
-    echo "  ─────────────────────────────────────────────────────────────────────"
-    echo "  The mock WFM and CTT test runner each need an X.509-SVID from a MIS."
-    echo "  Generate a WFM SVID and a client SVID using your MIS, then enter"
-    echo "  the directory where the SVIDs were written."
+    echo "  ── MIAF Identity Setup ──────────────────────────────────────────────────"
+    echo "  Before continuing, use your MIS to generate two SVIDs:"
+    echo "    1. A WFM SVID    — mock WFM's mTLS server identity (port 3003)"
+    echo "    2. A Client SVID — CTT test runner's mTLS client identity"
+    echo ""
+    echo "  For the Margo sandbox MIS:"
+    echo "    bash ~/sandbox/scripts/mis.sh"
+    echo "    sudo chown -R \$USER:\$USER ~/mis-deployment"
+    echo ""
+    echo "  ⚠  The CA used here MUST match the CA trusted by the vendor's device."
+    echo "  ────────────────────────────────────────────────────────────────────────"
     echo ""
 
-    # Offer to run sandbox mis.sh if available
-    if [[ -f "$sandbox_mis" ]]; then
-        local run_sandbox
-        read -p "  Run sandbox mis.sh now to generate SVIDs? [Y/n]: " run_sandbox < /dev/tty
-        if [[ "${run_sandbox:-Y}" =~ ^[Yy]$ ]]; then
-            bash "$sandbox_mis"
+    # --- WFM SVID cert + key ---
+    local wfm_cert="" wfm_key=""
+
+    # Try sandbox auto-detect (x509svid-<wfm-id> is prefix of x509svid-<wfm-id>-<client-id>)
+    local default_mis_dir="$HOME/mis-deployment"
+    if ls -d "$default_mis_dir"/x509svid-* &>/dev/null; then
+        local svid_dirs=() auto_wfm="" auto_client=""
+        while IFS= read -r d; do svid_dirs+=("$d"); done < <(ls -d "$default_mis_dir"/x509svid-* 2>/dev/null)
+        for d1 in "${svid_dirs[@]}"; do
+            for d2 in "${svid_dirs[@]}"; do
+                [[ "$d2" == "${d1}-"* ]] && auto_wfm="$d1" && auto_client="$d2"
+            done
+        done
+        if [[ -n "$auto_wfm" && -n "$auto_client" ]]; then
+            echo "  Auto-detected from ~/mis-deployment:"
+            echo "    WFM SVID:    ${auto_wfm##*/}"
+            echo "    Client SVID: ${auto_client##*/}"
+            local confirm
+            read -p "  Use these? [Y/n]: " confirm < /dev/tty
+            if [[ "${confirm:-Y}" =~ ^[Yy]$ ]]; then
+                wfm_cert="${auto_wfm}/payload-cert.pem"
+                wfm_key="${auto_wfm}/payload-key.pem"
+                local client_cert="${auto_client}/payload-cert.pem"
+                local client_key="${auto_client}/payload-key.pem"
+            fi
         fi
     fi
 
-    # Ask for MIS deployment directory (where x509svid-* dirs were written)
-    local default_mis_dir="$HOME/mis-deployment"
-    local mis_dir
-    read -p "  MIS deployment directory [${default_mis_dir}]: " mis_dir < /dev/tty
-    mis_dir="${mis_dir:-$default_mis_dir}"
-    mis_dir="${mis_dir/#\~/$HOME}"
-
-    sudo chown -R "${USER}:${USER}" "$mis_dir" 2>/dev/null || true
-
-    # Auto-detect WFM and client SVID dirs.
-    # MIS names them x509svid-<wfm-id> and x509svid-<wfm-id>-<client-id>
-    # → the WFM dir name is a strict prefix of the client dir name
-    local wfm_dir="" client_dir=""
-    local svid_dirs=()
-    while IFS= read -r d; do svid_dirs+=("$d"); done < <(ls -d "$mis_dir"/x509svid-* 2>/dev/null)
-
-    if [[ ${#svid_dirs[@]} -lt 2 ]]; then
-        error "Expected at least 2 x509svid-* directories in $mis_dir, found ${#svid_dirs[@]}. Generate both a WFM SVID and a client SVID first."
+    # Fall back to explicit paths (works for any MIS)
+    if [[ -z "$wfm_cert" ]]; then
+        echo "  Enter paths to the SVID files your MIS produced:"
+        read -p "  WFM SVID cert:    " wfm_cert    < /dev/tty ; wfm_cert="${wfm_cert/#\~/$HOME}"
+        read -p "  WFM SVID key:     " wfm_key     < /dev/tty ; wfm_key="${wfm_key/#\~/$HOME}"
+        read -p "  Client SVID cert: " client_cert < /dev/tty ; client_cert="${client_cert/#\~/$HOME}"
+        read -p "  Client SVID key:  " client_key  < /dev/tty ; client_key="${client_key/#\~/$HOME}"
     fi
 
-    for d1 in "${svid_dirs[@]}"; do
-        for d2 in "${svid_dirs[@]}"; do
-            [[ "$d2" == "${d1}-"* ]] && wfm_dir="$d1" && client_dir="$d2"
-        done
-    done
+    # --- CA cert ---
+    local default_ca="$default_mis_dir/certs/ca.crt"
+    local ca_cert
+    read -p "  MIS CA cert [${default_ca}]: " ca_cert < /dev/tty
+    ca_cert="${ca_cert:-$default_ca}"
+    ca_cert="${ca_cert/#\~/$HOME}"
 
-    if [[ -z "$wfm_dir" || -z "$client_dir" ]]; then
-        error "Could not auto-detect WFM vs client SVID dirs. Dirs found: ${svid_dirs[*]##*/}"
-    fi
-
+    # Copy everything into place
+    sudo chown -R "${USER}:${USER}" "$default_mis_dir" 2>/dev/null || true
     mkdir -p "$cert_dir"
-    cp "${wfm_dir}/payload-cert.pem"    "$cert_dir/miaf-server-cert.pem"
-    cp "${wfm_dir}/payload-key.pem"     "$cert_dir/miaf-server-key.pem"
-    cp "${client_dir}/payload-cert.pem" "$cert_dir/svid-cert.pem"
-    cp "${client_dir}/payload-key.pem"  "$cert_dir/svid-key.pem"
-    cp "$mis_dir/certs/ca.crt"          "$cert_dir/svid-ca.pem"
+    cp "$wfm_cert"    "$cert_dir/miaf-server-cert.pem"
+    cp "$wfm_key"     "$cert_dir/miaf-server-key.pem"
+    cp "$client_cert" "$cert_dir/svid-cert.pem"
+    cp "$client_key"  "$cert_dir/svid-key.pem"
+    cp "$ca_cert"     "$cert_dir/svid-ca.pem"
     chmod 644 "$cert_dir/svid-ca.pem"
 
     # Ensure manifests/ symlink — server reads ./manifests/assertions.json at startup
@@ -1845,11 +1857,9 @@ device_generate_certs() {
     echo ""
     success "Identity setup complete!"
     echo ""
-    echo "  WFM SVID:    ${wfm_dir##*/}"
-    echo "  Device SVID: ${client_dir##*/}"
-    echo "  Certs:       $cert_dir"
+    echo "  Certs: $cert_dir"
     echo ""
-    echo "  ➜  Give vendors $cert_dir/svid-ca.pem — their device must trust this CA."
+    echo "  ➜  Share $cert_dir/svid-ca.pem with the vendor — their device must trust this CA."
     echo ""
 }
 

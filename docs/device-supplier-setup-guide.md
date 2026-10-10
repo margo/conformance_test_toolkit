@@ -79,48 +79,64 @@ jq --version
 ## Phase 1 — Identity setup (one-time)
 
 All conformance tests use MIAF mTLS (port 3003). The mock WFM and the CTT
-test runner each need an X.509-SVID from a shared MIS so they can authenticate
-each other. The CTT CLI option 1 automates this entirely.
-
-### Path 1 — Centralized MIS (recommended)
+test runner each need an X.509-SVID from a **shared MIS** — the same MIS that
+the vendor's real device trusts. This CA alignment is what makes the test
+production-representative.
 
 ```
 MIS  ──issues SVIDs──►  mock WFM server  (MIAF TLS identity, port 3003)
      ──issues SVIDs──►  CTT test runner  (mTLS client identity)
+     ──issues SVID──►   vendor device    (connects to mock WFM on port 3003)
 ```
 
-Verify MIS is running:
+> **CA alignment:** `certs/svid-ca.pem` placed here must be the CA that the
+> vendor's device trusts. For sandbox testing this is the sandbox MIS CA. For
+> real vendor conformance testing, use the CA from whichever MIS the vendor's
+> device is enrolled in.
+
+### Path 1 — Centralized MIS (recommended)
+
+**Step 1 — Generate SVIDs via your MIS**
+
+Use your MIS to generate a WFM SVID and a client/device SVID.
+
+For the Margo sandbox MIS:
 
 ```bash
+# Verify MIS is running
 docker ps --filter name=margo-identity-service --format "{{.Status}}"
-# → Up N minutes   (if not running: bash ~/sandbox/scripts/mis.sh docker start-docker)
+# → Up N minutes   (if not: bash ~/sandbox/scripts/mis.sh docker start-docker)
+
+# Generate SVIDs (follow prompts: WFM SVID + client SVID)
+bash ~/sandbox/scripts/mis.sh
+sudo chown -R $USER:$USER ~/mis-deployment
 ```
 
-Then run the CTT CLI — option 1 does everything:
+For a vendor-provided MIS: follow the vendor's MIS procedure to obtain a WFM
+SVID cert/key pair, a client SVID cert/key pair, and the MIS CA cert.
+
+**Step 2 — Copy SVIDs to CTT via the CLI**
 
 ```bash
 bash ctt-runner/ctt-start.sh
 # Select: 2) Device Supplier → 1) Generate Certificates
 ```
 
-The CLI will:
-1. Optionally run `mis.sh` to generate a WFM SVID and a client SVID
-2. Ask for the MIS deployment directory (default: `~/mis-deployment`)
-3. Auto-detect the two SVID directories and copy all certs to `ctt-runner/device-supplier/certs/`
+The CLI auto-detects sandbox MIS output (`~/mis-deployment/x509svid-*`) and
+confirms before copying. For any other MIS it prompts for explicit cert paths.
+All certs land in `ctt-runner/device-supplier/certs/`.
 
-Verify afterwards:
+**Verify:**
 
 ```bash
-openssl verify -CAfile ctt-runner/device-supplier/certs/svid-ca.pem \
-               ctt-runner/device-supplier/certs/miaf-server-cert.pem
+cd ctt-runner/device-supplier
+openssl verify -CAfile certs/svid-ca.pem certs/miaf-server-cert.pem
 # → certs/miaf-server-cert.pem: OK
-
-openssl verify -CAfile ctt-runner/device-supplier/certs/svid-ca.pem \
-               ctt-runner/device-supplier/certs/svid-cert.pem
+openssl verify -CAfile certs/svid-ca.pem certs/svid-cert.pem
 # → certs/svid-cert.pem: OK
 ```
 
-**SVID validity:** MIS issues SVIDs with a ~90-day TTL. Re-run option 1 when
+**SVID validity:** MIS issues SVIDs with a ~90-day TTL. Re-run both steps when
 certs expire.
 
 ---
@@ -162,19 +178,21 @@ the server hostname changes.
 
 ---
 
-## Phase 2 — Build binaries (one-time)
+## Phase 2 — Start the mock WFM server
+
+The CTT CLI builds the binaries automatically on first run if not already
+present. Use option 2:
 
 ```bash
-cd ctt-runner/device-supplier
-go build -o bin/server  ./scripts/cmd/device-supplier
-go build -o bin/run_tests ./scripts/
+bash ctt-runner/ctt-start.sh
+# Select: 2) Device Supplier → 2) Start Mock WFM Server
 ```
 
----
+The server starts on two ports:
+- **Port 3001** — plain TLS (legacy, not used by current conformance tests)
+- **Port 3003** — MIAF mTLS with the SVIDs from Phase 1
 
-## Phase 3 — Start the mock WFM server
-
-How you start the server depends on which cert path you used in Phase 1.
+Or start manually:
 
 ### With MIS SVIDs (Path 1)
 
@@ -217,7 +235,7 @@ The menu will prompt for MIAF cert paths if you want to use MIS SVIDs.
 
 ---
 
-## Phase 4 — Run the conformance suite
+## Phase 3 — Run the conformance suite
 
 ### Directly (recommended for CI / scripting)
 
@@ -568,36 +586,23 @@ openssl x509 -in ctt-runner/device-supplier/certs/svid-cert.pem \
 ```
 Phase 1 — Identity setup (once per MIS deployment; re-run when SVIDs expire)
   □ Verify MIS is running: docker ps --filter name=margo-identity-service
-  □ bash ctt-runner/ctt-start.sh → 2) Device Supplier → 1) Generate Certificates
-      - Optionally run mis.sh to generate WFM + client SVIDs
-      - Enter MIS deployment directory when prompted (default: ~/mis-deployment)
-      - CLI auto-detects SVID dirs and copies all certs to ctt-runner/device-supplier/certs/
+  □ Generate SVIDs: bash ~/sandbox/scripts/mis.sh  (follow prompts for WFM + client SVID)
+  □ Fix ownership:  sudo chown -R $USER:$USER ~/mis-deployment
+  □ Copy to CTT:    ctt-start.sh → 2) Device Supplier → 1) Generate Certificates
+                    Enter MIS deployment directory when prompted (default: ~/mis-deployment)
   □ Verify: openssl verify -CAfile certs/svid-ca.pem certs/miaf-server-cert.pem → OK
 
-Phase 2 — Build binaries (once)
-  □ go build -o bin/server   ./scripts/cmd/device-supplier
-  □ go build -o bin/run_tests ./scripts/
-
-Phase 3 — CTT self-test (CTT simulates device-agent against mock WFM)
-  □ Start mock WFM with MIS SVIDs:
-      MIAF_SERVER_CERT=certs/miaf-server-cert.pem \
-      MIAF_SERVER_KEY=certs/miaf-server-key.pem \
-      MIAF_TRUST_CA=certs/svid-ca.pem \
-      ./bin/server
-  □ Run core test group:
-      ./bin/run_tests \
-        -url "https://localhost:3001/v1alpha2/margo" \
-        -miaf-url "https://localhost:3003/v1alpha2/margo" \
-        -file "../../test-suites/device-supplier/core/test-cases/device-supplier.json" \
-        -ctt-margo-version "1.0.0-rc.3" \
-        -flexible-order
+Phase 2 — CTT self-test (CTT simulates device-agent against mock WFM)
+  □ ctt-start.sh → 2) Device Supplier → 2) Start Mock WFM Server  (auto-builds on first run)
+  □ ctt-start.sh → 2) Device Supplier → 3) Run Tests → core
   □ Open report: ctt-runner/reports/device-supplier/conformance-report-<ts>.html
 
-Phase 4 — Integration test with real sandbox device-agent (optional)
-  □ Start mock WFM as in Phase 3
+Phase 3 — Integration test with real sandbox device-agent (optional)
+  □ Start mock WFM as in Phase 2
   □ On device-agent machine: edit config/config.yaml
       → wfm.sbiUrl: https://<ctt-host>:3003/v1alpha2/margo
       → leave all miaf / mis config unchanged (device keeps using its own MIS SVID)
+  □ Use device-agent.sh option 11 to add mock WFM SPIFFE ID to device's authorized.json
   □ Restart device-agent (docker stop-docker / start-docker)
   □ Watch CTT mock WFM logs: tail -f /tmp/wfm-server.log
   □ Restore config.yaml to point back at Symphony when done
