@@ -128,13 +128,16 @@ func respondProblem(w http.ResponseWriter, r *http.Request, status int, problemT
 		"instance": r.URL.Path,
 		"error":    detail,
 	}
+	reasons := detail
 	if len(errs) > 0 {
 		fieldErrors := make([]map[string]string, 0, len(errs))
 		for _, e := range errs {
 			fieldErrors = append(fieldErrors, map[string]string{"message": e.Error, "rule_id": e.RuleID})
+			reasons += " | " + e.RuleID + ": " + e.Error
 		}
 		body["errors"] = fieldErrors
 	}
+	log.Printf("[MIAF] answered %d %s — %s", status, title, reasons)
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(body)

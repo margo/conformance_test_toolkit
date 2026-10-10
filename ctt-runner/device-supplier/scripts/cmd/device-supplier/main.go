@@ -1513,6 +1513,17 @@ func handleSampleAppFile(w http.ResponseWriter, r *http.Request) {
 
 // ===== RESPONSE HELPERS =====
 
+// statusRecorder remembers the status code a handler answered with.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
 func respondJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -1821,11 +1832,13 @@ func main() {
 	// Setup routes
 	router := mux.NewRouter()
 
-	// Add logging middleware
+	// Log every request with the status it was answered with, so the log alone
+	// shows what a connected device sent and how the mock WFM judged it.
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Printf("[Router] %s %s from %s", r.Method, r.RequestURI, r.RemoteAddr)
-			next.ServeHTTP(w, r)
+			rec := &statusRecorder{ResponseWriter: w, status: 200}
+			next.ServeHTTP(rec, r)
+			log.Printf("[Router] %s %s from %s → %d", r.Method, r.RequestURI, r.RemoteAddr, rec.status)
 		})
 	})
 
