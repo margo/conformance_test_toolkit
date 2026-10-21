@@ -14,11 +14,11 @@
           "MARGO-WFM-MANAGEMENTINTERFACE-023"
         ],
         "method": "PUT",
-        "endpoint": "/api/v1/capabilities/wfm-otel-device",
+        "endpoint": "/api/v1/capabilities/wfm-core-device",
         "mtls": true,
         "request_body": {
           "properties": {
-            "id": "wfm-otel-device",
+            "id": "wfm-core-device",
             "vendor": "Acme Corp",
             "modelNumber": "ACM-OTEL",
             "serialNumber": "SN-OTEL-001",
@@ -60,11 +60,11 @@
           "MARGO-WFM-MANAGEMENTINTERFACE-023"
         ],
         "method": "PUT",
-        "endpoint": "/api/v1/capabilities/wfm-otel-device",
+        "endpoint": "/api/v1/capabilities/wfm-core-device",
         "mtls": true,
         "request_body": {
           "properties": {
-            "id": "wfm-otel-device",
+            "id": "wfm-core-device",
             "vendor": "Acme Corp",
             "modelNumber": "ACM-OTEL",
             "serialNumber": "SN-OTEL-001",
@@ -107,11 +107,11 @@
           "MARGO-WFM-MANAGEMENTINTERFACE-023"
         ],
         "method": "PUT",
-        "endpoint": "/api/v1/capabilities/wfm-otel-device",
+        "endpoint": "/api/v1/capabilities/wfm-core-device",
         "mtls": true,
         "request_body": {
           "properties": {
-            "id": "wfm-otel-device",
+            "id": "wfm-core-device",
             "vendor": "Acme Corp",
             "modelNumber": "ACM-OTEL",
             "serialNumber": "SN-OTEL-001",
