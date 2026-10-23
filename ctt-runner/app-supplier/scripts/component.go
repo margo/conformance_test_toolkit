@@ -17,6 +17,7 @@ func ValidateOCIComponent(
 ) error {
 
     repo, ok := c.Properties["repository"]
+    rev := c.Properties["revision"].(string)
 
     if !ok {
         return fmt.Errorf(
@@ -43,12 +44,12 @@ func ValidateOCIComponent(
     }
 
     return CheckOCI(
-        repository,
+        repository + ":" + rev,
     )
 }
 // CheckOCI verifies that the OCI repository is reachable using ORAS.
 func CheckOCI(location string) error {
-
+    location = strings.TrimPrefix(location, "oci://")
     cmd := exec.Command(
         "oras",
         "manifest",
