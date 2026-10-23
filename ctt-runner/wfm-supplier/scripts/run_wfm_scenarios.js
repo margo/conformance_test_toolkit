@@ -351,7 +351,7 @@ function deriveErrorRequest(code, method, endpoint) {
       return {
         request_body: {
           properties: {
-            id: 'ctt-postman-device', vendor: 'Conformance Test Suite', modelNumber: 'CTS-1', serialNumber: 'SN-1',
+            id: '{deviceId}', vendor: 'Conformance Test Suite', modelNumber: 'CTS-1', serialNumber: 'SN-1',
             supportedRuntimes: ['oci'], supportedDeploymentTypes: ['__invalid_deployment_type__'],
           },
         },
@@ -590,7 +590,7 @@ function regenerateCertificate() {
 // instead of a double-slash like /deployments// which triggers redirects.
 // A well-formed fake ID ensures the WFM returns a proper 404 rather than 301.
 const CONTEXT_FALLBACKS = {
-  deviceId:        'ctt-postman-device',
+  deviceId:        'wfm-core-device',
   deploymentId:    'deployment-none-00000000',
   deploymentDigest:'sha256:0000000000000000000000000000000000000000000000000000000000000000',
   bundleDigest:    'sha256:0000000000000000000000000000000000000000000000000000000000000000',

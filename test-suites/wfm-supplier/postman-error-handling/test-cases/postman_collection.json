@@ -427,7 +427,7 @@
     },
     {
       "key": "deviceId",
-      "value": "ctt-postman-negative-device"
+      "value": "wfm-core-device"
     }
   ]
 }
