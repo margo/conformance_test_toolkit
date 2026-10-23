@@ -1459,15 +1459,39 @@ async function performOrasStep(step) {
   return { method: 'ORAS', endpoint: ref, bodyText: '', response, responseSource };
 }
 
-// GET against an OCI registry, following the standard token flow: a 401 with a
-// "WWW-Authenticate: Bearer realm=...,service=...,scope=..." challenge means
-// "fetch a token from realm, then retry". Uses the credentials `docker login` /
-// `oras login` stored for this host when there are any, otherwise an anonymous
-// token (enough for a public repository).
+// The credentials `docker login` / `oras login` stored for this registry host
+// (the `auth` field of ~/.docker/config.json), as the value of a Basic
+// Authorization header; undefined when there are none.
+function storedRegistryAuth(host) {
+  try {
+    const dockerConfig = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '', '.docker', 'config.json'), 'utf8'));
+    const stored = dockerConfig.auths && dockerConfig.auths[host] && dockerConfig.auths[host].auth;
+    return stored ? `Basic ${stored}` : undefined;
+  } catch (_) {
+    return undefined; // no stored credentials
+  }
+}
+
+// GET against an OCI registry, answering the two authentication challenges the
+// Distribution API allows (the Margo specification recommends token
+// authentication for the WFM <-> registry exchange but does not define the
+// mechanism, so a registry may legitimately use either):
+//   - "WWW-Authenticate: Bearer realm=...,service=...,scope=..." -> fetch a token
+//     from realm, then retry (stored credentials if there are any, otherwise an
+//     anonymous token, enough for a public repository);
+//   - "WWW-Authenticate: Basic ..." (for example registry:2/3 with htpasswd) ->
+//     retry with the stored credentials.
 async function registryGet(host, url) {
   const first = await request('GET', url, {}, '');
   const challenge = first.headers['www-authenticate'] || '';
-  if (first.status !== 401 || !/^Bearer /i.test(challenge)) return first;
+  if (first.status !== 401) return first;
+
+  if (/^Basic /i.test(challenge)) {
+    const authorization = storedRegistryAuth(host);
+    if (!authorization) return first;
+    return request('GET', url, { Authorization: authorization }, '');
+  }
+  if (!/^Bearer /i.test(challenge)) return first;
 
   const params = Object.fromEntries([...challenge.matchAll(/(\w+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
   if (!params.realm) return first;
@@ -1476,13 +1500,8 @@ async function registryGet(host, url) {
   if (params.scope) tokenUrl.searchParams.set('scope', params.scope);
 
   const tokenHeaders = {};
-  try {
-    const dockerConfig = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '', '.docker', 'config.json'), 'utf8'));
-    const stored = dockerConfig.auths && dockerConfig.auths[host] && dockerConfig.auths[host].auth;
-    if (stored) tokenHeaders.Authorization = `Basic ${stored}`;
-  } catch (_) {
-    // no stored credentials — anonymous token
-  }
+  const authorization = storedRegistryAuth(host);
+  if (authorization) tokenHeaders.Authorization = authorization;
 
   const tokenResponse = await request('GET', tokenUrl.toString(), tokenHeaders, '');
   const token = (parseBody(tokenResponse.body) || {}).token || (parseBody(tokenResponse.body) || {}).access_token;
