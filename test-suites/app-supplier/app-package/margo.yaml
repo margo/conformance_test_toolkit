@@ -1,14 +1,14 @@
 apiVersion: margo.org/v1-alpha1
 kind: ApplicationDescription
-id: com-northstartida-hello-world
+id: com-northstartida-otel-app
 metadata:
-  name: Hello World
-  description: A basic hello world application
+  name: otel-app
+  description: A basic OpenTelemetry application
   version: "1.0"
   catalog:
     application:
       icon: ./resources/hw-logo.png
-      tagline: Northstar Industrial Application's hello world application.
+      tagline: Northstar Industrial Application's OpenTelemetry application.
       descriptionFile: ./resources/description.md
       releaseNotes: ./resources/release-notes.md
       licenseFile: ./resources/license.pdf
@@ -41,7 +41,7 @@ parameters:
     value: World
     targets:
     - pointer: global.config.appGreetingAddressee
-      components: ["hello-world"]
+      components: ["otel-app"]
 configuration:
   sections:
     - name: General Settings
