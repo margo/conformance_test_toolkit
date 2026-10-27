@@ -68,7 +68,7 @@ of the CTT.
 
 The X.509-SVIDs of the CTT (mock WFM) and of the device must come from the same
 MIS. This guide uses the sandbox MIS to generate the Root CAs and the
-X.509-SVIDs of the mock WFM, of the CTT test client and of the device under test.
+X.509-SVIDs of the mock WFM, of the CTT's self-test client (CTT's own device-client) and of the device under test.
 
 1. **Set up the MIS**
 
@@ -156,7 +156,7 @@ bash ctt-runner/ctt-start.sh
 #       MIS on a different host:   ~/ctt-certs
 #   Select the mock WFM SVID:
 #       the number of x509svid-ctt-mock-wfm (not asked for ~/ctt-certs)
-#   Select the WFM Client SVID:
+#   Select the WFM Client SVID of the CTT's self-test client (CTT's own device-client):
 #       the number of x509svid-ctt-mock-wfm-ctt-client (not asked for ~/ctt-certs)
 ```
 
