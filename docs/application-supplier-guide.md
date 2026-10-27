@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Application Supplier Validation Module is responsible for validating the `application-description.yaml` file provided by an Application Supplier.
+The Application Supplier Validation Module is responsible for validating the `margo.yaml` file provided by an Application Supplier.
 
-The supplier provides an application package (application folder) containing the application artifacts and the `application-description.yaml` file. The validation process verifies that all mandatory keys and their values comply with the expected schema and validation rules.
+The supplier provides an application package (application folder) containing the application artifacts and the `margo.yaml` file. The validation process verifies that all mandatory keys and their values comply with the expected schema and validation rules.
 
 The validation logic has been implemented in Go and integrated into the CTT Runner framework.
 
@@ -14,14 +14,14 @@ The validation logic has been implemented in Go and integrated into the CTT Runn
 
 ### Step 1: Application Package Submission
 
-The Application Supplier provides an application folder containing the application resources and the required `application-description.yaml` file.
+The Application Supplier provides an application folder containing the application resources and the required `margo.yaml` file.
 
 Example:
 
 ```text
 application-package/
 │
-├── application-description.yaml
+├── margo.yaml
 ├── manifests/
 ├── charts/
 └── other application artifacts
@@ -52,19 +52,19 @@ Once selected, the validation process begins.
 
 ### Step 3: YAML File Discovery
 
-The validator searches for the following file inside the selected application package:
+The validator searches the selected application package for the Application Description:
 
 ```text
-application-description.yaml
+margo.yaml
 ```
 
-If the file is not present, validation immediately fails and an appropriate error is reported.
+If there is no `margo.yaml`, the validator uses a YAML file with the top-level keys `apiVersion`, `metadata` and `deploymentProfiles`. The Application Description has no `kind` field. If no Application Description is found, validation immediately fails and an appropriate error is reported.
 
 ---
 
 ### Step 4: YAML Parsing
 
-The `application-description.yaml` file is loaded and parsed using the Go implementation.
+The `margo.yaml` file is loaded and parsed using the Go implementation.
 
 The validation process checks that:
 
@@ -282,6 +282,6 @@ ctt-runner/
 
 ## Conclusion
 
-The Application Supplier Validation Module automates the validation of the `application-description.yaml` file provided by application vendors. It ensures that all required keys and values meet the expected validation rules, generates detailed validation results, and stores reports under the `reports/application-supplier` directory for auditing and review purposes.
+The Application Supplier Validation Module automates the validation of the `margo.yaml` file provided by application vendors. It ensures that all required keys and values meet the expected validation rules, generates detailed validation results, and stores reports under the `reports/application-supplier` directory for auditing and review purposes.
 
 The solution is fully implemented in Go and integrated with the CTT Runner workflow, enabling consistent and repeatable validation of Application Supplier packages before further certification or conformance testing activities.

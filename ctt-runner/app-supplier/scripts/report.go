@@ -126,6 +126,33 @@ th {
     font-weight: bold;
 }
 
+.warn {
+    color: #b36b00;
+    font-weight: bold;
+}
+
+.other {
+    color: #666;
+    font-weight: bold;
+}
+
+.warn-icon {
+    font-size: 26px;
+    line-height: 1;
+}
+
+.warn-text {
+    color: #b36b00;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.other-text {
+    color: #666;
+    font-size: 14px;
+    font-weight: bold;
+}
+
 </style>
 
 </head>
@@ -169,6 +196,20 @@ th {
         <span class="fail">
             ❌ Failed: {{failedCount .Entries}}
         </span>
+        |
+        <span class="warn">
+            ⚠️ Warnings: {{statusCount .Entries "WARN"}}
+        </span>
+        |
+        <span class="other">
+            Not run: {{statusCount .Entries "NOT RUN"}}
+            · Not applicable: {{statusCount .Entries "N/A"}}
+            · Info: {{statusCount .Entries "INFO"}}
+        </span>
+    </p>
+
+    <p>
+        Warnings, not run, not applicable and info rows do not fail the report.
     </p>
 
     <p>
@@ -208,8 +249,12 @@ th {
             <div class="fail-icon">❌</div>
             <div class="fail-text">FAIL</div>
 
+        {{else if eq .Status "WARN"}}
+            <div class="warn-icon">⚠️</div>
+            <div class="warn-text">WARN</div>
+
         {{else}}
-            {{.Status}}
+            <div class="other-text">{{.Status}}</div>
         {{end}}
 
     </td>
@@ -313,7 +358,25 @@ func (r *ValidationReport) Fail(
     r.Status = "FAILED"
 }
 
+// Mark updates the last validation entry with a status that does not fail the
+// report: WARN (a RECOMMENDED / SHOULD NOT rule is not met), N/A, NOT RUN or INFO.
+func (r *ValidationReport) Mark(
+    status string,
+    actual string,
+    details string,
+) {
 
+    if len(r.Entries) == 0 {
+        return
+    }
+
+    last :=
+        &r.Entries[len(r.Entries)-1]
+
+    last.Status = status
+    last.ActualValue = actual
+    last.Remarks = details
+}
 
 // GenerateHTMLReport generates an HTML report for the validation results and writes it to the specified file.
 func (r ValidationReport) GenerateHTMLReport(
@@ -371,6 +434,23 @@ func (r ValidationReport) GenerateHTMLReport(
             for _, e := range entries {
 
                 if e.Status == "FAIL" {
+                    count++
+                }
+            }
+
+            return count
+        },
+
+        "statusCount": func(
+            entries []ValidationEntry,
+            status string,
+        ) int {
+
+            count := 0
+
+            for _, e := range entries {
+
+                if e.Status == status {
                     count++
                 }
             }

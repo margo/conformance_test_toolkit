@@ -23,11 +23,11 @@
         "id": "f55c84c8-3c29-4cd0-b11a-49bde4aeafe4",
         "name": "Report Capabilities (compose + helm supported)",
         "method": "PUT",
-        "endpoint": "/api/v1/capabilities/multi-component-test-device",
+        "endpoint": "/api/v1/capabilities/wfm-core-device",
         "mtls": true,
         "request_body": {
           "properties": {
-            "id": "multi-component-test-device",
+            "id": "wfm-core-device",
             "vendor": "Conformance Test Suite",
             "modelNumber": "CTS-MULTICOMPONENT-1",
             "serialNumber": "SN-MULTICOMPONENT-001",

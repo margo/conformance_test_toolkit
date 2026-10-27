@@ -2,8 +2,11 @@
   "apiVersion": {
     "type": "string",
     "required": true,
+    "enum": [
+      "v1"
+    ],
     "displayName": "apiVersion",
-    "expected": "API version required"
+    "expected": "v1"
   },
   "id": {
     "type": "string",
@@ -17,9 +20,7 @@
     "type": "string",
     "required": true,
     "displayName": "metadata.name",
-    "expected": "Required (non-empty)",
-    "regex": "^[a-z0-9-]{1,200}$"
-
+    "expected": "Required (non-empty)"
   },
 
   "metadata.version": {

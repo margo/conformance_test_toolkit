@@ -15,7 +15,7 @@ func main() {
 	if len(os.Args) < 2 {
 
 		fmt.Println(
-			"Usage: validator <folder|zip|tar.gz>",
+			"Usage: validator <folder|zip|tar.gz|oci://host/repository:tag>",
 		)
 
 		os.Exit(1)
@@ -24,17 +24,53 @@ func main() {
 	inputPath := os.Args[1]
 	workDir := ""
 
-	info, err := os.Stat(inputPath)
+	// packageRef is the OCI reference of the Application Package when the
+	// package is validated from the Application Registry.
+	packageRef := ""
 
-	if err != nil {
-		panic(err)
+	var info os.FileInfo
+	var err error
+
+	if !IsOCIReference(inputPath) {
+
+		info, err = os.Stat(inputPath)
+
+		if err != nil {
+			panic(err)
+		}
 	}
+
+	//--------------------------------------------------
+	// OCI reference: pull the Application Package
+	//--------------------------------------------------
+
+	if info == nil {
+
+		packageRef = inputPath
+		workDir = "./workdir"
+
+		os.RemoveAll(workDir)
+
+		err = PullApplicationPackage(
+			packageRef,
+			workDir,
+		)
+
+		if err != nil {
+
+			fmt.Println(
+				"Application Package could not be pulled:",
+				err,
+			)
+
+			os.Exit(1)
+		}
 
 	//--------------------------------------------------
 	// Folder
 	//--------------------------------------------------
 
-	if info.IsDir() {
+	} else if info.IsDir() {
 
 		workDir = inputPath
 
@@ -86,10 +122,26 @@ func main() {
 	// Find Application Description
 	//--------------------------------------------------
 
-	appYaml, err :=
-		FindApplicationDescription(
-			workDir,
-		)
+	// A pulled package names its Application Description in the manifest
+	// (the layer of mediaType application/vnd.margo.app.description.v1+yaml).
+	appYaml := ""
+
+	if packageRef != "" {
+
+		appYaml =
+			ApplicationDescriptionPath(
+				packageRef,
+				workDir,
+			)
+	}
+
+	if appYaml == "" {
+
+		appYaml, err =
+			FindApplicationDescription(
+				workDir,
+			)
+	}
 
 	if err != nil {
 		panic(err)
@@ -357,6 +409,53 @@ for _, profile := range app.DeploymentProfile {
         )
     }
 }
+
+	//--------------------------------------------------
+	// Package Signing
+	//--------------------------------------------------
+
+	ValidateSigning(
+		&app,
+		report,
+	)
+
+	//--------------------------------------------------
+	// Application Registry
+	//--------------------------------------------------
+
+	if packageRef != "" {
+
+		ValidateRegistry(
+			packageRef,
+			&app,
+			raw,
+			report,
+		)
+
+	} else {
+
+		report.Check(
+			"MARGO-APP-APPLICATIONREGISTRY-001, MARGO-APP-APPLICATIONREGISTRY-002, MARGO-APP-APPLICATIONREGISTRY-003, MARGO-APP-APPLICATIONREGISTRY-004",
+			"Application Registry checks",
+			"registry",
+			"Application Package in the Application Registry",
+		)
+
+		report.Mark(
+			"NOT RUN",
+			"local package",
+			"The input is a local folder or archive. Give the OCI reference of the Application Package (oci://<host>/<repository>:<metadata.version>) to run the Application Registry checks.",
+		)
+	}
+
+	//--------------------------------------------------
+	// Observability
+	//--------------------------------------------------
+
+	ValidateObservability(
+		&app,
+		report,
+	)
 
 	//--------------------------------------------------
 	// Validation Completed

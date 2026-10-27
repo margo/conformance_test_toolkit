@@ -1,61 +1,67 @@
-apiVersions: margo.org/v1-alpha1
-kind: ApplicationDescription
-id: com-northstartida-hello-world
+apiVersion: v1
+id: com-go-otel-service
 metadata:
-  name: Hello World
-  description: A basic hello world application
-  version: "1.0"
+  name: Go OpenTelemetry Service
+  description: A lightweight observability service using OpenTelemetry
+  version: 0.1.0
   catalog:
     application:
-      icon: ./resources/hw-logo.png
-      tagline: Northstar Industrial Application's hello world application.
+      icon: ./resources/opentelemtry-logo.png
+      tagline: A simple, containerized OpenTelemetry service for distributed tracing and metrics.
       descriptionFile: ./resources/description.md
       releaseNotes: ./resources/release-notes.md
-      licenseFile: ./resources/license.pdf
-      site: http://www.northstar-ida.com
-      tags: ["monitoring"]
-    author:
-      - name: Roger Wilkershank
-        email: rpwilkershank@northstar-ida.com
+      licenseFile: ./resources/license.txt
+      site: http://localhost:8080
+      tags: ["observability", "telemetry", "monitoring"]
     organization:
-      - name: Northstar Industrial Applications
-        site: http://northstar-ida.com
+      - name: OpenTelemetry Lab
+        site: https://opentelemetry.io
 deploymentProfiles:
   - type: helm
-    id: com-northstartida-hello-world-helm-a
+    id: otel-demo
+    description: Deploys the go-otel-service using Helm v3. Requires network connectivity to the OTEL collector and basic compute resources.
     components:
-      - name: hello-world
-        properties:  
-          repository: oci://northstarida.azurecr.io/charts/hello-world
-          revision: 1.0.1
+      - name: otel-app
+        properties:
+          repository: oci://harbor.machine:8443/library/custom-otel-helm
+          revision: 0.1.0
           wait: true
+          timeout: 5m
+    deviceConstraints:
+      capacityRequirements:
+        cpu:
+          cores: 1
+          architectures: ["amd64"]
+        memory: 4Gi
+        storage: 10Gi
+      eligibilityRules:
+        - propertySelector:
+            matchExpressions:
+              - key: /supportedDeploymentTypes
+                operator: In
+                values:
+                  - "helm"
+              - key: /supportedRuntimes
+                operator: In
+                values:
+                  - "oci"
 parameters:
-  greeting:
-    value: Hello
+  # Frontend service configuration
+  otlpEndpoint:
+    value: "http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318"
     targets:
-    # Maps to deployment configuration param,
-    # e.g., helm install ... --set global.config.appGreeting="Hello"
-    - pointer: global.config.appGreeting
-      components: ["hello-world"]
-  greetingAddressee:
-    value: World
-    targets:
-    - pointer: global.config.appGreetingAddressee
-      components: ["hello-world"]
+      - pointer: env.OTEL_EXPORTER_OTLP_ENDPOINT
+        components: ["otel-app"]
+
 configuration:
   sections:
-    - name: General Settings
+    - name: Observability Settings
       settings:
-        - parameter: greeting
-          name: Greeting
-          description: The greeting to use.
-          schema: requireText
-        - parameter: greetingAddressee
-          name: Greeting Addressee
-          description: The person, or group, the greeting addresses.
-          schema: requireText
+        - parameter: otlpEndpoint
+          name: Endpoint of the OTLP collector
+          description: Endpoint of the OTLP collector
+          schema: endpoint
   schema:
-    - name: requireText
+    - name: endpoint
       dataType: string
-      maxLength: 45
       allowEmpty: false

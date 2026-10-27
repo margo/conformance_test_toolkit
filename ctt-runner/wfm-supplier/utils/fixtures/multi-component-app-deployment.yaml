@@ -37,7 +37,7 @@ id: cts-multi-component-app
 metadata:
   name: cts-multi-component-app
   namespace: <namespace>
-  deviceId: multi-component-test-device
+  deviceId: wfm-core-device
 spec:
   applicationId: cts-multi-component-app
   deploymentProfile:

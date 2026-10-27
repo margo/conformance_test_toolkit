@@ -44,11 +44,6 @@ type ObserveSpec struct {
 	Instruct      string           `json:"instruct,omitempty"`       // printed for the operator before waiting
 }
 
-const (
-	observeMarkKey  = "_observeMark"
-	skipScenarioKey = "_skipScenario"
-)
-
 func ownSPIFFEID() string {
 	cert, err := tls.LoadX509KeyPair(filepath.Join(certDir, "svid-cert.pem"), filepath.Join(certDir, "svid-key.pem"))
 	if err != nil {
@@ -163,8 +158,8 @@ func observeMatches(entry map[string]interface{}, m ObserveMatch, ctx *TestConte
 // WFM other than the runner itself. The first one seen becomes {deviceClient}.
 func deviceEntries(entries []map[string]interface{}, ctx *TestContext) []map[string]interface{} {
 	own := ownSPIFFEID()
-	device, _ := ctx.Data["deviceClient"].(string)
-	addr, _ := ctx.Data["deviceAddr"].(string)
+	device, _ := ctx.Data[deviceClientKey].(string)
+	addr, _ := ctx.Data[deviceAddrKey].(string)
 	var out []map[string]interface{}
 	for _, e := range entries {
 		client, _ := e["client"].(string)
@@ -176,17 +171,21 @@ func deviceEntries(entries []map[string]interface{}, ctx *TestContext) []map[str
 			continue
 		}
 		if client == own {
+			// The runner sends no Management Interface requests while it observes a
+			// device: requests under its own SPIFFE ID come from a device that was
+			// given the CTT's WFM Client SVID. Remembered to say so when no device is seen.
+			ctx.Data[ownClientKey] = true
 			continue
 		}
 		if device == "" {
 			device = client
-			ctx.Data["deviceClient"] = client
+			ctx.Data[deviceClientKey] = client
 			ObservedDevice = client
 		}
 		if client == device {
 			if addr == "" {
 				addr, _ = e["remote"].(string)
-				ctx.Data["deviceAddr"] = addr
+				ctx.Data[deviceAddrKey] = addr
 			}
 			out = append(out, e)
 		}
@@ -389,7 +388,9 @@ func runObserve(step TestStep, ctx *TestContext) TestResult {
 				return result
 			}
 			result.Status = "fail"
-			if len(entries) == 0 && ctx.Data["deviceClient"] == nil {
+			if len(entries) == 0 && ctx.Data[deviceClientKey] == nil && ctx.Data[ownClientKey] == true {
+				result.Reason = fmt.Sprintf("requests were received, but all with %s, the SPIFFE ID of the CTT's own test client, so none can be attributed to the device. The device and the CTT need different WFM Client SVIDs (the guide uses .../client/vendor-device-1 for the device and .../client/ctt-client for the CTT)", ownSPIFFEID())
+			} else if len(entries) == 0 && ctx.Data[deviceClientKey] == nil {
 				result.Reason = fmt.Sprintf("no request from any device was received in %s — is the device running and pointed at %s?", within, MIAFServer)
 			} else {
 				result.Reason = fmt.Sprintf("the device did not send this request within %s", within)

@@ -2,14 +2,14 @@ apiVersion:
   crId:
   check:
     datatype: string
-    expected: API version required
+    expected: v1
 
   pass:
     description: API version conforms to the required specification.
 
   fail:
     missing: API version is required but was not provided.
-    invalid: API version does not conform to the required specification.
+    invalid: API version MUST be v1.
 
 id:
   crId: MARGO-APP-APPLICATIONDESCRIPTION-001, MARGO-APP-APPLICATIONDESCRIPTION-006, MARGO-APP-APPLICATIONDESCRIPTION-005
@@ -38,7 +38,9 @@ metadata.name:
     invalid: Application name does not conform to the required naming convention.
 
 metadata.version:
-  crId: MARGO-APP-APPLICATIONREGISTRY-002
+  # MARGO-APP-APPLICATIONREGISTRY-002 (tag == metadata.version) is judged by
+  # the Application Registry check (registry.go), not by this presence check.
+  crId:
   check:
     datatype: string
     expected: Required (non-empty)
@@ -168,18 +170,6 @@ deploymentProfiles.components.properties.revision:
 
   fail:
     missing: Revision information is required but was not provided.
-
-deploymentProfiles.components.properties.packageLocation:
-  crId:
-  check:
-    datatype: string
-    expected: Required package location
-
-  pass:
-    description: Package location conforms to the deployment requirements.
-
-  fail:
-    missing: Package location is required but was not provided.
 
 configuration.schema.name:
   crId:

@@ -24,6 +24,11 @@ checked.
 
 ## Prerequisites
 
+### Operating system
+
+The CTT host must run Ubuntu 24.04, the operating system officially supported
+by the CTT. Other Linux distributions are not supported.
+
 ### Network connectivity
 
 When the MIS, the WFM and the CTT run on different hosts, all hosts must be

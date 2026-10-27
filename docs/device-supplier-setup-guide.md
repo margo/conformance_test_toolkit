@@ -26,6 +26,11 @@ checked.
 
 ## Prerequisites
 
+### Operating system
+
+The CTT host must run Ubuntu 24.04, the operating system officially supported
+by the CTT. Other Linux distributions are not supported.
+
 ### Network connectivity
 
 When the MIS, the CTT and the device run on different hosts, all hosts must be
@@ -46,7 +51,7 @@ git checkout feature/multi-persona-conformance
 Check that the following tools are installed on the CTT host:
 
 ```bash
-go version         # 1.21 or later
+go version         # 1.24 or later
 openssl version    # 1.1 or later
 jq --version       # any version
 ```
@@ -63,7 +68,7 @@ of the CTT.
 
 The X.509-SVIDs of the CTT (mock WFM) and of the device must come from the same
 MIS. This guide uses the sandbox MIS to generate the Root CAs and the
-X.509-SVIDs of the mock WFM, of the CTT test client and of the device under test.
+X.509-SVIDs of the mock WFM, of the CTT's self-test client (CTT's own device-client) and of the device under test.
 
 1. **Set up the MIS**
 
@@ -151,7 +156,7 @@ bash ctt-runner/ctt-start.sh
 #       MIS on a different host:   ~/ctt-certs
 #   Select the mock WFM SVID:
 #       the number of x509svid-ctt-mock-wfm (not asked for ~/ctt-certs)
-#   Select the WFM Client SVID:
+#   Select the WFM Client SVID of the CTT's self-test client (CTT's own device-client):
 #       the number of x509svid-ctt-mock-wfm-ctt-client (not asked for ~/ctt-certs)
 ```
 

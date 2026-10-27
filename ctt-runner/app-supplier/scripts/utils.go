@@ -10,10 +10,19 @@ import (
     "gopkg.in/yaml.v3"
 )
 
-// FindApplicationDescription searches the given directory for a YAML file with kind ApplicationDescription.
+// applicationDescriptionFile is the file name of the Application Description
+// in an Application Package (see the manifest example of the Application
+// Registry specification).
+const applicationDescriptionFile = "margo.yaml"
+
+// FindApplicationDescription searches the given directory for the Application
+// Description: the file margo.yaml or, when there is none, a YAML file with the
+// top-level keys apiVersion, metadata and deploymentProfiles. The Application
+// Description has no kind field, so the file cannot be found by its kind.
 func FindApplicationDescription(root string) (string, error) {
 
     var found string
+    var named string
 
     err := filepath.Walk(
         root,
@@ -43,9 +52,7 @@ func FindApplicationDescription(root string) (string, error) {
                 return nil
             }
 
-            var obj struct {
-                Kind string `yaml:"kind"`
-            }
+            var obj map[string]any
 
             if err := yaml.Unmarshal(
                 data,
@@ -55,11 +62,19 @@ func FindApplicationDescription(root string) (string, error) {
                 return nil
             }
 
-            if obj.Kind ==
-                "ApplicationDescription" {
+            _, hasAPIVersion := obj["apiVersion"]
+            _, hasMetadata := obj["metadata"]
+            _, hasProfiles := obj["deploymentProfiles"]
 
-                found = path
+            if !hasAPIVersion || !hasMetadata || !hasProfiles {
+                return nil
             }
+
+            if info.Name() == applicationDescriptionFile && named == "" {
+                named = path
+            }
+
+            found = path
 
             return nil
         },
@@ -67,6 +82,10 @@ func FindApplicationDescription(root string) (string, error) {
 
     if err != nil {
         return "", err
+    }
+
+    if named != "" {
+        found = named
     }
 
     if found == "" {

@@ -155,6 +155,35 @@ check_pip() {
 # Detects the OS and package manager, installs only missing packages.
 # Non-fatal if sudo is unavailable — emits a warning and continues.
 # ─────────────────────────────────────────────────────────────────────────────
+
+# The shared libraries WeasyPrint loads at run time (weasyprint/text/ffi.py).
+WEASYPRINT_LINUX_LIBS=(
+    libgobject-2.0.so.0
+    libpango-1.0.so.0
+    libpangoft2-1.0.so.0
+    libharfbuzz.so.0
+    libfontconfig.so.1
+)
+
+# Prints the libraries of WEASYPRINT_LINUX_LIBS the dynamic linker cannot find
+# (nothing when all are present), whatever installed them.
+missing_linux_libs() {
+    local ldconfig_cmd cache=""
+    ldconfig_cmd="$(command -v ldconfig || echo /sbin/ldconfig)"
+    if [[ -x "${ldconfig_cmd}" ]]; then
+        cache="$("${ldconfig_cmd}" -p 2>/dev/null || true)"
+    fi
+    for lib in "${WEASYPRINT_LINUX_LIBS[@]}"; do
+        if [[ -n "${cache}" ]]; then
+            grep -q "${lib}" <<< "${cache}" && continue
+        elif compgen -G "/usr/lib*/${lib}" >/dev/null || compgen -G "/usr/lib*/*/${lib}" >/dev/null \
+            || compgen -G "/lib*/${lib}" >/dev/null || compgen -G "/lib*/*/${lib}" >/dev/null; then
+            continue
+        fi
+        echo "${lib}"
+    done
+}
+
 install_system_deps() {
     log_info "Checking WeasyPrint native system dependencies..."
 
@@ -291,8 +320,16 @@ install_system_deps() {
             return 0
         fi
 
-        log_error "No supported package manager found (apt-get / dnf / yum)."
-        log_error "Manually install: libpango, libcairo2, libgdk-pixbuf2, libffi"
+        # Any other distribution (Gentoo, Arch, Alpine, ...): the libraries may
+        # have been installed with its own package manager or by hand.
+        local missing_libs
+        missing_libs="$(missing_linux_libs | tr '\n' ' ')"
+        if [[ -z "${missing_libs// /}" ]]; then
+            log_info "No apt-get / dnf / yum; all WeasyPrint libraries found: ${WEASYPRINT_LINUX_LIBS[*]}"
+            return 0
+        fi
+        log_error "No supported package manager found (apt-get / dnf / yum) to install: ${missing_libs}"
+        log_error "Install them with your package manager (they come with pango, harfbuzz, fontconfig and glib) and run this script again."
         exit 1
     fi
 
