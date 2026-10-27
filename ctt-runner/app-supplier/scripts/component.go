@@ -18,10 +18,6 @@ func ValidateOCIComponent(
 
     repo, ok := c.Properties["repository"]
 
-    // A missing or non-string revision is reported by the
-    // deploymentProfiles.components.properties.revision rule, not here.
-    rev, _ := c.Properties["revision"].(string)
-
     if !ok {
         return fmt.Errorf(
             "repository missing",
@@ -46,14 +42,36 @@ func ValidateOCIComponent(
         )
     }
 
-    location := repository
+    // The revision itself is judged by the
+    // deploymentProfiles.components.properties.revision rule; without a string
+    // revision the component cannot be looked up, so this check fails and the
+    // validation continues with the next component.
+    rawRev, ok := c.Properties["revision"]
 
-    if rev != "" {
-        location += ":" + rev
+    if !ok || rawRev == nil {
+        return fmt.Errorf(
+            "revision missing: the repository cannot be looked up without the OCI tag",
+        )
+    }
+
+    rev, ok := rawRev.(string)
+
+    if !ok {
+        return fmt.Errorf(
+            "revision must be a string, got %v (%T); quote it in the YAML, e.g. revision: \"1.0.0\"",
+            rawRev,
+            rawRev,
+        )
+    }
+
+    if rev == "" {
+        return fmt.Errorf(
+            "revision is empty: the repository cannot be looked up without the OCI tag",
+        )
     }
 
     return CheckOCI(
-        location,
+        repository + ":" + rev,
     )
 }
 // CheckOCI verifies that the OCI repository is reachable using ORAS.
