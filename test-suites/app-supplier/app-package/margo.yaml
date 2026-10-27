@@ -1,14 +1,14 @@
-apiVersions: margo.org/v1-alpha1
+apiVersion: margo.org/v1-alpha1
 kind: ApplicationDescription
-id: com-northstartida-hello-world
+id: com-northstartida-otel-app
 metadata:
-  name: Hello World
-  description: A basic hello world application
+  name: otel-app
+  description: A basic OpenTelemetry application
   version: "1.0"
   catalog:
     application:
       icon: ./resources/hw-logo.png
-      tagline: Northstar Industrial Application's hello world application.
+      tagline: Northstar Industrial Application's OpenTelemetry application.
       descriptionFile: ./resources/description.md
       releaseNotes: ./resources/release-notes.md
       licenseFile: ./resources/license.pdf
@@ -22,12 +22,12 @@ metadata:
         site: http://northstar-ida.com
 deploymentProfiles:
   - type: helm
-    id: com-northstartida-hello-world-helm-a
+    id: otel-demo
     components:
-      - name: hello-world
-        properties:  
-          repository: oci://northstarida.azurecr.io/charts/hello-world
-          revision: 1.0.1
+      - name: otel-app
+        properties:
+          repository: oci://harbor.machine:8443/library/custom-otel-helm
+          revision: 0.1.0
           wait: true
 parameters:
   greeting:
@@ -36,12 +36,12 @@ parameters:
     # Maps to deployment configuration param,
     # e.g., helm install ... --set global.config.appGreeting="Hello"
     - pointer: global.config.appGreeting
-      components: ["hello-world"]
+      components: ["otel-app"]
   greetingAddressee:
     value: World
     targets:
     - pointer: global.config.appGreetingAddressee
-      components: ["hello-world"]
+      components: ["otel-app"]
 configuration:
   sections:
     - name: General Settings

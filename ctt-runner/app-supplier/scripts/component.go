@@ -18,6 +18,10 @@ func ValidateOCIComponent(
 
     repo, ok := c.Properties["repository"]
 
+    // A missing or non-string revision is reported by the
+    // deploymentProfiles.components.properties.revision rule, not here.
+    rev, _ := c.Properties["revision"].(string)
+
     if !ok {
         return fmt.Errorf(
             "repository missing",
@@ -42,13 +46,19 @@ func ValidateOCIComponent(
         )
     }
 
+    location := repository
+
+    if rev != "" {
+        location += ":" + rev
+    }
+
     return CheckOCI(
-        repository,
+        location,
     )
 }
 // CheckOCI verifies that the OCI repository is reachable using ORAS.
 func CheckOCI(location string) error {
-
+    location = strings.TrimPrefix(location, "oci://")
     cmd := exec.Command(
         "oras",
         "manifest",

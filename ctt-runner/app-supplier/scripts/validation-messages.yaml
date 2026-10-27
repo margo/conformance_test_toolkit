@@ -38,7 +38,9 @@ metadata.name:
     invalid: Application name does not conform to the required naming convention.
 
 metadata.version:
-  crId: MARGO-APP-APPLICATIONREGISTRY-002
+  # MARGO-APP-APPLICATIONREGISTRY-002 (tag == metadata.version) is judged by
+  # the Application Registry check (registry.go), not by this presence check.
+  crId:
   check:
     datatype: string
     expected: Required (non-empty)
@@ -168,18 +170,6 @@ deploymentProfiles.components.properties.revision:
 
   fail:
     missing: Revision information is required but was not provided.
-
-deploymentProfiles.components.properties.packageLocation:
-  crId:
-  check:
-    datatype: string
-    expected: Required package location
-
-  pass:
-    description: Package location conforms to the deployment requirements.
-
-  fail:
-    missing: Package location is required but was not provided.
 
 configuration.schema.name:
   crId:

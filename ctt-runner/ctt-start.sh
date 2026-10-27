@@ -1402,10 +1402,24 @@ select_application() {
                 "$((i+1))" \
                 "$(basename "${apps[$i]}")"
         done
+        echo "  o) Application Package in an Application Registry (OCI reference)"
         echo ""
     } >&2
 
-    read -p "Select Application (1-${#apps[@]}): " choice < /dev/tty
+    read -p "Select Application (1-${#apps[@]} or o): " choice < /dev/tty
+
+    # An Application Package in a registry: the validator pulls it with ORAS
+    # and also runs the Application Registry checks.
+    if [[ "${choice,,}" == "o" ]]; then
+        local package_ref
+        read -p "OCI reference (e.g. oci://harbor.machine:8443/library/<app>:<metadata.version>): " package_ref < /dev/tty
+        if [[ -z "$package_ref" ]]; then
+            echo "No OCI reference given" >&2
+            return 1
+        fi
+        echo "$package_ref"
+        return 0
+    fi
 
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || \
        [[ $choice -lt 1 || $choice -gt ${#apps[@]} ]]; then
