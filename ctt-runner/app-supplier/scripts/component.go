@@ -17,7 +17,10 @@ func ValidateOCIComponent(
 ) error {
 
     repo, ok := c.Properties["repository"]
-    rev := c.Properties["revision"].(string)
+
+    // A missing or non-string revision is reported by the
+    // deploymentProfiles.components.properties.revision rule, not here.
+    rev, _ := c.Properties["revision"].(string)
 
     if !ok {
         return fmt.Errorf(
@@ -43,8 +46,14 @@ func ValidateOCIComponent(
         )
     }
 
+    location := repository
+
+    if rev != "" {
+        location += ":" + rev
+    }
+
     return CheckOCI(
-        repository + ":" + rev,
+        location,
     )
 }
 // CheckOCI verifies that the OCI repository is reachable using ORAS.
