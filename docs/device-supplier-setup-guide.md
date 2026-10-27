@@ -51,7 +51,7 @@ git checkout feature/multi-persona-conformance
 Check that the following tools are installed on the CTT host:
 
 ```bash
-go version         # 1.21 or later
+go version         # 1.24 or later
 openssl version    # 1.1 or later
 jq --version       # any version
 ```
