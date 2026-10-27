@@ -1,5 +1,4 @@
-apiVersion: margo.org/v1-alpha1
-kind: ApplicationDescription
+apiVersion: v1
 id: com-northstartida-otel-app
 metadata:
   name: otel-app
@@ -7,11 +6,11 @@ metadata:
   version: "1.0"
   catalog:
     application:
-      icon: ./resources/hw-logo.png
+      icon: ./resources/opentelemtry-logo.png
       tagline: Northstar Industrial Application's OpenTelemetry application.
       descriptionFile: ./resources/description.md
       releaseNotes: ./resources/release-notes.md
-      licenseFile: ./resources/license.pdf
+      licenseFile: ./resources/license.txt
       site: http://www.northstar-ida.com
       tags: ["monitoring"]
     author:
@@ -30,32 +29,22 @@ deploymentProfiles:
           revision: 0.1.0
           wait: true
 parameters:
-  greeting:
-    value: Hello
+  otlpEndpoint:
+    value: "http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318"
     targets:
-    # Maps to deployment configuration param,
-    # e.g., helm install ... --set global.config.appGreeting="Hello"
-    - pointer: global.config.appGreeting
-      components: ["otel-app"]
-  greetingAddressee:
-    value: World
-    targets:
-    - pointer: global.config.appGreetingAddressee
+    # Maps to the chart value env.OTEL_EXPORTER_OTLP_ENDPOINT,
+    # e.g., helm install ... --set env.OTEL_EXPORTER_OTLP_ENDPOINT="http://..."
+    - pointer: env.OTEL_EXPORTER_OTLP_ENDPOINT
       components: ["otel-app"]
 configuration:
   sections:
-    - name: General Settings
+    - name: Observability Settings
       settings:
-        - parameter: greeting
-          name: Greeting
-          description: The greeting to use.
-          schema: requireText
-        - parameter: greetingAddressee
-          name: Greeting Addressee
-          description: The person, or group, the greeting addresses.
-          schema: requireText
+        - parameter: otlpEndpoint
+          name: Endpoint of the OTLP collector
+          description: Endpoint of the OTLP collector
+          schema: endpoint
   schema:
-    - name: requireText
+    - name: endpoint
       dataType: string
-      maxLength: 45
       allowEmpty: false

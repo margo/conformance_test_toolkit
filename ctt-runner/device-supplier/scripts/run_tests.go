@@ -175,6 +175,19 @@ type TestContext struct {
 	Data         map[string]interface{}
 }
 
+// Keys of TestContext.Data. deviceClientKey is also the {deviceClient} variable
+// the test cases set with extract_context and use in endpoints.
+const (
+	deviceClientKey        = "deviceClient"
+	deviceAddrKey          = "deviceAddr"
+	observeMarkKey         = "_observeMark"
+	skipScenarioKey        = "_skipScenario"
+	ownClientKey           = "_ownClientRequests"
+	seenManifestVersionKey = "_seenManifestVersion"
+	signingKeyKey          = "_signingKey"
+	signingAlgorithmKey    = "_signingAlgorithm"
+)
+
 // ===== MAIN TEST RUNNER =====
 
 func main() {
@@ -287,8 +300,8 @@ func runScenarioSteps(scenario TestScenario, ctx *TestContext, stepFilter string
 	fmt.Printf("  Description: %s\n", scenario.Description)
 
 	// Scenario-level signing config, read by executeStep (a step may override).
-	ctx.Data["_signingKey"] = scenario.SigningKey
-	ctx.Data["_signingAlgorithm"] = scenario.SigningAlgorithm
+	ctx.Data[signingKeyKey] = scenario.SigningKey
+	ctx.Data[signingAlgorithmKey] = scenario.SigningAlgorithm
 
 	var results []TestResult
 	pass, fail := 0, 0
@@ -569,8 +582,8 @@ func executeStep(step TestStep, ctx *TestContext) TestResult {
 	// (mtls: true) — MIAF has no per-request signing at all, auth is the mTLS
 	// handshake itself (see mtlsClient() below).
 	if !step.SkipSigning && !step.MTLS {
-		keyPath := firstNonEmpty(step.SigningKey, ctxString(ctx, "_signingKey"), getDeviceKeyPath())
-		alg := firstNonEmpty(step.SigningAlgorithm, ctxString(ctx, "_signingAlgorithm"))
+		keyPath := firstNonEmpty(step.SigningKey, ctxString(ctx, signingKeyKey), getDeviceKeyPath())
+		alg := firstNonEmpty(step.SigningAlgorithm, ctxString(ctx, signingAlgorithmKey))
 		if err := signRequest(req, bodyBytes, keyPath, alg); err != nil {
 			result.Status = "fail"
 			result.Reason = fmt.Sprintf("Failed to sign request: %v", err)
@@ -737,8 +750,8 @@ func executeStep(step TestStep, ctx *TestContext) TestResult {
 	// are real manifests — the test-control PUT echoes a version too.
 	if step.Method == "GET" && !step.ExpectManifestRejected {
 		if cur, ok := extractJSONPath(respData, "manifestVersion").(float64); ok {
-			if prev, _ := ctx.Data["_seenManifestVersion"].(float64); cur > prev {
-				ctx.Data["_seenManifestVersion"] = cur
+			if prev, _ := ctx.Data[seenManifestVersionKey].(float64); cur > prev {
+				ctx.Data[seenManifestVersionKey] = cur
 			}
 		}
 	}

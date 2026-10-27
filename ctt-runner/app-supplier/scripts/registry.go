@@ -1,17 +1,27 @@
 package main
 
 import (
-    "bytes"
+    "context"
     "crypto/sha256"
     "encoding/hex"
     "encoding/json"
     "fmt"
+    "io"
+    "net"
     "os"
-    "os/exec"
     "path"
     "path/filepath"
     "regexp"
     "strings"
+
+    "github.com/opencontainers/go-digest"
+    ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+    "oras.land/oras-go/v2"
+    "oras.land/oras-go/v2/content/file"
+    "oras.land/oras-go/v2/registry/remote"
+    "oras.land/oras-go/v2/registry/remote/auth"
+    "oras.land/oras-go/v2/registry/remote/credentials"
+    "oras.land/oras-go/v2/registry/remote/retry"
 )
 
 // Media types and annotation keys of the Application Registry specification
@@ -76,37 +86,38 @@ func IsOCIReference(input string) bool {
         (strings.Contains(input, ":") || strings.Contains(input, "@"))
 }
 
-// SplitReference splits an OCI reference into repository and tag; the tag is
-// empty when the reference is a digest or has no tag.
-func SplitReference(
-    ref string,
-) (string, string) {
-
-    ref = strings.TrimPrefix(ref, schemeOCI)
-
-    if i := strings.Index(ref, "@"); i >= 0 {
-        return ref[:i], ""
-    }
-
-    slash := strings.LastIndex(ref, "/")
-
-    if colon := strings.LastIndex(ref, ":"); colon > slash {
-        return ref[:colon], ref[colon+1:]
-    }
-
-    return ref, ""
-}
-
-// PullApplicationPackage downloads the Application Package with ORAS into dir.
+// PullApplicationPackage downloads the Application Package with ORAS into dir:
+// every layer with a file name (title annotation) becomes a file in dir.
 func PullApplicationPackage(
     ref string,
     dir string,
 ) error {
 
-    _, err := runOras(
-        "pull",
-        "--output", dir,
-        strings.TrimPrefix(ref, schemeOCI),
+    repo, err := newRepository(ref)
+
+    if err != nil {
+        return err
+    }
+
+    if err := os.MkdirAll(dir, 0o755); err != nil {
+        return err
+    }
+
+    store, err := file.New(dir)
+
+    if err != nil {
+        return err
+    }
+
+    defer store.Close()
+
+    tag := repo.Reference.Reference
+
+    _, err = oras.Copy(
+        context.Background(),
+        repo, tag,
+        store, tag,
+        oras.DefaultCopyOptions,
     )
 
     return err
@@ -120,7 +131,13 @@ func ApplicationDescriptionPath(
     dir string,
 ) string {
 
-    body, err := runOras("manifest", "fetch", strings.TrimPrefix(ref, schemeOCI))
+    repo, err := newRepository(ref)
+
+    if err != nil {
+        return ""
+    }
+
+    body, err := fetchManifest(repo)
 
     if err != nil {
         return ""
@@ -148,53 +165,101 @@ func ApplicationDescriptionPath(
     return ""
 }
 
-// runOras runs ORAS and returns its standard output; the error carries ORAS's
-// own message.
-func runOras(
-    args ...string,
-) ([]byte, error) {
+// newRepository returns the ORAS client of the repository of ref
+// (host/repository:tag or host/repository@digest, oci:// optional). It uses the
+// credentials `oras login` or `docker login` stored (~/.docker/config.json) and,
+// like the ORAS CLI, plain HTTP for a registry on localhost.
+func newRepository(
+    ref string,
+) (*remote.Repository, error) {
 
-    var stderr bytes.Buffer
-
-    cmd := exec.Command("oras", args...)
-    cmd.Stderr = &stderr
-
-    out, err := cmd.Output()
+    repo, err := remote.NewRepository(strings.TrimPrefix(ref, schemeOCI))
 
     if err != nil {
-
-        msg := strings.TrimSpace(stderr.String())
-
-        if msg == "" {
-            msg = err.Error()
-        }
-
-        return nil, fmt.Errorf("%s", msg)
+        return nil, err
     }
 
-    return out, nil
+    store, err := credentials.NewStoreFromDocker(credentials.StoreOptions{})
+
+    if err != nil {
+        return nil, err
+    }
+
+    repo.Client = &auth.Client{
+        Client:     retry.DefaultClient,
+        Cache:      auth.NewCache(),
+        Credential: credentials.Credential(store),
+    }
+
+    repo.PlainHTTP = isLocalRegistry(repo.Reference.Registry)
+
+    return repo, nil
 }
 
-// resolveDigest returns the digest of the manifest a reference points to.
+// isLocalRegistry reports whether a registry (host or host:port) is on localhost.
+func isLocalRegistry(
+    registry string,
+) bool {
+
+    host, _, err := net.SplitHostPort(registry)
+
+    if err != nil {
+        host = registry
+    }
+
+    return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+// fetchManifest returns the manifest the reference of repo points to, as the
+// registry sent it.
+func fetchManifest(
+    repo *remote.Repository,
+) ([]byte, error) {
+
+    _, rc, err := repo.FetchReference(context.Background(), repo.Reference.Reference)
+
+    if err != nil {
+        return nil, err
+    }
+
+    defer rc.Close()
+
+    return io.ReadAll(rc)
+}
+
+// resolveDigest returns the digest the registry reports for the manifest a
+// reference (tag or digest) of repo points to.
 func resolveDigest(
-    ref string,
+    repo *remote.Repository,
+    reference string,
 ) (string, error) {
 
-    out, err := runOras(
-        "manifest", "fetch", "--descriptor", ref,
-    )
+    desc, err := repo.Resolve(context.Background(), reference)
 
     if err != nil {
         return "", err
     }
 
-    var d Descriptor
+    return desc.Digest.String(), nil
+}
 
-    if err := json.Unmarshal(out, &d); err != nil {
-        return "", err
-    }
+// listTags returns the tags of repo.
+func listTags(
+    repo *remote.Repository,
+) ([]string, error) {
 
-    return d.Digest, nil
+    var tags []string
+
+    err := repo.Tags(
+        context.Background(),
+        "",
+        func(page []string) error {
+            tags = append(tags, page...)
+            return nil
+        },
+    )
+
+    return tags, err
 }
 
 // sha256Digest returns the OCI digest string of data.
@@ -219,7 +284,6 @@ func ValidateRegistry(
 ) {
 
     ref = strings.TrimPrefix(ref, schemeOCI)
-    repo, _ := SplitReference(ref)
 
     //--------------------------------------------------
     // MARGO-APP-APPLICATIONREGISTRY-003
@@ -232,7 +296,13 @@ func ValidateRegistry(
         "GET /v2/<name>/manifests/<reference> returns the manifest; its sha256 is the digest the registry reports",
     )
 
-    body, err := runOras("manifest", "fetch", ref)
+    repo, err := newRepository(ref)
+
+    var body []byte
+
+    if err == nil {
+        body, err = fetchManifest(repo)
+    }
 
     if err != nil {
 
@@ -257,7 +327,7 @@ func ValidateRegistry(
         return
     }
 
-    digest, err := resolveDigest(ref)
+    digest, err := resolveDigest(repo, repo.Reference.Reference)
 
     if err != nil || digest != sha256Digest(body) {
 
@@ -488,7 +558,7 @@ func validateManifestConstraints(
 // validateBlobs downloads every blob of the manifest by digest and compares its
 // digest and size with the descriptor (MARGO-APP-APPLICATIONREGISTRY-001).
 func validateBlobs(
-    repo string,
+    repo *remote.Repository,
     manifest *Manifest,
     report *ValidationReport,
 ) {
@@ -506,9 +576,7 @@ func validateBlobs(
 
     for _, b := range blobs {
 
-        data, err := runOras(
-            "blob", "fetch", "--output", "-", repo+"@"+b.Digest,
-        )
+        data, err := fetchBlob(repo, b)
 
         switch {
 
@@ -539,11 +607,37 @@ func validateBlobs(
     )
 }
 
+// fetchBlob downloads the blob of a descriptor by its digest.
+func fetchBlob(
+    repo *remote.Repository,
+    d Descriptor,
+) ([]byte, error) {
+
+    dgst, err := digest.Parse(d.Digest)
+
+    if err != nil {
+        return nil, err
+    }
+
+    rc, err := repo.Blobs().Fetch(
+        context.Background(),
+        ocispec.Descriptor{MediaType: d.MediaType, Digest: dgst, Size: d.Size},
+    )
+
+    if err != nil {
+        return nil, err
+    }
+
+    defer rc.Close()
+
+    return io.ReadAll(rc)
+}
+
 // validateTags checks that every tag of the Application Package's manifest is
 // the metadata.version of its Application Description
 // (MARGO-APP-APPLICATIONREGISTRY-002).
 func validateTags(
-    repo string,
+    repo *remote.Repository,
     digest string,
     version string,
     report *ValidationReport,
@@ -556,11 +650,13 @@ func validateTags(
         "Each tag of this manifest is metadata.version ("+orMissing(version)+")",
     )
 
-    out, err := runOras("repo", "tags", repo)
+    name := repo.Reference.Registry + "/" + repo.Reference.Repository
+
+    allTags, err := listTags(repo)
 
     if err != nil {
 
-        report.Fail("tags not listed", fmt.Sprintf("The tags of %s could not be listed: %v", repo, err))
+        report.Fail("tags not listed", fmt.Sprintf("The tags of %s could not be listed: %v", name, err))
 
         return
     }
@@ -568,9 +664,9 @@ func validateTags(
     var tags []string
     var wrong []string
 
-    for _, tag := range strings.Fields(string(out)) {
+    for _, tag := range allTags {
 
-        tagDigest, err := resolveDigest(repo + ":" + tag)
+        tagDigest, err := resolveDigest(repo, tag)
 
         if err != nil || tagDigest != digest {
             continue
@@ -586,7 +682,7 @@ func validateTags(
     switch {
 
     case len(tags) == 0:
-        report.Fail("no tag", "No tag of "+repo+" points to this manifest; it MUST be tagged with metadata.version.")
+        report.Fail("no tag", "No tag of "+name+" points to this manifest; it MUST be tagged with metadata.version.")
 
     case len(wrong) > 0:
         report.Fail(
@@ -682,44 +778,56 @@ func findSignature(
     ref string,
 ) (string, error) {
 
-    digest, err := resolveDigest(ref)
+    repo, err := newRepository(ref)
 
     if err != nil {
         return "", err
     }
 
-    out, err := runOras("discover", "-o", "json", ref)
+    subject, err := repo.Resolve(context.Background(), repo.Reference.Reference)
 
     if err != nil {
         return "", err
     }
 
-    var index struct {
-        Manifests []Descriptor `json:"manifests"`
-    }
+    // OCI 1.1 referrers (the Referrers API, or the referrers tag schema of a
+    // registry without it).
+    var signature string
 
-    if err := json.Unmarshal(out, &index); err != nil {
-        return "", err
-    }
+    err = repo.Referrers(
+        context.Background(),
+        subject,
+        "",
+        func(referrers []ocispec.Descriptor) error {
 
-    for _, m := range index.Manifests {
+            for _, r := range referrers {
 
-        if signatureArtifactTypes[m.ArtifactType] {
-            return m.ArtifactType, nil
-        }
-    }
+                if signatureArtifactTypes[r.ArtifactType] && signature == "" {
+                    signature = r.ArtifactType
+                }
+            }
 
-    repo, _ := SplitReference(ref)
-
-    tags, err := runOras("repo", "tags", repo)
+            return nil
+        },
+    )
 
     if err != nil {
         return "", err
     }
 
-    cosignTag := strings.Replace(digest, ":", "-", 1) + ".sig"
+    if signature != "" {
+        return signature, nil
+    }
 
-    for _, tag := range strings.Fields(string(tags)) {
+    tags, err := listTags(repo)
+
+    if err != nil {
+        return "", err
+    }
+
+    cosignTag := strings.Replace(subject.Digest.String(), ":", "-", 1) + ".sig"
+
+    for _, tag := range tags {
 
         if tag == cosignTag {
             return "cosign signature tag " + cosignTag, nil

@@ -378,7 +378,14 @@ func renderHelm(
     out, err := cmd.Output()
 
     if err != nil {
-        return nil, fmt.Errorf("helm template: %s", strings.TrimSpace(stderr.String()))
+
+        msg := strings.TrimSpace(stderr.String())
+
+        if msg == "" {
+            msg = err.Error() // e.g. helm is not installed
+        }
+
+        return nil, fmt.Errorf("helm template: %s", msg)
     }
 
     return decodeYAMLDocuments(out)
