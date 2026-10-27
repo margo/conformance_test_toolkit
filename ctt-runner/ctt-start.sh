@@ -1533,6 +1533,7 @@ REQUIREMENTS:
   Node.js                     WFM Supplier
   Go 1.24+                    Device Supplier, Application Supplier
   oras                        WFM Supplier: Application Registry checks
+  helm                        Application Supplier: observability checks of Helm components
 
 TROUBLESHOOTING:
 

@@ -2,7 +2,6 @@ package main
 
 import (
     "fmt"
-    "os/exec"
     "strings"
 )
 
@@ -74,23 +73,21 @@ func ValidateOCIComponent(
         repository + ":" + rev,
     )
 }
-// CheckOCI verifies that the OCI repository is reachable using ORAS.
+// CheckOCI verifies that the OCI repository is reachable: its manifest can be
+// fetched with ORAS.
 func CheckOCI(location string) error {
-    location = strings.TrimPrefix(location, "oci://")
-    cmd := exec.Command(
-        "oras",
-        "manifest",
-        "fetch",
-        location,
-    )
 
-    out, err := cmd.CombinedOutput()
+    repo, err := newRepository(location)
+
+    if err == nil {
+        _, err = fetchManifest(repo)
+    }
 
     if err != nil {
 
         return fmt.Errorf(
-            "oci unreachable: %s",
-            string(out),
+            "oci unreachable: %v",
+            err,
         )
     }
 
