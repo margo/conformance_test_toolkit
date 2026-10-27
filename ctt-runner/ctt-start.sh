@@ -1293,7 +1293,7 @@ execute_device_tests() {
     if jq -e '[.[].steps[]? | select(has("observe"))] | length > 0' ./device-scenarios/test-scenarios.json >/dev/null 2>&1; then
         observes_real_device=true
         if [[ ! -f /tmp/wfm-server.pid ]] || ! kill -0 "$(cat /tmp/wfm-server.pid)" 2>/dev/null; then
-            error "This group judges a real device. Start the mock WFM first (ctt-start.sh → Device Supplier → 2), point the device at it, then run the group again."
+            error "This group judges the device under test. Start the mock WFM first (ctt-start.sh → Device Supplier → 2), point the device under test at it, then run the group again."
         fi
         log "Using the running Mock WFM Server (PID: $(cat /tmp/wfm-server.pid)) — the device under test must be connected to it."
     else
@@ -1493,7 +1493,7 @@ PERSONAS:
     2. Start Mock WFM Server — Management Interface, mTLS on port 3003
     3. Run Tests             — pick a group; the CTT's device client runs it
     4. Stop Mock WFM Server
-    A real device-agent is tested by pointing it at the mock WFM.
+    The device under test is tested by pointing it at the mock WFM.
     Guide: docs/device-supplier-setup-guide.md
 
   Application Supplier
@@ -1975,7 +1975,7 @@ device_generate_certs() {
     echo "  ── MIAF Identity Setup ──────────────────────────────────────────────────"
     echo "  The MIS of the Trust Domain must have issued two X.509-SVIDs:"
     echo "    1. A WFM SVID        — identity of the mock WFM (mTLS endpoint, port 3003)"
-    echo "    2. A WFM Client SVID — identity of the CTT test client"
+    echo "    2. A WFM Client SVID — identity of the CTT's self-test client (CTT's own device-client)"
     echo ""
     echo "  Provide the folder that contains them. Accepted layouts:"
     echo "    • The folder that contains the x509svid-* folders (sandbox:"
@@ -2033,7 +2033,7 @@ device_generate_certs() {
                 read -r -p "  Select the mock WFM SVID: " wfm_n < /dev/tty
             done
             while [[ -z "$client_n" ]]; do
-                read -r -p "  Select the WFM Client SVID: " client_n < /dev/tty
+                read -r -p "  Select the WFM Client SVID of the CTT's self-test client (CTT's own device-client): " client_n < /dev/tty
             done
             if [[ ! "$wfm_n" =~ ^[0-9]+$ || ! "$client_n" =~ ^[0-9]+$ ]] \
                 || (( wfm_n < 1 || wfm_n > ${#svid_dirs[@]} )) \
@@ -2050,7 +2050,7 @@ device_generate_certs() {
             echo "  No known layout found in $src_dir."
             echo "  Enter the folders holding payload-cert.pem / payload-key.pem for each SVID:"
             _device_read_dir "WFM SVID folder" "";    wfm_dir="$REPLY"
-            _device_read_dir "Client SVID folder" ""; client_dir="$REPLY"
+            _device_read_dir "CTT's self-test client SVID folder (CTT's own device-client)" ""; client_dir="$REPLY"
             read -r -p "  SVID Root CA certificate file (ca.crt of the MIS): " ca_cert < /dev/tty
             ca_cert="${ca_cert/#\~/$HOME}"
         fi
@@ -2260,8 +2260,8 @@ device_start_server() {
     echo "  Server log           : /tmp/wfm-server.log"
     echo ""
     echo "  ➜  Option 3 (Run Tests) runs the CTT's own device-agent against this server."
-    echo "  ➜  To test a real device: point it at the Management Interface URL above."
-    echo "     The device must reach this host at that address; to show a different"
+    echo "  ➜  Device under test: point it at the Management Interface URL above."
+    echo "     The device under test must reach this host at that address; to show a different"
     echo "     address (e.g. the host's IP on the device network): CTT_HOST_ADDRESS=<ip-or-name>"
     echo "     Its SVID must be issued by the same MIS, as"
     echo "     <WFM SPIFFE ID>/client/<wfm-client-id>, and it must accept the WFM SPIFFE ID."
