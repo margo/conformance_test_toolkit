@@ -27,8 +27,7 @@ checked.
 ### Operating system
 
 The CTT host must run Ubuntu 24.04, the operating system officially supported
-by the CTT and used by the sandbox Setup Guide. Other Linux distributions are
-not supported.
+by the CTT. Other Linux distributions are not supported.
 
 ### Network connectivity
 

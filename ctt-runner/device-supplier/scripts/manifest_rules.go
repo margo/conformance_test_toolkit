@@ -76,7 +76,7 @@ func evaluateManifest(data interface{}, ctx *TestContext) (string, bool) {
 
 	// MI-010: manifestVersion MUST be strictly greater than any already seen.
 	if cur, ok := m["manifestVersion"].(float64); ok {
-		if prev, seen := ctx.Data["_seenManifestVersion"].(float64); seen && cur <= prev {
+		if prev, seen := ctx.Data[seenManifestVersionKey].(float64); seen && cur <= prev {
 			return fmt.Sprintf("manifestVersion %v is not strictly greater than previously seen %v (MI-010)", cur, prev), true
 		}
 	}
