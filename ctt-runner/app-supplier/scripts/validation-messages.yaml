@@ -2,14 +2,14 @@ apiVersion:
   crId:
   check:
     datatype: string
-    expected: API version required
+    expected: v1
 
   pass:
     description: API version conforms to the required specification.
 
   fail:
     missing: API version is required but was not provided.
-    invalid: API version does not conform to the required specification.
+    invalid: API version MUST be v1.
 
 id:
   crId: MARGO-APP-APPLICATIONDESCRIPTION-001, MARGO-APP-APPLICATIONDESCRIPTION-006, MARGO-APP-APPLICATIONDESCRIPTION-005
