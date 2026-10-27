@@ -20,9 +20,7 @@
     "type": "string",
     "required": true,
     "displayName": "metadata.name",
-    "expected": "Required (non-empty)",
-    "regex": "^[a-z0-9-]{1,200}$"
-
+    "expected": "Required (non-empty)"
   },
 
   "metadata.version": {
