@@ -89,6 +89,9 @@ the CTT's own device client against the mock WFM and needs no device.
 
 ## Prerequisites
 
+The CTT is officially supported on **Ubuntu 24.04**, the operating system used by
+the sandbox Setup Guide. Other Linux distributions are not supported.
+
 | Tool | Needed for |
 |---|---|
 | **Node.js** (any recent LTS) | `run_wfm_scenarios.js` — no `npm install` required, uses only Node built-ins |
