@@ -327,6 +327,10 @@ func ValidateRegistry(
         return
     }
 
+    // Record the bytes actually fetched so a shared report identifies the
+    // package tested even when the input used a mutable tag.
+    report.ManifestDigest = sha256Digest(body)
+
     digest, err := resolveDigest(repo, repo.Reference.Reference)
 
     if err != nil || digest != sha256Digest(body) {

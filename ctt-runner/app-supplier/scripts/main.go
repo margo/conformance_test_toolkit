@@ -296,6 +296,9 @@ reportDir := filepath.Join(
 	report :=
 		NewValidationReport()
 
+	report.InputSource = describeInputSource(packageRef, info)
+	report.CTTRevision = cttSourceRevision()
+
 	report.ApplicationName =
 		app.Metadata.Name
 

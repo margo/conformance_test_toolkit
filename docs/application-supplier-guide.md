@@ -190,6 +190,14 @@ Failed       : 2
 
 Reports are stored inside the CTT Runner reports directory.
 
+The HTML header records the input source. For an OCI input, it also records the
+SHA-256 digest of the manifest bytes fetched from the registry, so a report
+against a mutable tag still identifies the package that was checked. Local
+inputs are identified as a directory or archive without exposing their
+filesystem path. When Go embeds VCS build information, the header also records
+the CTT source revision and marks a modified working tree; exported source
+builds may omit that field.
+
 Example:
 
 ```text
