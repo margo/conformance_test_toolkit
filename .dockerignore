@@ -1,0 +1,6 @@
+# The image needs only the Go module files; the repository is mounted at run time.
+*
+!ctt-runner/device-supplier/go.mod
+!ctt-runner/device-supplier/go.sum
+!ctt-runner/app-supplier/go.mod
+!ctt-runner/app-supplier/go.sum

@@ -1,0 +1,39 @@
+# Runs the CTT CLIs in a container. The menus and arguments are the same as without Docker.
+#
+#   docker compose build                                    # once (pass UID/GID if yours are not 1000)
+#   docker compose run --rm ctt-runner                      # ctt-runner menu
+#   docker compose run --rm ctt-runner wfm <group> <WFM_URL>
+#   docker compose run --rm ctt-runner device <group>
+#   docker compose run --rm ctt-runner application
+#   docker compose run --rm ctt-creator                     # ctt-creator menu
+
+x-ctt: &ctt
+  image: margo-ctt:latest
+  build:
+    context: .
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+  # Host network: the mock WFM ports (3001, 3003) are on the host, and the host's /etc/hosts names resolve
+  network_mode: host
+  stdin_open: true
+  tty: true
+  volumes:
+    # The repository: test suites, group.json files, certificates and reports stay on the host
+    - .:/ctt
+    # Python environment of the PDF signer, filled from the image on first use
+    - ctt-pdf-venv:/ctt/ctt-runner/reports/scripts/.venv
+    # Folder with the SVIDs from the MIS; the identity setup suggests $HOME/mis-deployment
+    - ${CTT_MIS_DIR:-${HOME}/mis-deployment}:/home/ctt/mis-deployment
+
+services:
+  ctt-runner:
+    <<: *ctt
+    entrypoint: ["bash", "ctt-runner/ctt-start.sh"]
+
+  ctt-creator:
+    <<: *ctt
+    entrypoint: ["bash", "ctt-creator/ctt-start.sh"]
+
+volumes:
+  ctt-pdf-venv:
