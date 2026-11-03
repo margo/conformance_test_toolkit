@@ -147,7 +147,7 @@ carries the group name and version.
 | `management-interface` | both | The Management Interface API |
 | `identity` | both | mTLS, trust, SVID rotation |
 | `observability` | both | OpenTelemetry |
-| `deployment-delivery`, `application-registry` | WFM | Delivering a deployment; the OCI registry |
+| `deployment-delivery` | WFM | Delivering a deployment |
 | `postman-lifecycle`, `postman-error-handling` | WFM | Tests written in Postman |
 | `manifest-integrity` | Device | Manifests and content a device must reject; state kept across a restart |
 | `core` | both | The full set — run this for a conformance result. WFM: requests sent to the real WFM. Device: the requests a real device sends, judged by the mock WFM |

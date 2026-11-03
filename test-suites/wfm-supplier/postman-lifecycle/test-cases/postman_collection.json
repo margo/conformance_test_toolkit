@@ -62,7 +62,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 201,
       "accepted_statuses": [
@@ -125,7 +125,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 200,
       "accepted_statuses": [
@@ -183,11 +183,11 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-004",
-        "MARGO-WFM-MANAGEMENTINTERFACE-006",
-        "MARGO-WFM-MANAGEMENTINTERFACE-007",
-        "MARGO-WFM-MANAGEMENTINTERFACE-027",
-        "MARGO-WFM-MANAGEMENTINTERFACE-034"
+        "MARGO-WFM-MGMT-032",
+        "MARGO-WFM-MGMT-045",
+        "MARGO-WFM-MGMT-057",
+        "MARGO-WFM-MGMT-059",
+        "MARGO-WFM-MGMT-085"
       ],
       "expected_status": 200,
       "validations": [
@@ -254,7 +254,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-030"
+        "MARGO-WFM-MGMT-060"
       ],
       "expected_status": 304
     },
@@ -310,7 +310,8 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-048",
+        "MARGO-WFM-MGMT-056"
       ],
       "expected_status": 200,
       "validations": [
@@ -368,9 +369,8 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-031",
-        "MARGO-WFM-MANAGEMENTINTERFACE-025",
-        "MARGO-WFM-MANAGEMENTINTERFACE-027"
+        "MARGO-WFM-MGMT-043",
+        "MARGO-WFM-MGMT-056"
       ],
       "expected_status": 200,
       "validations": [
@@ -438,7 +438,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 200,
       "accepted_statuses": [
@@ -502,7 +502,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 200,
       "accepted_statuses": [
@@ -566,7 +566,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 200,
       "accepted_statuses": [
@@ -630,7 +630,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 200,
       "accepted_statuses": [

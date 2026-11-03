@@ -62,7 +62,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 201,
       "accepted_statuses": [
@@ -71,7 +71,7 @@
     },
     {
       "id": "cce2e8d1-dde4-41b0-893d-6b988c353b91",
-      "name": "PUT Capabilities — Unknown deployment type is rejected",
+      "name": "PUT Capabilities — Unknown deployment type is accepted",
       "request": {
         "method": "PUT",
         "description": "",
@@ -116,8 +116,8 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test(\"Status code is 422\", function () {",
-              "    pm.response.to.have.status(422);",
+              "pm.test(\"Status code is 200 or 201\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
               "});"
             ]
           }
@@ -125,19 +125,12 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-025"
       ],
-      "expected_status": 422,
-      "validations": [
-        {
-          "field": "_headers.content-type",
-          "operation": "contains",
-          "value": "application/problem+json"
-        },
-        {
-          "field": "type",
-          "operation": "not_empty"
-        }
+      "expected_status": 200,
+      "validations": [],
+      "accepted_statuses": [
+        201
       ]
     },
     {
@@ -189,7 +182,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 200
     },
@@ -234,7 +227,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-008"
+        "MARGO-WFM-MGMT-030"
       ],
       "expected_status": 406,
       "validations": [
@@ -297,7 +290,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 404
     },
@@ -343,7 +336,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 404
     },
@@ -404,7 +397,7 @@
       ],
       "response": [],
       "crIds": [
-        "MARGO-WFM-MANAGEMENTINTERFACE-023"
+        "MARGO-WFM-MGMT-001"
       ],
       "expected_status": 422,
       "validations": [

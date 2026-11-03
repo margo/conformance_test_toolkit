@@ -3,10 +3,11 @@
     "id": "wfm-core-capabilities",
     "name": "Device Capabilities — Report, Update, and Validation",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-023",
-      "MARGO-WFM-MGMT-001"
+      "MARGO-WFM-MGMT-001",
+      "MARGO-WFM-MGMT-024",
+      "MARGO-WFM-MGMT-025"
     ],
-    "description": "Device capabilities: the first report creates the device, a second report updates it, and reports with a value outside the allowed set or without a required field are rejected with problem details.",
+    "description": "Device capabilities: the first report creates the device, a second report updates it, a report with an unknown runtime or deployment type value is accepted, and a report without a required field is rejected with problem details.",
     "steps": [
       {
         "id": "wfm-core-cap-1",
@@ -107,9 +108,9 @@
       },
       {
         "id": "wfm-core-cap-3",
-        "name": "Reject Capabilities — Invalid supportedDeploymentTypes",
+        "name": "Capabilities — Unknown supportedDeploymentTypes Value Is Accepted",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-025"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -144,26 +145,18 @@
           }
         },
         "headers": {},
-        "expected_status": 422,
-        "validations": [
-          {
-            "field": "_headers.content-type",
-            "operation": "contains",
-            "value": "application/problem+json"
-          },
-          {
-            "field": "type",
-            "operation": "equals",
-            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
-          }
-        ],
-        "extract_context": {}
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          201
+        ]
       },
       {
         "id": "wfm-core-cap-4",
-        "name": "Reject Capabilities — Invalid supportedRuntimes",
+        "name": "Capabilities — Unknown supportedRuntimes Value Is Accepted",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-024"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -198,20 +191,12 @@
           }
         },
         "headers": {},
-        "expected_status": 422,
-        "validations": [
-          {
-            "field": "_headers.content-type",
-            "operation": "contains",
-            "value": "application/problem+json"
-          },
-          {
-            "field": "type",
-            "operation": "equals",
-            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
-          }
-        ],
-        "extract_context": {}
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          201
+        ]
       },
       {
         "id": "wfm-core-cap-5",

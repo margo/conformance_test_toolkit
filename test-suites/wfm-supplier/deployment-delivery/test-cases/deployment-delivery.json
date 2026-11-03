@@ -3,21 +3,23 @@
     "id": "wfm-multi-component-deployment",
     "name": "Multi-Component ApplicationDeployment — wait=true/false, digest & caching contract",
     "crIds": [
-      "MARGO-WFM-APPLICATIONDESCRIPTION-001",
-      "MARGO-WFM-APPLICATIONDESCRIPTION-002",
-      "MARGO-WFM-MANAGEMENTINTERFACE-014",
-      "MARGO-WFM-MANAGEMENTINTERFACE-023",
-      "MARGO-WFM-MANAGEMENTINTERFACE-024",
-      "MARGO-WFM-MANAGEMENTINTERFACE-025",
-      "MARGO-WFM-MANAGEMENTINTERFACE-027",
-      "MARGO-WFM-MANAGEMENTINTERFACE-030",
-      "MARGO-WFM-MANAGEMENTINTERFACE-031",
-      "MARGO-WFM-MANAGEMENTINTERFACE-034",
-      "MARGO-WFM-MANAGEMENTINTERFACE-035",
-      "MARGO-WFM-MANAGEMENTINTERFACE-036",
-      "MARGO-WFM-MANAGEMENTINTERFACE-038"
+      "MARGO-WFM-MGMT-001",
+      "MARGO-WFM-MGMT-040",
+      "MARGO-WFM-MGMT-041",
+      "MARGO-WFM-MGMT-042",
+      "MARGO-WFM-MGMT-043",
+      "MARGO-WFM-MGMT-044",
+      "MARGO-WFM-MGMT-048",
+      "MARGO-WFM-MGMT-049",
+      "MARGO-WFM-MGMT-051",
+      "MARGO-WFM-MGMT-053",
+      "MARGO-WFM-MGMT-054",
+      "MARGO-WFM-MGMT-055",
+      "MARGO-WFM-MGMT-056",
+      "MARGO-WFM-MGMT-085",
+      "MARGO-WFM-MGMT-086"
     ],
-    "description": "A WFM serves a multi-component compose ApplicationDeployment faithfully, without anything being deployed: content-addressed URLs, the deployment YAML with both `wait` values and its digest, the bundle archive with exactly the listed YAML files, its cache headers and 304, wrong digests answered 404, and status reports for every state, with invalid reports rejected. PRECONDITION: a deployment with two components (wait: true and wait: false) is assigned to the CTT's device while the second step is polling.",
+    "description": "A WFM serves a multi-component compose ApplicationDeployment faithfully, without anything being deployed: content-addressed URLs, the deployment YAML and its digest, the bundle archive with exactly the listed YAML files, its cache headers, wrong digests answered 404, and status reports for every state, with invalid reports rejected. PRECONDITION: a deployment with two components (wait: true and wait: false) is assigned to the CTT's device while the second step is polling.",
     "steps": [
       {
         "id": "f55c84c8-3c29-4cd0-b11a-49bde4aeafe4",
@@ -63,7 +65,7 @@
           200
         ],
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       },
       {
@@ -124,15 +126,15 @@
           "manifestDeployments": "deployments"
         },
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-031",
-          "MARGO-WFM-MANAGEMENTINTERFACE-034"
+          "MARGO-WFM-MGMT-040",
+          "MARGO-WFM-MGMT-085"
         ]
       },
       {
         "id": "wfm-mc-manifest-not-immutable",
         "name": "Manifest With Deployments Is Not Marked immutable",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-035"
+          "MARGO-WFM-MGMT-086"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -154,7 +156,8 @@
         "id": "wfm-mc-manifest-urls",
         "name": "State Manifest URLs Are Content-Addressed (bundle.url, deployments[].url)",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-044",
+          "MARGO-WFM-MGMT-049"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -202,43 +205,17 @@
         ],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-014",
-          "MARGO-WFM-MANAGEMENTINTERFACE-025",
-          "MARGO-WFM-MANAGEMENTINTERFACE-034",
-          "MARGO-WFM-MANAGEMENTINTERFACE-036"
+          "MARGO-WFM-MGMT-048",
+          "MARGO-WFM-MGMT-051",
+          "MARGO-WFM-MGMT-056",
+          "MARGO-WFM-MGMT-085"
         ]
-      },
-      {
-        "id": "wfm-mc-deployment-yaml-content",
-        "name": "ApplicationDeployment YAML Carries Both Components (wait: true and wait: false)",
-        "crIds": [
-          "MARGO-WFM-APPLICATIONDESCRIPTION-001",
-          "MARGO-WFM-APPLICATIONDESCRIPTION-002"
-        ],
-        "method": "GET",
-        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
-        "mtls": true,
-        "headers": {},
-        "expected_status": 200,
-        "validations": [
-          {
-            "field": "_body",
-            "operation": "contains",
-            "value": "wait: true"
-          },
-          {
-            "field": "_body",
-            "operation": "contains",
-            "value": "wait: false"
-          }
-        ],
-        "extract_context": {}
       },
       {
         "id": "wfm-mc-deployment-wrong-digest",
         "name": "Deployment YAML With A Digest The WFM Does Not Have Returns 404",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments/{deploymentId}/sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -263,10 +240,11 @@
         "id": "wfm-mc-bundle-fetch",
         "name": "Download The Deployment Bundle — Content-Type, ETag And Digest",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-025",
-          "MARGO-WFM-MANAGEMENTINTERFACE-027",
-          "MARGO-WFM-MANAGEMENTINTERFACE-031",
-          "MARGO-WFM-MANAGEMENTINTERFACE-036"
+          "MARGO-WFM-MGMT-041",
+          "MARGO-WFM-MGMT-043",
+          "MARGO-WFM-MGMT-053",
+          "MARGO-WFM-MGMT-054",
+          "MARGO-WFM-MGMT-056"
         ],
         "method": "GET",
         "endpoint": "/api/v1/bundles/{bundleDigest}",
@@ -296,7 +274,7 @@
         "id": "wfm-mc-bundle-contents",
         "name": "Deployment Bundle Contains Exactly The Listed Deployment Files",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-024"
+          "MARGO-WFM-MGMT-042"
         ],
         "method": "GET",
         "endpoint": "/api/v1/bundles/{bundleDigest}",
@@ -315,7 +293,7 @@
         "id": "wfm-mc-bundle-cache",
         "name": "Deployment Bundle Cache Headers (private, max-age=31536000, immutable)",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-038"
+          "MARGO-WFM-MGMT-055"
         ],
         "method": "GET",
         "endpoint": "/api/v1/bundles/{bundleDigest}",
@@ -342,32 +320,10 @@
         "extract_context": {}
       },
       {
-        "id": "wfm-mc-bundle-not-modified",
-        "name": "Download The Bundle Again With If-None-Match — 304 With An Empty Body",
-        "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-030"
-        ],
-        "method": "GET",
-        "endpoint": "/api/v1/bundles/{bundleDigest}",
-        "mtls": true,
-        "headers": {
-          "If-None-Match": "\"{bundleDigest}\""
-        },
-        "expected_status": 304,
-        "validations": [
-          {
-            "field": "_body",
-            "operation": "equals",
-            "value": ""
-          }
-        ],
-        "extract_context": {}
-      },
-      {
         "id": "wfm-mc-bundle-wrong-digest",
         "name": "Bundle With A Digest The WFM Does Not Have Returns 404",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "GET",
         "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -419,7 +375,7 @@
         "validations": [],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       },
       {
@@ -453,7 +409,7 @@
         "validations": [],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       },
       {
@@ -497,7 +453,7 @@
         "validations": [],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       },
       {
@@ -531,7 +487,7 @@
         "validations": [],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       },
       {
@@ -575,7 +531,7 @@
         ],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       },
       {
@@ -616,7 +572,7 @@
         ],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       }
     ]

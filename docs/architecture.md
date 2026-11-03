@@ -261,7 +261,6 @@ The groups shipped with the toolkit:
 | `identity` | both | mTLS handshake, trust, SVID rotation |
 | `observability` | both | OpenTelemetry |
 | `deployment-delivery` | WFM | A multi-component deployment: URLs, deployment YAML, bundle, digests |
-| `application-registry` | WFM | The OCI Application Registry |
 | `postman-lifecycle`, `postman-error-handling` | WFM | The same kind of tests written as Postman collections |
 | `manifest-integrity` | Device | Manifests and content a device must reject, one it must accept, state kept across a restart |
 | `core` | both | The full set — the conformance result. WFM: every scenario. Device: every real-device scenario |

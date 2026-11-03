@@ -212,7 +212,7 @@ every device requirement and the step that judges it.
 | `core` | both | the conformance result |
 | `management-interface` | both | the six API calls, accepted and rejected |
 | `identity` | both | mTLS, refused identities, SVID rotation |
-| `deployment-delivery`, `application-registry` | WFM | a deployment delivered with correct digests; the OCI registry |
+| `deployment-delivery` | WFM | a deployment delivered with correct digests |
 | `postman-lifecycle`, `postman-error-handling` | WFM | tests written in Postman |
 | `manifest-integrity` | Device | what a device must reject, what it must accept, state kept across a restart |
 | `self-check`, `random-order` | Device | the CTT itself, no device needed |

@@ -3,15 +3,17 @@
     "id": "wfm-core-capabilities",
     "name": "Device Capabilities — Report, Update, and Validation",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-023"
+      "MARGO-WFM-MGMT-001",
+      "MARGO-WFM-MGMT-024",
+      "MARGO-WFM-MGMT-025"
     ],
-    "description": "Device capabilities: the first report creates the device, a second report updates it, and reports with a value outside the allowed set or without a required field are rejected with problem details.",
+    "description": "Device capabilities: the first report creates the device, a second report updates it, a report with an unknown runtime or deployment type value is accepted, and a report without a required field is rejected with problem details.",
     "steps": [
       {
         "id": "wfm-core-cap-1",
         "name": "Report Device Capabilities (create)",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -58,7 +60,7 @@
         "id": "wfm-core-cap-2",
         "name": "Update Device Capabilities (same deviceId, second call)",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -106,9 +108,9 @@
       },
       {
         "id": "wfm-core-cap-3",
-        "name": "Reject Capabilities — Invalid supportedDeploymentTypes",
+        "name": "Capabilities — Unknown supportedDeploymentTypes Value Is Accepted",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-025"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -143,26 +145,18 @@
           }
         },
         "headers": {},
-        "expected_status": 422,
-        "validations": [
-          {
-            "field": "_headers.content-type",
-            "operation": "contains",
-            "value": "application/problem+json"
-          },
-          {
-            "field": "type",
-            "operation": "equals",
-            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
-          }
-        ],
-        "extract_context": {}
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          201
+        ]
       },
       {
         "id": "wfm-core-cap-4",
-        "name": "Reject Capabilities — Invalid supportedRuntimes",
+        "name": "Capabilities — Unknown supportedRuntimes Value Is Accepted",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-024"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -197,26 +191,18 @@
           }
         },
         "headers": {},
-        "expected_status": 422,
-        "validations": [
-          {
-            "field": "_headers.content-type",
-            "operation": "contains",
-            "value": "application/problem+json"
-          },
-          {
-            "field": "type",
-            "operation": "equals",
-            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
-          }
-        ],
-        "extract_context": {}
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          201
+        ]
       },
       {
         "id": "wfm-core-cap-5",
         "name": "Reject Capabilities — Required Field vendor Is Missing",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -274,15 +260,15 @@
     "id": "wfm-core-desired-state",
     "name": "Desired State — Retrieval, Content Negotiation, Digest-Addressed Fetches",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-004",
-      "MARGO-WFM-MANAGEMENTINTERFACE-006",
-      "MARGO-WFM-MANAGEMENTINTERFACE-007",
-      "MARGO-WFM-MANAGEMENTINTERFACE-009",
-      "MARGO-WFM-MANAGEMENTINTERFACE-027",
-      "MARGO-WFM-MANAGEMENTINTERFACE-030",
-      "MARGO-WFM-MANAGEMENTINTERFACE-033",
-      "MARGO-WFM-MANAGEMENTINTERFACE-034",
-      "MARGO-WFM-MANAGEMENTINTERFACE-035"
+      "MARGO-WFM-MGMT-031",
+      "MARGO-WFM-MGMT-032",
+      "MARGO-WFM-MGMT-033",
+      "MARGO-WFM-MGMT-038",
+      "MARGO-WFM-MGMT-058",
+      "MARGO-WFM-MGMT-060",
+      "MARGO-WFM-MGMT-084",
+      "MARGO-WFM-MGMT-085",
+      "MARGO-WFM-MGMT-086"
     ],
     "description": "The desired-state manifest: served with and without an Accept header, with a quoted sha256 ETag and without `immutable` caching; `bundle` is null exactly when there are no deployments; a conditional request with the current ETag is answered 304.",
     "steps": [
@@ -290,10 +276,10 @@
         "id": "wfm-core-ds-1",
         "name": "Retrieve Desired State With Explicit Accept Header — Content-Type And ETag Format",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-004",
-          "MARGO-WFM-MANAGEMENTINTERFACE-006",
-          "MARGO-WFM-MANAGEMENTINTERFACE-027",
-          "MARGO-WFM-MANAGEMENTINTERFACE-034"
+          "MARGO-WFM-MGMT-032",
+          "MARGO-WFM-MGMT-033",
+          "MARGO-WFM-MGMT-058",
+          "MARGO-WFM-MGMT-085"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -329,8 +315,8 @@
         "id": "wfm-core-ds-bundle-field",
         "name": "Desired State: bundle Is null Exactly When There Are No Deployments",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-009",
-          "MARGO-WFM-MANAGEMENTINTERFACE-033"
+          "MARGO-WFM-MGMT-038",
+          "MARGO-WFM-MGMT-084"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -350,7 +336,7 @@
         "id": "wfm-core-ds-not-immutable",
         "name": "Desired State Manifest Is Not Marked immutable",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-035"
+          "MARGO-WFM-MGMT-086"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -372,7 +358,7 @@
         "id": "wfm-core-ds-2",
         "name": "Retrieve Desired State Without An Accept Header — Defaults To Manifest Media Type",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-007"
+          "MARGO-WFM-MGMT-031"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -392,7 +378,7 @@
         "id": "wfm-core-ds-3",
         "name": "Retrieve Desired State Again With Matching ETag — 304",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-030"
+          "MARGO-WFM-MGMT-060"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -411,7 +397,7 @@
     "id": "wfm-core-content-negotiation",
     "name": "WFM Content Negotiation — Unsupported Accept Header",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-008"
+      "MARGO-WFM-MGMT-030"
     ],
     "description": "A request whose Accept header lists only media types the WFM does not serve is answered 406 with problem details.",
     "steps": [
@@ -419,7 +405,7 @@
         "id": "wfm-core-cn-1",
         "name": "Request With Unsupported Accept Header Returns 406",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-008"
+          "MARGO-WFM-MGMT-030"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -448,7 +434,7 @@
     "id": "wfm-core-status",
     "name": "Deployment Status Reporting",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-023"
+      "MARGO-WFM-MGMT-001"
     ],
     "description": "A status report for a deployment ID the WFM did not assign. The specification leaves the answer open, so the report may be accepted (200/201) or rejected as a semantic error (422); a server error or any other answer fails.",
     "steps": [
@@ -480,7 +466,7 @@
         "validations": [],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ]
       }
     ]
@@ -490,14 +476,13 @@
     "name": "Desired State Manifest — ETag & Content-Type Correctness",
     "description": "Headers of the desired-state manifest: Content-Type, a quoted sha256 ETag that is the digest of the exact response body, the same ETag on a second read, and 304 with an empty body for a conditional request.",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-004",
-      "MARGO-WFM-MANAGEMENTINTERFACE-006",
-      "MARGO-WFM-MANAGEMENTINTERFACE-015",
-      "MARGO-WFM-MANAGEMENTINTERFACE-027",
-      "MARGO-WFM-MANAGEMENTINTERFACE-030",
-      "MARGO-WFM-MANAGEMENTINTERFACE-034",
-      "MARGO-WFM-MANAGEMENTINTERFACE-036",
-      "MARGO-WFM-MANAGEMENTINTERFACE-039"
+      "MARGO-WFM-MGMT-032",
+      "MARGO-WFM-MGMT-033",
+      "MARGO-WFM-MGMT-057",
+      "MARGO-WFM-MGMT-058",
+      "MARGO-WFM-MGMT-060",
+      "MARGO-WFM-MGMT-085",
+      "MARGO-WFM-MGMT-089"
     ],
     "steps": [
       {
@@ -535,10 +520,10 @@
           "etag": "_headers.etag"
         },
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-004",
-          "MARGO-WFM-MANAGEMENTINTERFACE-006",
-          "MARGO-WFM-MANAGEMENTINTERFACE-027",
-          "MARGO-WFM-MANAGEMENTINTERFACE-034"
+          "MARGO-WFM-MGMT-032",
+          "MARGO-WFM-MGMT-033",
+          "MARGO-WFM-MGMT-058",
+          "MARGO-WFM-MGMT-085"
         ]
       },
       {
@@ -561,15 +546,14 @@
         ],
         "extract_context": {},
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-030"
+          "MARGO-WFM-MGMT-060"
         ]
       },
       {
         "id": "step-wfm-hi-1.3",
         "name": "Manifest ETag Is The sha256 Digest Of The Exact Response Body",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-015",
-          "MARGO-WFM-MANAGEMENTINTERFACE-036"
+          "MARGO-WFM-MGMT-057"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -589,7 +573,7 @@
         "id": "step-wfm-hi-1.4",
         "name": "Manifest ETag Is Unchanged On A Second Read",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-039"
+          "MARGO-WFM-MGMT-089"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",

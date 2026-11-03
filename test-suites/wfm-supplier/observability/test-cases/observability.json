@@ -4,14 +4,14 @@
     "name": "OTEL Observability — WFM Accepts Device with otelCollector Capability",
     "description": "The otelCollector capability: the WFM accepts a device that reports a collector and one that reports none, and rejects a value that is not a boolean. Whether telemetry reaches the WFM's observability backend is not checked here.",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-023"
+      "MARGO-WFM-MGMT-001"
     ],
     "steps": [
       {
         "id": "wfm-otel-cap-1",
         "name": "Report Capabilities With otelCollector: true — Accepted",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -57,7 +57,7 @@
         "id": "wfm-otel-cap-2",
         "name": "Report Capabilities With otelCollector: false — Accepted",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",
@@ -104,7 +104,7 @@
         "id": "wfm-otel-cap-3",
         "name": "Reject Capabilities — otelCollector Is Not A Boolean",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-023"
+          "MARGO-WFM-MGMT-001"
         ],
         "method": "PUT",
         "endpoint": "/api/v1/capabilities/wfm-core-device",

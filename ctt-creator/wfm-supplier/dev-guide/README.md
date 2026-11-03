@@ -46,7 +46,6 @@ ctt-runner/wfm-supplier/
 | `management-interface` | Capabilities, desired-state retrieval, content negotiation, status reporting, ETag and cache headers |
 | `deployment-delivery` | Multi-component `ApplicationDeployment` — manifest URLs, deployment YAML, bundle, digests |
 | `identity` | mTLS handshake, trust bundle, refused clients, SVID rotation |
-| `application-registry` | OCI registry conformance (AR-002 through AR-012) |
 | `observability` | A device reporting an OpenTelemetry collector is accepted |
 | `postman-lifecycle`, `postman-error-handling` | The same kind of tests written as Postman collections |
 

@@ -260,7 +260,6 @@ was executed.
 | `management-interface` | Margo Management Interface: Device Capabilities, Desired State, content negotiation, Deployment Status, ETag and cache headers | Work on the Management Interface |
 | `deployment-delivery` | Delivery of a multi-component deployment: State Manifest URLs, ApplicationDeployment YAML, Deployment Bundle and their digests | Work on deployment delivery |
 | `identity` | MIAF: mTLS handshake, rejected clients, SVID rotation | Work on MIAF |
-| `application-registry` | Application Registry (OCI): manifest, media types, pulls, tags | Work on the registry |
 | `observability` | A device that declares an OpenTelemetry collector is accepted | Work on observability |
 | `postman-lifecycle`, `postman-error-handling` | Positive and negative requests authored in Postman | Examples for tests authored in Postman |
 

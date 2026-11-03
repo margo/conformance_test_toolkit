@@ -3,8 +3,11 @@
     "id": "wfm-identity-trust-bundle",
     "name": "MIAF Identity — Trust Bundle Fetch and mTLS Handshake",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-001",
-      "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-002"
+      "MARGO-WFM-IDENT-084",
+      "MARGO-WFM-IDENT-090",
+      "MARGO-WFM-IDENT-091",
+      "MARGO-WFM-IDENT-121",
+      "MARGO-WFM-MGMT-004"
     ],
     "description": "The mTLS handshake: the WFM presents an SVID that chains to the MIS CA and carries the SPIFFE ID of the WFM this client belongs to, and accepts the CTT's client SVID; it refuses a connection without a client certificate and one with a certificate the MIS did not issue.",
     "steps": [
@@ -12,8 +15,8 @@
         "id": "wfm-identity-tb-1",
         "name": "mTLS Handshake Both Ways — The WFM Presents Its SVID And Accepts The CTT's SVID",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-001",
-          "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-002"
+          "MARGO-WFM-IDENT-084",
+          "MARGO-WFM-IDENT-090"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -35,7 +38,8 @@
         "id": "wfm-identity-tb-2",
         "name": "WFM Rejects Connection Without Client Certificate",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-001"
+          "MARGO-WFM-IDENT-121",
+          "MARGO-WFM-MGMT-004"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -55,7 +59,8 @@
         "id": "wfm-identity-tb-3",
         "name": "WFM Refuses A Client Certificate The MIS Did Not Issue",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-002"
+          "MARGO-WFM-IDENT-091",
+          "MARGO-WFM-MGMT-004"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -78,7 +83,8 @@
     "id": "wfm-identity-svid-refresh",
     "name": "MIAF Identity — SVID Rotation Continuity",
     "crIds": [
-      "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-003"
+      "MARGO-WFM-IDENT-090",
+      "MARGO-WFM-IDENT-091"
     ],
     "description": "Verifies that after SVID rotation the WFM continues to accept the client without re-registration: a request with the pre-rotation SVID and a request with the re-issued SVID (same SPIFFE ID) must both succeed. Runs only once the CTT's client SVID has been re-issued and installed again through Setup MIAF Identity, which keeps the SVID it replaces; until then both steps are reported as NOT RUN.",
     "steps": [
@@ -86,7 +92,8 @@
         "id": "wfm-identity-svid-1",
         "name": "Authenticate With The Pre-Rotation SVID (baseline)",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-003"
+          "MARGO-WFM-IDENT-090",
+          "MARGO-WFM-IDENT-091"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -109,7 +116,8 @@
         "id": "wfm-identity-svid-2",
         "name": "Authenticate With Refreshed SVID (after rotation)",
         "crIds": [
-          "MARGO-WFM-MANAGEMENTINTERFACE-MIAF-003"
+          "MARGO-WFM-IDENT-090",
+          "MARGO-WFM-IDENT-091"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
