@@ -6,6 +6,7 @@
   "FolderPath": [
     "../test-suites/wfm-supplier/management-interface/test-cases"
   ],
+  "flexibleOrder": false,
   "testCases": [
     "step-wfm-hi-1.1",
     "step-wfm-hi-1.2",
@@ -24,6 +25,9 @@
     "wfm-core-ds-2",
     "wfm-core-ds-3",
     "wfm-core-ds-bundle-field",
+    "wfm-core-ds-cache-private",
+    "wfm-core-ds-deployments-array",
+    "wfm-core-ds-manifest-version",
     "wfm-core-ds-not-immutable",
     "wfm-core-status",
     "wfm-core-status-1",

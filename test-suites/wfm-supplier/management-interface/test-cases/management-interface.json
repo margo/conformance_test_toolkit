@@ -263,8 +263,12 @@
       "MARGO-WFM-MGMT-031",
       "MARGO-WFM-MGMT-032",
       "MARGO-WFM-MGMT-033",
+      "MARGO-WFM-MGMT-034",
+      "MARGO-WFM-MGMT-037",
       "MARGO-WFM-MGMT-038",
+      "MARGO-WFM-MGMT-045",
       "MARGO-WFM-MGMT-058",
+      "MARGO-WFM-MGMT-059",
       "MARGO-WFM-MGMT-060",
       "MARGO-WFM-MGMT-084",
       "MARGO-WFM-MGMT-085",
@@ -312,9 +316,57 @@
         }
       },
       {
+        "id": "wfm-core-ds-manifest-version",
+        "name": "Desired State: manifestVersion Is A Positive Integer",
+        "crIds": [
+          "MARGO-WFM-MGMT-034"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          },
+          {
+            "field": "manifestVersion",
+            "operation": "matches_regex",
+            "value": "^[1-9][0-9]*$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-ds-deployments-array",
+        "name": "Desired State: deployments Is An Array",
+        "crIds": [
+          "MARGO-WFM-MGMT-045"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "deployments",
+            "operation": "is_array"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
         "id": "wfm-core-ds-bundle-field",
         "name": "Desired State: bundle Is null Exactly When There Are No Deployments",
         "crIds": [
+          "MARGO-WFM-MGMT-037",
           "MARGO-WFM-MGMT-038",
           "MARGO-WFM-MGMT-084"
         ],
@@ -350,6 +402,28 @@
             "field": "_headers.cache-control",
             "operation": "not_contains",
             "value": "immutable"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-ds-cache-private",
+        "name": "Desired State Manifest Is Marked Cache-Control: private",
+        "crIds": [
+          "MARGO-WFM-MGMT-059"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.cache-control",
+            "operation": "contains",
+            "value": "private"
           }
         ],
         "extract_context": {}

@@ -112,6 +112,7 @@
     "crIds": [
       "MARGO-WFM-MGMT-032",
       "MARGO-WFM-MGMT-033",
+      "MARGO-WFM-MGMT-037",
       "MARGO-WFM-MGMT-038",
       "MARGO-WFM-MGMT-058",
       "MARGO-WFM-MGMT-060",
@@ -164,6 +165,7 @@
         "id": "wfm-core-ds-bundle-field",
         "name": "Desired State: bundle Is null Exactly When There Are No Deployments",
         "crIds": [
+          "MARGO-WFM-MGMT-037",
           "MARGO-WFM-MGMT-038",
           "MARGO-WFM-MGMT-084"
         ],

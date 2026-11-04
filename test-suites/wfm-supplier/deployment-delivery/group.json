@@ -6,6 +6,7 @@
   "FolderPath": [
     "../test-suites/wfm-supplier/deployment-delivery/test-cases"
   ],
+  "flexibleOrder": false,
   "testCases": [
     "e2e5bf11-3015-40cd-8e58-96aceb20bc5e",
     "e9089cb2-d210-4434-b736-5cc1f61d2d07",
@@ -15,7 +16,11 @@
     "wfm-mc-bundle-contents",
     "wfm-mc-bundle-fetch",
     "wfm-mc-bundle-wrong-digest",
+    "wfm-mc-deployment-cache",
+    "wfm-mc-deployment-etag-url",
     "wfm-mc-deployment-wrong-digest",
+    "wfm-mc-manifest-bundle-fields",
+    "wfm-mc-manifest-deployment-fields",
     "wfm-mc-manifest-not-immutable",
     "wfm-mc-manifest-urls",
     "wfm-mc-status-failed",
