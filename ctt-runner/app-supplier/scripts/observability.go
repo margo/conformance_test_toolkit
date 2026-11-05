@@ -405,7 +405,7 @@ func renderCompose(
 
     defer os.RemoveAll(dir)
 
-    if err := PullApplicationPackage(repository+":"+revision, dir); err != nil {
+    if _, err := PullApplicationPackage(repository+":"+revision, dir); err != nil {
         return nil, err
     }
 

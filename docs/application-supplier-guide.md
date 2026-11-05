@@ -191,12 +191,13 @@ Failed       : 2
 Reports are stored inside the CTT Runner reports directory.
 
 The HTML header records the input source. For an OCI input, it also records the
-SHA-256 digest of the manifest bytes fetched from the registry, so a report
-against a mutable tag still identifies the package that was checked. Local
-inputs are identified as a directory or archive without exposing their
-filesystem path. When Go embeds VCS build information, the header also records
-the CTT source revision and marks a modified working tree; exported source
-builds may omit that field.
+manifest digest returned by the ORAS pull that supplied the package under test,
+so a report against a mutable tag identifies the package actually pulled. Later
+manifest checks use that digest; the tag check still verifies that the version
+tag points to it. Local inputs are identified as a directory or archive without
+exposing their filesystem path. The CTT launcher records the source checkout's
+Git revision and marks modified tracked files. Direct Go builds use embedded
+VCS information when available; exported source builds may omit that field.
 
 Example:
 

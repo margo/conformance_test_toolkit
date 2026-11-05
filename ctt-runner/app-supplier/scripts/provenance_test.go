@@ -49,6 +49,28 @@ func TestRevisionFromBuildSettings(t *testing.T) {
 	}
 }
 
+func TestCTTSourceRevisionPrefersLauncherRevision(t *testing.T) {
+	t.Setenv("CTT_SOURCE_REVISION", "launcher-commit (modified working tree)")
+	if got := cttSourceRevision(); got != "launcher-commit (modified working tree)" {
+		t.Fatalf("CTT source revision = %q", got)
+	}
+}
+
+func TestPinnedPackageReferenceKeepsThePulledManifest(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	got, err := pinnedPackageReference("oci://localhost:5000/example/app:1.0", digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "localhost:5000/example/app@" + digest
+	if got != want {
+		t.Fatalf("pinned reference = %q, want %q", got, want)
+	}
+	if _, err := pinnedPackageReference("oci://localhost:5000/example/app:1.0", "not-a-digest"); err == nil {
+		t.Fatal("invalid copied digest was accepted")
+	}
+}
+
 func TestHTMLReportIncludesProvenance(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "report.html")
 	report := NewValidationReport()

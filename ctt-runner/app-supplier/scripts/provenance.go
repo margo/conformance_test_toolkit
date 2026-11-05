@@ -17,9 +17,12 @@ func describeInputSource(packageRef string, info os.FileInfo) string {
 	return "local archive"
 }
 
-// cttSourceRevision uses Go's embedded VCS build information when available.
-// An exported source tree or a build without VCS stamping leaves this blank.
+// cttSourceRevision prefers the revision passed by ctt-start.sh. Direct Go
+// builds can still use embedded VCS information when available.
 func cttSourceRevision() string {
+	if revision := os.Getenv("CTT_SOURCE_REVISION"); revision != "" {
+		return revision
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return ""

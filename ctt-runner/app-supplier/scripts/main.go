@@ -27,6 +27,8 @@ func main() {
 	// packageRef is the OCI reference of the Application Package when the
 	// package is validated from the Application Registry.
 	packageRef := ""
+	validationRef := ""
+	pulledManifestDigest := ""
 
 	var info os.FileInfo
 	var err error
@@ -51,7 +53,7 @@ func main() {
 
 		os.RemoveAll(workDir)
 
-		err = PullApplicationPackage(
+		pulledManifestDigest, err = PullApplicationPackage(
 			packageRef,
 			workDir,
 		)
@@ -63,6 +65,12 @@ func main() {
 				err,
 			)
 
+			os.Exit(1)
+		}
+
+		validationRef, err = pinnedPackageReference(packageRef, pulledManifestDigest)
+		if err != nil {
+			fmt.Println("Application Package digest could not be used:", err)
 			os.Exit(1)
 		}
 
@@ -130,7 +138,7 @@ func main() {
 
 		appYaml =
 			ApplicationDescriptionPath(
-				packageRef,
+				validationRef,
 				workDir,
 			)
 	}
@@ -297,6 +305,7 @@ reportDir := filepath.Join(
 		NewValidationReport()
 
 	report.InputSource = describeInputSource(packageRef, info)
+	report.ManifestDigest = pulledManifestDigest
 	report.CTTRevision = cttSourceRevision()
 
 	report.ApplicationName =
@@ -429,7 +438,7 @@ for _, profile := range app.DeploymentProfile {
 	if packageRef != "" {
 
 		ValidateRegistry(
-			packageRef,
+			validationRef,
 			&app,
 			raw,
 			report,

@@ -91,36 +91,53 @@ func IsOCIReference(input string) bool {
 func PullApplicationPackage(
     ref string,
     dir string,
-) error {
+) (string, error) {
 
     repo, err := newRepository(ref)
 
     if err != nil {
-        return err
+        return "", err
     }
 
     if err := os.MkdirAll(dir, 0o755); err != nil {
-        return err
+        return "", err
     }
 
     store, err := file.New(dir)
 
     if err != nil {
-        return err
+        return "", err
     }
 
     defer store.Close()
 
     tag := repo.Reference.Reference
 
-    _, err = oras.Copy(
+    copied, err := oras.Copy(
         context.Background(),
         repo, tag,
         store, tag,
         oras.DefaultCopyOptions,
     )
 
-    return err
+    if err != nil {
+        return "", err
+    }
+
+    return copied.Digest.String(), nil
+}
+
+// pinnedPackageReference addresses the manifest returned by the first pull.
+// Later checks must not silently follow a tag that changed after that pull.
+func pinnedPackageReference(ref string, manifestDigest string) (string, error) {
+    repo, err := remote.NewRepository(strings.TrimPrefix(ref, schemeOCI))
+    if err != nil {
+        return "", err
+    }
+    if _, err := digest.Parse(manifestDigest); err != nil {
+        return "", err
+    }
+    return repo.Reference.Registry + "/" + repo.Reference.Repository + "@" + manifestDigest, nil
 }
 
 // ApplicationDescriptionPath returns the path of the Application Description in
@@ -326,10 +343,6 @@ func ValidateRegistry(
 
         return
     }
-
-    // Record the bytes actually fetched so a shared report identifies the
-    // package tested even when the input used a mutable tag.
-    report.ManifestDigest = sha256Digest(body)
 
     digest, err := resolveDigest(repo, repo.Reference.Reference)
 
