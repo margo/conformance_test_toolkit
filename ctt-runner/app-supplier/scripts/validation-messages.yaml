@@ -1,5 +1,5 @@
 apiVersion:
-  crId:
+  crId: MARGO-APP-APPDESC-001
   check:
     datatype: string
     expected: v1
@@ -12,7 +12,7 @@ apiVersion:
     invalid: API version MUST be v1.
 
 id:
-  crId: MARGO-APP-APPLICATIONDESCRIPTION-001, MARGO-APP-APPLICATIONDESCRIPTION-006, MARGO-APP-APPLICATIONDESCRIPTION-005
+  crId: MARGO-APP-APPDESC-002, MARGO-APP-APPDESC-048, MARGO-APP-APPDESC-049
   check:
     datatype: string
     expected: lowercase letters, numbers and dashes only, max length=200
@@ -25,7 +25,7 @@ id:
     invalid: Application identifier does not conform to the required naming convention.
 
 metadata.name:
-  crId:
+  crId: MARGO-APP-APPDESC-005
   check:
     datatype: string
     expected: Required (non-empty)
@@ -40,7 +40,7 @@ metadata.name:
 metadata.version:
   # MARGO-APP-APPLICATIONREGISTRY-002 (tag == metadata.version) is judged by
   # the Application Registry check (registry.go), not by this presence check.
-  crId:
+  crId: MARGO-APP-APPDESC-006
   check:
     datatype: string
     expected: Required (non-empty)
@@ -51,7 +51,7 @@ metadata.version:
   fail:
     missing: Application version is required but was not provided.
 metadata.catalog.organization:
-  crId:
+  crId: MARGO-APP-APPDESC-008
   check:
     datatype: array
     expected: At least one organization
@@ -63,7 +63,7 @@ metadata.catalog.organization:
     missing: At least one organization definition is required.
 
 metadata.catalog.organization.name:
-  crId:
+  crId: MARGO-APP-APPDESC-009
   check:
     datatype: string
     expected: Required (non-empty)
@@ -87,7 +87,7 @@ deploymentProfiles:
     missing: At least one deployment profile is required.
 
 deploymentProfiles.type:
-  crId:
+  crId: MARGO-APP-APPDESC-010
   check:
     datatype: string
     expected: helm | compose
@@ -100,7 +100,7 @@ deploymentProfiles.type:
     invalid: Deployment profile type does not conform to the supported deployment specifications.
 
 deploymentProfiles.id:
-  crId:
+  crId: MARGO-APP-APPDESC-011
   check:
     datatype: string
     expected: Required (non-empty)
@@ -112,7 +112,7 @@ deploymentProfiles.id:
     missing: Deployment profile identifier is required but was not provided.
 
 deploymentProfiles.components:
-  crId:
+  crId: MARGO-APP-APPDESC-012
   check:
     datatype: array
     expected: At least one component definition
@@ -124,7 +124,7 @@ deploymentProfiles.components:
     missing: Deployment profile does not contain any component definitions.
 
 deploymentProfiles.components.name:
-  crId: MARGO-APP-APPLICATIONDESCRIPTION-002,MARGO-APP-APPLICATIONDESCRIPTION-007
+  crId: MARGO-APP-APPDESC-030,MARGO-APP-APPDESC-053
   check:
     datatype: string
     expected: Required (non-empty)
@@ -136,7 +136,7 @@ deploymentProfiles.components.name:
     missing: Component name is required but was not provided.
 
 deploymentProfiles.components.properties:
-  crId:
+  crId: MARGO-APP-APPDESC-031
   check:
     datatype: map
     expected: Component properties required
@@ -148,7 +148,7 @@ deploymentProfiles.components.properties:
     missing: Component configuration properties are not defined.
 
 deploymentProfiles.components.properties.repository:
-  crId:
+  crId: MARGO-APP-APPDESC-032
   check:
     datatype: string
     expected: Repository URL required
@@ -160,19 +160,20 @@ deploymentProfiles.components.properties.repository:
     missing: Repository configuration is required but was not provided.
 
 deploymentProfiles.components.properties.revision:
-  crId:
+  crId: MARGO-APP-APPDESC-033
   check:
     datatype: string
-    expected: Required (non-empty)
+    expected: Valid SemVer 2.0 without leading v
 
   pass:
-    description: Revision information conforms to the deployment requirements.
+    description: Component revision conforms to the required SemVer specification.
 
   fail:
     missing: Revision information is required but was not provided.
+    invalid: Component revision must be a valid SemVer 2.0 string without a leading v.
 
 configuration.schema.name:
-  crId:
+  crId: MARGO-APP-APPDESC-041
   check:
     datatype: string
     expected: Schema name required
@@ -184,19 +185,20 @@ configuration.schema.name:
     missing: Schema name is required but was not provided.
 
 configuration.schema.dataType:
-  crId:
+  crId: MARGO-APP-APPDESC-041
   check:
     datatype: string
-    expected: Schema data type required
+    expected: string | integer | double | boolean | array[string] | array[integer] | array[double] | array[boolean]
 
   pass:
-    description: Schema conforms to the defined specification.
+    description: Schema data type conforms to the specification.
 
   fail:
-    missing: Schema does not define a data type.
+    missing: Schema data type is required but was not provided.
+    invalid: Schema data type is not one of the supported Margo data types.
 
 configuration.sections.settings.parameter:
-  crId:
+  crId: MARGO-APP-APPDESC-040
   check:
     datatype: reference
     expected: Must match a parameter definition
@@ -208,7 +210,7 @@ configuration.sections.settings.parameter:
     invalid: Referenced parameter is not defined.
 
 configuration.sections.settings.schema:
-  crId:
+  crId: MARGO-APP-APPDESC-039
   check:
     datatype: reference
     expected: Must match a schema definition
@@ -220,7 +222,7 @@ configuration.sections.settings.schema:
     invalid: Referenced schema is not defined.
 
 parameters.targets.components:
-  crId: MARGO-APP-APPLICATIONDESCRIPTION-003
+  crId: MARGO-APP-APPDESC-035, MARGO-APP-APPDESC-037
   check:
     datatype: reference
     expected: Must match a deployment component
@@ -232,7 +234,7 @@ parameters.targets.components:
     invalid: Parameter references a component that does not conform to the defined deployment configuration.
 
 parameters.targets.pointer:
-  crId:
+  crId: MARGO-APP-APPDESC-036
   check:
     datatype: string
     expected: Required (non-empty)
@@ -242,3 +244,41 @@ parameters.targets.pointer:
 
   fail:
     missing: Parameter target pointer is required but was not provided.
+
+deploymentProfiles.deviceConstraints.capacityRequirements.cpu.cores:
+  crId: MARGO-APP-APPDESC-013
+  check:
+    datatype: number
+    expected: Required when cpu is present
+
+  pass:
+    description: CPU core requirements conform to the device constraint specification.
+
+  fail:
+    missing: CPU cores are required when capacityRequirements.cpu is defined.
+
+propertySelector.matchExpressions.key:
+  crId: MARGO-APP-APPDESC-014
+  check:
+    datatype: string
+    expected: RFC6901 JSON Pointer
+
+  pass:
+    description: Property selector key conforms to the RFC6901 JSON Pointer format.
+
+  fail:
+    missing: Property selector key is required but was not provided.
+    invalid: Property selector key is not a valid RFC6901 JSON Pointer.
+
+propertySelector.matchExpressions:
+  crId: MARGO-APP-APPDESC-018
+  check:
+    datatype: array
+    expected: At least one match expression
+
+  pass:
+    description: Property selector contains valid match expressions.
+
+  fail:
+    missing: Property selector must define one or more match expressions.
+    invalid: Property selector does not contain the required match expressions.

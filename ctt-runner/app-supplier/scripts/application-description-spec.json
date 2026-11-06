@@ -119,7 +119,17 @@
     "type": "string",
     "required": true,
     "displayName": "schema.dataType",
-    "expected": "Schema data type required"
+    "expected": "Schema data type required",
+    "enum": [
+    "string",
+    "integer",
+    "double",
+    "boolean",
+    "array[string]",
+    "array[integer]",
+    "array[double]",
+    "array[boolean]"
+  ]
   },
 
   "configuration.sections.settings.parameter": {
@@ -148,5 +158,24 @@
     "required": true,
     "displayName": "parameter.target.pointer",
     "expected": "Required (non-empty)"
-  }
+  },
+
+  "deploymentProfiles.deviceConstraints.capacityRequirements.cpu.cores": {
+  "type": "number",
+  "required": true,
+  "displayName": "cpu.cores",
+  "expected": "Required when cpu is present"
+},
+"propertySelector.matchExpressions.key": {
+  "type": "string",
+  "required": true,
+  "regex": "^/.*",
+  "displayName": "propertySelector.key",
+  "expected": "RFC6901 JSON Pointer"
+},
+"propertySelector.matchExpressions": {
+  "type": "array",
+  "required": true,
+  "minItems": 1
+}
 }
