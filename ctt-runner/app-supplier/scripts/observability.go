@@ -164,12 +164,29 @@ func validateOTLP(
     }
 
     var problems []string
+    var unresolved []string
 
     for _, v := range otelExporterVars {
 
         value, ok := facts.Env[v]
 
         if !ok {
+            continue
+        }
+
+        if strings.Contains(value, "${") {
+            // renderCompose does not apply Compose interpolation. Check a
+            // declared default, but do not claim the deployed value is known.
+            fallback, hasDefault := composeInterpolationDefault(value)
+            if !hasDefault {
+                unresolved = append(unresolved, v+"="+value)
+                continue
+            }
+            if !otlpExporters[strings.TrimSpace(fallback)] {
+                problems = append(problems, v+"="+value)
+            } else {
+                unresolved = append(unresolved, v+"="+value)
+            }
             continue
         }
 
@@ -184,7 +201,22 @@ func validateOTLP(
 
     for _, v := range otelProtocolVars {
 
-        if value, ok := facts.Env[v]; ok && !otlpProtocols[value] {
+        value, ok := facts.Env[v]
+        if !ok {
+            continue
+        }
+        if strings.Contains(value, "${") {
+            fallback, hasDefault := composeInterpolationDefault(value)
+            if !hasDefault {
+                unresolved = append(unresolved, v+"="+value)
+            } else if !otlpProtocols[strings.TrimSpace(fallback)] {
+                problems = append(problems, v+"="+value)
+            } else {
+                unresolved = append(unresolved, v+"="+value)
+            }
+            continue
+        }
+        if !otlpProtocols[value] {
             problems = append(problems, v+"="+value)
         }
     }
@@ -199,10 +231,44 @@ func validateOTLP(
         return
     }
 
+    if len(unresolved) > 0 {
+        report.Mark(
+            "NOT RUN",
+            strings.Join(unresolved, "; "),
+            "Compose interpolation has a permitted default, but the effective deployment value was not rendered or observed.",
+        )
+        return
+    }
+
     report.Pass(
         strings.Join(otelVars, ", "),
         "The workload's OpenTelemetry configuration uses OTLP.",
     )
+}
+
+// composeInterpolationDefault reads only a complete ${NAME:-default} or
+// ${NAME-default} expression. Other Compose expressions remain inconclusive.
+func composeInterpolationDefault(value string) (string, bool) {
+    if !strings.HasPrefix(value, "${") || !strings.HasSuffix(value, "}") {
+        return "", false
+    }
+    body := value[2 : len(value)-1]
+    for _, separator := range []string{":-", "-"} {
+        if i := strings.Index(body, separator); i > 0 {
+            name := body[:i]
+            for j, r := range name {
+                if !(r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (j > 0 && r >= '0' && r <= '9')) {
+                    return "", false
+                }
+            }
+            fallback := body[i+len(separator):]
+            if strings.ContainsAny(fallback, "{}") {
+                return "", false
+            }
+            return fallback, true
+        }
+    }
+    return "", false
 }
 
 // validateAutoInstrumentation reports MARGO-APP-OBSERVABILITY-008 for one
