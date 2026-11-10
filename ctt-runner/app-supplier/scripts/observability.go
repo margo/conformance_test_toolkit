@@ -164,6 +164,7 @@ func validateOTLP(
     }
 
     var problems []string
+    var unresolved []string
 
     for _, v := range otelExporterVars {
 
@@ -171,6 +172,17 @@ func validateOTLP(
 
         if !ok {
             continue
+        }
+
+        if strings.Contains(value, "${") {
+            // Component parameters were applied by renderComponent. Resolve
+            // a remaining default before using the same checks as plain values.
+            fallback, hasDefault := composeInterpolationDefault(value)
+            if !hasDefault {
+                unresolved = append(unresolved, v+"="+value)
+                continue
+            }
+            value = fallback
         }
 
         for _, exporter := range strings.Split(value, ",") {
@@ -184,7 +196,19 @@ func validateOTLP(
 
     for _, v := range otelProtocolVars {
 
-        if value, ok := facts.Env[v]; ok && !otlpProtocols[value] {
+        value, ok := facts.Env[v]
+        if !ok {
+            continue
+        }
+        if strings.Contains(value, "${") {
+            fallback, hasDefault := composeInterpolationDefault(value)
+            if !hasDefault {
+                unresolved = append(unresolved, v+"="+value)
+                continue
+            }
+            value = fallback
+        }
+        if !otlpProtocols[value] {
             problems = append(problems, v+"="+value)
         }
     }
@@ -199,10 +223,77 @@ func validateOTLP(
         return
     }
 
+    if len(unresolved) > 0 {
+        report.Mark(
+            "NOT RUN",
+            strings.Join(unresolved, "; "),
+            "Compose interpolation has no known component parameter value or default.",
+        )
+        return
+    }
+
     report.Pass(
         strings.Join(otelVars, ", "),
         "The workload's OpenTelemetry configuration uses OTLP.",
     )
+}
+
+// composeInterpolationDefault reads only a complete ${NAME:-default} or
+// ${NAME-default} expression. Other Compose expressions remain inconclusive.
+func composeInterpolationDefault(value string) (string, bool) {
+    _, fallback, hasDefault, ok := composeInterpolation(value)
+    return fallback, ok && hasDefault
+}
+
+// composeInterpolation recognises complete variable and default expressions;
+// compound and nested expressions remain inconclusive.
+func composeInterpolation(value string) (string, string, bool, bool) {
+    if !strings.HasPrefix(value, "${") || !strings.HasSuffix(value, "}") {
+        return "", "", false, false
+    }
+    body := value[2 : len(value)-1]
+    name, fallback, hasDefault := body, "", false
+    for _, separator := range []string{":-", "-"} {
+        if i := strings.Index(body, separator); i > 0 {
+            name, fallback, hasDefault = body[:i], body[i+len(separator):], true
+            break
+        }
+    }
+    if name == "" || strings.ContainsAny(fallback, "{}") {
+        return "", "", false, false
+    }
+    for j, r := range name {
+        if !(r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (j > 0 && r >= '0' && r <= '9')) {
+            return "", "", false, false
+        }
+    }
+    return name, fallback, hasDefault, true
+}
+
+// applyComposeParameters resolves environment references using only values
+// declared for this component; the validator's host environment is not used.
+func applyComposeParameters(facts *workloadFacts, component string, parameters map[string]Parameter) {
+    for env, expression := range facts.Env {
+        name, _, _, ok := composeInterpolation(expression)
+        if !ok {
+            continue
+        }
+        for _, parameter := range parameters {
+            if parameter.Value == nil {
+                continue
+            }
+            for _, target := range parameter.Targets {
+                if target.Pointer != name {
+                    continue
+                }
+                for _, targetComponent := range target.Components {
+                    if targetComponent == component {
+                        facts.Env[env] = fmt.Sprint(parameter.Value)
+                    }
+                }
+            }
+        }
+    }
 }
 
 // validateAutoInstrumentation reports MARGO-APP-OBSERVABILITY-008 for one
@@ -339,6 +430,10 @@ func renderComponent(
         } else {
             collectFacts(doc, &facts)
         }
+    }
+
+    if profileType == "compose" {
+        applyComposeParameters(&facts, c.Name, parameters)
     }
 
     return facts, nil
