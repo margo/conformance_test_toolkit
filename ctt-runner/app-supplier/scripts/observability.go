@@ -175,19 +175,14 @@ func validateOTLP(
         }
 
         if strings.Contains(value, "${") {
-            // renderCompose does not apply Compose interpolation. Check a
-            // declared default, but do not claim the deployed value is known.
+            // Component parameters were applied by renderComponent. Resolve
+            // a remaining default before using the same checks as plain values.
             fallback, hasDefault := composeInterpolationDefault(value)
             if !hasDefault {
                 unresolved = append(unresolved, v+"="+value)
                 continue
             }
-            if !otlpExporters[strings.TrimSpace(fallback)] {
-                problems = append(problems, v+"="+value)
-            } else {
-                unresolved = append(unresolved, v+"="+value)
-            }
-            continue
+            value = fallback
         }
 
         for _, exporter := range strings.Split(value, ",") {
@@ -209,12 +204,9 @@ func validateOTLP(
             fallback, hasDefault := composeInterpolationDefault(value)
             if !hasDefault {
                 unresolved = append(unresolved, v+"="+value)
-            } else if !otlpProtocols[strings.TrimSpace(fallback)] {
-                problems = append(problems, v+"="+value)
-            } else {
-                unresolved = append(unresolved, v+"="+value)
+                continue
             }
-            continue
+            value = fallback
         }
         if !otlpProtocols[value] {
             problems = append(problems, v+"="+value)
@@ -235,7 +227,7 @@ func validateOTLP(
         report.Mark(
             "NOT RUN",
             strings.Join(unresolved, "; "),
-            "Compose interpolation has a permitted default, but the effective deployment value was not rendered or observed.",
+            "Compose interpolation has no known component parameter value or default.",
         )
         return
     }
@@ -249,26 +241,59 @@ func validateOTLP(
 // composeInterpolationDefault reads only a complete ${NAME:-default} or
 // ${NAME-default} expression. Other Compose expressions remain inconclusive.
 func composeInterpolationDefault(value string) (string, bool) {
+    _, fallback, hasDefault, ok := composeInterpolation(value)
+    return fallback, ok && hasDefault
+}
+
+// composeInterpolation recognises complete variable and default expressions;
+// compound and nested expressions remain inconclusive.
+func composeInterpolation(value string) (string, string, bool, bool) {
     if !strings.HasPrefix(value, "${") || !strings.HasSuffix(value, "}") {
-        return "", false
+        return "", "", false, false
     }
     body := value[2 : len(value)-1]
+    name, fallback, hasDefault := body, "", false
     for _, separator := range []string{":-", "-"} {
         if i := strings.Index(body, separator); i > 0 {
-            name := body[:i]
-            for j, r := range name {
-                if !(r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (j > 0 && r >= '0' && r <= '9')) {
-                    return "", false
-                }
-            }
-            fallback := body[i+len(separator):]
-            if strings.ContainsAny(fallback, "{}") {
-                return "", false
-            }
-            return fallback, true
+            name, fallback, hasDefault = body[:i], body[i+len(separator):], true
+            break
         }
     }
-    return "", false
+    if name == "" || strings.ContainsAny(fallback, "{}") {
+        return "", "", false, false
+    }
+    for j, r := range name {
+        if !(r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (j > 0 && r >= '0' && r <= '9')) {
+            return "", "", false, false
+        }
+    }
+    return name, fallback, hasDefault, true
+}
+
+// applyComposeParameters resolves environment references using only values
+// declared for this component; the validator's host environment is not used.
+func applyComposeParameters(facts *workloadFacts, component string, parameters map[string]Parameter) {
+    for env, expression := range facts.Env {
+        name, _, _, ok := composeInterpolation(expression)
+        if !ok {
+            continue
+        }
+        for _, parameter := range parameters {
+            if parameter.Value == nil {
+                continue
+            }
+            for _, target := range parameter.Targets {
+                if target.Pointer != name {
+                    continue
+                }
+                for _, targetComponent := range target.Components {
+                    if targetComponent == component {
+                        facts.Env[env] = fmt.Sprint(parameter.Value)
+                    }
+                }
+            }
+        }
+    }
 }
 
 // validateAutoInstrumentation reports MARGO-APP-OBSERVABILITY-008 for one
@@ -405,6 +430,10 @@ func renderComponent(
         } else {
             collectFacts(doc, &facts)
         }
+    }
+
+    if profileType == "compose" {
+        applyComposeParameters(&facts, c.Name, parameters)
     }
 
     return facts, nil
