@@ -25,7 +25,7 @@ id:
     invalid: Application identifier does not conform to the required naming convention.
 
 metadata.name:
-  crId: MARGO-APP-APPDESC-005
+  crId: MARGO-APP-APPDESC-005, MARGO-APP-APPDESC-003
   check:
     datatype: string
     expected: Required (non-empty)
@@ -210,7 +210,7 @@ configuration.sections.settings.parameter:
     invalid: Referenced parameter is not defined.
 
 configuration.sections.settings.schema:
-  crId: MARGO-APP-APPDESC-039
+  crId: MARGO-APP-APPDESC-040
   check:
     datatype: reference
     expected: Must match a schema definition
@@ -282,3 +282,136 @@ propertySelector.matchExpressions:
   fail:
     missing: Property selector must define one or more match expressions.
     invalid: Property selector does not contain the required match expressions.
+
+matchExpressions.key:
+  crId: MARGO-APP-APPDESC-019
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Match expression key conforms to the specification.
+
+  fail:
+    missing: Match expression key is required but was not provided.
+
+matchExpressions.operator:
+  crId: MARGO-APP-APPDESC-019
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Match expression operator conforms to the specification.
+
+  fail:
+    missing: Match expression operator is required but was not provided.
+
+configuration.sections.name:
+  crId: MARGO-APP-APPDESC-039
+  check:
+    datatype: string
+    expected: Required (non-empty)
+
+  pass:
+    description: Configuration section name conforms to the specification.
+
+  fail:
+    missing: Configuration section name is required.
+
+configuration.sections.settings:
+  crId: MARGO-APP-APPDESC-039
+  check:
+    datatype: array
+    expected: At least one setting
+
+  pass:
+    description: Configuration section contains settings.
+
+  fail:
+    missing: Configuration section must contain one or more settings.
+
+parameters.targets:
+  crId: MARGO-APP-APPDESC-035
+  check:
+    datatype: array
+    expected: At least one target
+
+  pass:
+    description: Parameter targets conform to the specification.
+
+  fail:
+    missing: Parameter targets are required.
+
+matchExpressions.in-notin.values:
+  crId: MARGO-APP-APPDESC-020
+  check:
+    datatype: array
+    expected: Values required for In and NotIn operators
+
+  pass:
+    description: In/NotIn operator contains the required values.
+
+  fail:
+    missing: Values must be specified for In and NotIn operators.
+
+matchExpressions.exists.values:
+  crId: MARGO-APP-APPDESC-023
+  check:
+    datatype: none
+    expected: Values must be omitted
+
+  pass:
+    description: Exists/DoesNotExist operator correctly omits values.
+
+  fail:
+    invalid: Values must not be specified for Exists or DoesNotExist operators.
+
+matchExpressions.gtlt.values:
+  crId: MARGO-APP-APPDESC-024
+  check:
+    datatype: array
+    expected: Values required for Gt and Lt operators
+
+  pass:
+    description: Gt/Lt operator contains the required value.
+
+  fail:
+    missing: Values must be specified for Gt and Lt operators.
+
+matchExpressions.gtlt.singleValue:
+  crId: MARGO-APP-APPDESC-026
+  check:
+    datatype: number
+    expected: Exactly one value
+
+  pass:
+    description: Gt/Lt operator contains exactly one value.
+
+  fail:
+    invalid: Gt/Lt operators must contain exactly one value.
+
+matchExpressions.contains.itemSelector:
+  crId: MARGO-APP-APPDESC-027
+  check:
+    datatype: object
+    expected: itemSelector required
+
+  pass:
+    description: ContainsAll/ContainsAny operator defines itemSelector.
+
+  fail:
+    missing: itemSelector is required for ContainsAll and ContainsAny operators.
+
+
+matchExpressions.contains.values:
+  crId: MARGO-APP-APPDESC-029
+  check:
+    datatype: none
+    expected: Values must be omitted
+
+  pass:
+    description: ContainsAll/ContainsAny operator correctly omits values.
+
+  fail:
+    invalid: Values must not be specified for ContainsAll or ContainsAny operators.

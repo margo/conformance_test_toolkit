@@ -177,5 +177,33 @@
   "type": "array",
   "required": true,
   "minItems": 1
+},
+"matchExpressions.key": {
+  "type": "string",
+  "required": true
+},
+"matchExpressions.operator": {
+  "type": "string",
+  "required": true
+},
+"configuration.sections.name": {
+  "type": "string",
+  "required": true,
+  "displayName": "configuration.section.name",
+  "expected": "Required (non-empty)"
+},
+"configuration.sections.settings": {
+  "type": "array",
+  "required": true,
+  "minItems": 1,
+  "displayName": "configuration.section.settings",
+  "expected": "At least one setting"
+},
+"parameters.targets": {
+  "type": "array",
+  "required": true,
+  "minItems": 1,
+  "displayName": "parameter.targets",
+  "expected": "At least one target"
 }
 }

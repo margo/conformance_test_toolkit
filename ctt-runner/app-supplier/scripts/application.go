@@ -61,6 +61,11 @@ func ValidateAppDescription(
             raw,
         )
     }
+ValidateMatchExpressions(
+    raw,
+    report,
+    messages,
+)
 
     return nil
 }
@@ -575,6 +580,295 @@ func failInvalid(
     actual string,
     msg ValidationMessage,
 ) {
+
+    fail(
+        report,
+        actual,
+        msg.Fail.Invalid,
+    )
+}
+
+
+func ValidateMatchExpressions(
+    raw map[string]any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+
+    expressionLists := GetValues(
+        raw,
+        "matchExpressions",
+    )
+
+    for _, expressionList := range expressionLists {
+
+        expressions, ok := expressionList.([]any)
+        if !ok {
+            continue
+        }
+
+        for _, expression := range expressions {
+
+            m, ok := expression.(map[string]any)
+            if !ok {
+                continue
+            }
+
+            operator, _ := m["operator"].(string)
+
+            switch operator {
+
+            case "In", "NotIn":
+                validateInOperator(
+                    m,
+                    report,
+                    messages,
+                )
+
+            case "Exists", "DoesNotExist":
+                validateExistsOperator(
+                    m,
+                    report,
+                    messages,
+                )
+
+            case "Gt", "Lt":
+                validateGtLtOperator(
+                    m,
+                    report,
+                    messages,
+                )
+
+            case "ContainsAll", "ContainsAny":
+                validateContainsOperator(
+                    m,
+                    report,
+                    messages,
+                )
+            }
+        }
+    }
+}
+func validateInOperator(
+    expr map[string]any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+
+    msg := messages["matchExpressions.in-notin.values"]
+
+    check(
+        report,
+        msg.CRID,
+        "matchExpressions.in-notin.values",
+        msg.Check.Datatype,
+        msg.Check.Expected,
+    )
+
+    if _, ok := expr["values"]; !ok {
+
+        fail(
+            report,
+            "(missing)",
+            msg.Fail.Missing,
+        )
+
+        return
+    }
+
+    pass(
+        report,
+        "present",
+        msg.Pass.Description,
+    )
+}
+func validateExistsOperator(
+    expr map[string]any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+
+    msg := messages["matchExpressions.exists.values"]
+
+    check(
+        report,
+        msg.CRID,
+        "matchExpressions.exists.values",
+        msg.Check.Datatype,
+        msg.Check.Expected,
+    )
+
+    if _, ok := expr["values"]; ok {
+
+        fail(
+            report,
+            "values present",
+            msg.Fail.Invalid,
+        )
+
+        return
+    }
+
+    pass(
+        report,
+        "(omitted)",
+        msg.Pass.Description,
+    )
+}
+
+
+func validateGtLtOperator(
+    expr map[string]any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+
+    msg024 := messages["matchExpressions.gtlt.values"]
+
+    check(
+        report,
+        msg024.CRID,
+        "matchExpressions.gtlt.values",
+        msg024.Check.Datatype,
+        msg024.Check.Expected,
+    )
+
+    values, ok := expr["values"]
+
+    if !ok {
+
+        fail(
+            report,
+            "(missing)",
+            msg024.Fail.Missing,
+        )
+
+        return
+    }
+
+    pass(
+        report,
+        "present",
+        msg024.Pass.Description,
+    )
+
+    msg026 := messages["matchExpressions.gtlt.singleValue"]
+
+    check(
+        report,
+        msg026.CRID,
+        "matchExpressions.gtlt.singleValue",
+        msg026.Check.Datatype,
+        msg026.Check.Expected,
+    )
+
+    arr, ok := values.([]any)
+
+    if !ok || len(arr) != 1 {
+
+        fail(
+            report,
+            fmt.Sprintf("%v", values),
+            msg026.Fail.Invalid,
+        )
+
+        return
+    }
+
+    pass(
+        report,
+        fmt.Sprintf("%v", arr[0]),
+        msg026.Pass.Description,
+    )
+}
+func validateContainsOperator(
+    expr map[string]any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+
+    msg027 := messages["matchExpressions.contains.itemSelector"]
+
+    check(
+        report,
+        msg027.CRID,
+        "matchExpressions.contains.itemSelector",
+        msg027.Check.Datatype,
+        msg027.Check.Expected,
+    )
+
+    if _, ok := expr["itemSelector"]; !ok {
+
+        fail(
+            report,
+            "(missing)",
+            msg027.Fail.Missing,
+        )
+
+    } else {
+
+        pass(
+            report,
+            "present",
+            msg027.Pass.Description,
+        )
+    }
+
+    msg029 := messages["matchExpressions.contains.values"]
+
+    check(
+        report,
+        msg029.CRID,
+        "matchExpressions.contains.values",
+        msg029.Check.Datatype,
+        msg029.Check.Expected,
+    )
+
+    if _, ok := expr["values"]; ok {
+
+        fail(
+            report,
+            "values present",
+            msg029.Fail.Invalid,
+        )
+
+        return
+    }
+
+    pass(
+        report,
+        "(omitted)",
+        msg029.Pass.Description,
+    )
+}
+
+
+
+func runCustomCheck(
+    report *ValidationReport,
+    msg ValidationMessage,
+    actual string,
+    success bool,
+) {
+
+    check(
+        report,
+        msg.CRID,
+        "",
+        msg.Check.Datatype,
+        msg.Check.Expected,
+    )
+
+    if success {
+
+        pass(
+            report,
+            actual,
+            msg.Pass.Description,
+        )
+
+        return
+    }
 
     fail(
         report,
