@@ -1,6 +1,15 @@
-# The image needs only the Go module files; the repository is mounted at run time.
-*
-!ctt-runner/device-supplier/go.mod
-!ctt-runner/device-supplier/go.sum
-!ctt-runner/app-supplier/go.mod
-!ctt-runner/app-supplier/go.sum
+# Keep the image build context small, and never put identities, private keys
+# or reports into an image.
+.git
+**/node_modules
+**/.venv
+container/ctt-data
+ctt-runner/wfm-supplier/utils/fixtures/miaf/real/*.pem
+ctt-runner/device-supplier/bin
+ctt-runner/device-supplier/certs
+ctt-runner/reports/wfm-supplier
+ctt-runner/reports/device-supplier
+ctt-runner/reports/application-supplier
+ctt-runner/reports/scripts/signing-identity
+ctt-runner/reports/scripts/fonts
+**/*.log

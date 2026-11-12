@@ -1,0 +1,27 @@
+{
+  "distSpecVersion": "1.1.1",
+  "storage": {
+    "rootDirectory": "/ctt-data/zot/storage",
+    "dedupe": true,
+    "gc": true,
+    "gcDelay": "1h",
+    "gcInterval": "6h"
+  },
+  "http": {
+    "address": "0.0.0.0",
+    "port": "5443",
+    "realm": "zot",
+    "tls": {
+      "cert": "/ctt-data/zot/certs/server-chain.crt",
+      "key": "/ctt-data/zot/certs/server.key"
+    },
+    "auth": {
+      "htpasswd": { "path": "/ctt-data/zot/htpasswd" },
+      "failDelay": 5
+    }
+  },
+  "log": {
+    "level": "info",
+    "audit": "/ctt-data/zot/audit.log"
+  }
+}

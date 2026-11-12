@@ -55,3 +55,6 @@ ctt-runner/reports/scripts/.venv/
 ctt-runner/reports/scripts/pdf_signer.log
 ctt-runner/reports/scripts/generatedReport/
 ctt-runner/reports/scripts/signing-identity/
+
+# Container runtime data (registry CA/keys, identities, reports)
+container/ctt-data/
