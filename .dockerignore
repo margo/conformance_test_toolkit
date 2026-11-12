@@ -1,5 +1,3 @@
-# Keep the image build context small, and never put identities, private keys
-# or reports into an image.
 .git
 **/node_modules
 **/.venv
@@ -11,5 +9,4 @@ ctt-runner/reports/wfm-supplier
 ctt-runner/reports/device-supplier
 ctt-runner/reports/application-supplier
 ctt-runner/reports/scripts/signing-identity
-ctt-runner/reports/scripts/fonts
 **/*.log

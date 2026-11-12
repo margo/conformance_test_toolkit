@@ -1,0 +1,42 @@
+name: margo-ctt
+
+services:
+  ctt-test-suites:
+    container_name: ctt-test-suites
+    image: ${CTT_TEST_SUITES_IMAGE_REF:-ghcr.io/margo/margo.org/ctt-test-suites:latest}
+    build:
+      context: ..
+      dockerfile: container/ctt-test-suites/Dockerfile
+    volumes:
+      - ctt-test-suites:/shared
+
+  ctt-runner:
+    container_name: ctt-runner
+    image: ${CTT_RUNNER_IMAGE_REF:-ghcr.io/margo/margo.org/ctt-runner:latest}
+    build:
+      context: ..
+      dockerfile: container/ctt-runner/Dockerfile
+    depends_on:
+      ctt-test-suites:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      CTT_REGISTRY_HOST: ${CTT_REGISTRY_HOST:-localhost}
+      REGISTRY_REF: 127.0.0.1:5443/library/margo-ctt-hello-world:1.0.0
+    ports:
+      - 5443:5443
+      - 3001:3001
+      - 3003:3003
+    volumes:
+      - ctt-test-suites:/ctt/test-suites:ro
+      - ./ctt-data:/ctt-data
+      - ./ctt-data/wfm-identity:/ctt/ctt-runner/wfm-supplier/utils/fixtures/miaf/real
+      - ./ctt-data/signing-identity:/ctt/ctt-runner/reports/scripts/signing-identity
+      - ./ctt-data/reports:/ctt/ctt-runner/reports/wfm-supplier
+
+volumes:
+  ctt-test-suites:
