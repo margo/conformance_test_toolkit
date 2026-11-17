@@ -367,18 +367,6 @@ matchExpressions.exists.values:
   fail:
     invalid: Values must not be specified for Exists or DoesNotExist operators.
 
-matchExpressions.gtlt.values:
-  crId: MARGO-APP-APPDESC-024
-  check:
-    datatype: array
-    expected: Values required for Gt and Lt operators
-
-  pass:
-    description: Gt/Lt operator contains the required value.
-
-  fail:
-    missing: Values must be specified for Gt and Lt operators.
-
 matchExpressions.gtlt.singleValue:
   crId: MARGO-APP-APPDESC-026
   check:
@@ -415,3 +403,64 @@ matchExpressions.contains.values:
 
   fail:
     invalid: Values must not be specified for ContainsAll or ContainsAny operators.
+
+matchExpressions.in-notin.validType:
+  crId: MARGO-APP-APPDESC-021
+  check:
+    datatype: array
+    expected: One or more strings/numbers, or exactly one boolean
+
+  pass:
+    description: In/NotIn operator values use a valid data type.
+
+  fail:
+    invalid: In/NotIn values must contain strings, numbers, or exactly one boolean.
+
+matchExpressions.gtlt.numeric:
+  crId: MARGO-APP-APPDESC-025
+  check:
+    datatype: number
+    expected: Value must be numeric
+
+  pass:
+    description: Gt/Lt operator value is numeric.
+
+  fail:
+    invalid: Gt/Lt operator values must be numeric.
+
+deploymentProfiles.components.properties.revisionPlus:
+  crId: MARGO-APP-APPDESC-034
+  check:
+    datatype: string
+    expected: Revision must not contain +
+
+  pass:
+    description: Revision uses OCI-compatible build metadata notation.
+
+  fail:
+    invalid: Revision must use _ instead of + for build metadata.
+
+
+matchExpressions.in-notin.sameType:
+  crId: MARGO-APP-APPDESC-022
+  check:
+    datatype: array
+    expected: All values must use the same data type
+
+  pass:
+    description: All values use the same data type.
+
+  fail:
+    invalid: All values must use the same data type.
+
+matchExpressions.gtlt.values:
+  crId: MARGO-APP-APPDESC-024
+  check:
+    datatype: array
+    expected: Values required for Gt and Lt operators
+
+  pass:
+    description: Gt/Lt operator contains the required value.
+
+  fail:
+    missing: Values must be specified for Gt and Lt operators.

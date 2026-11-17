@@ -101,13 +101,6 @@
   "expected": "Repository URL required"
 },
 
-"deploymentProfiles.components.properties.revision": {
-  "type": "string",
-  "required": true,
-  "displayName": "revision",
-  "expected": "Required (non-empty)"
-},
-
   "configuration.schema.name": {
     "type": "string",
     "required": true,
@@ -205,5 +198,34 @@
   "minItems": 1,
   "displayName": "parameter.targets",
   "expected": "At least one target"
+},
+"matchExpressions.in-notin.values": {
+  "type": "operatorValidation",
+  "operator": ["In","NotIn"],
+  "valueType": ["string","number","boolean"],
+  "allowSingleBoolean": true,
+  "minItems": 1
+},
+"matchExpressions.in-notin.sameType": {
+  "type": "operatorValidation",
+  "operator": ["In","NotIn"],
+  "sameType": true
+},
+"matchExpressions.gtlt.numeric": {
+  "type": "operatorValidation",
+  "operator": ["Gt","Lt"],
+  "numeric": true
+},
+"deploymentProfiles.components.properties.revision": {
+  "type": "string",
+  "required": true,
+  "displayName": "revision",
+  "regex": "^[^+]+$"
+},
+"configuration.schema.options": {
+  "requiredWhen": {
+      "validationType": "select"
+  },
+  "minItems": 1
 }
 }

@@ -5,7 +5,9 @@ import (
     "fmt"
     "os"
     "regexp"
+    "strconv"
     "strings"
+
     "gopkg.in/yaml.v3"
 )
 
@@ -66,7 +68,6 @@ ValidateMatchExpressions(
     report,
     messages,
 )
-
     return nil
 }
 
@@ -655,22 +656,25 @@ func validateInOperator(
     messages map[string]ValidationMessage,
 ) {
 
-    msg := messages["matchExpressions.in-notin.values"]
+    // APPDESC-020
+    msg020 := messages["matchExpressions.in-notin.values"]
 
     check(
         report,
-        msg.CRID,
+        msg020.CRID,
         "matchExpressions.in-notin.values",
-        msg.Check.Datatype,
-        msg.Check.Expected,
+        msg020.Check.Datatype,
+        msg020.Check.Expected,
     )
 
-    if _, ok := expr["values"]; !ok {
+    values, ok := expr["values"]
+
+    if !ok {
 
         fail(
             report,
             "(missing)",
-            msg.Fail.Missing,
+            msg020.Fail.Missing,
         )
 
         return
@@ -679,7 +683,99 @@ func validateInOperator(
     pass(
         report,
         "present",
-        msg.Pass.Description,
+        msg020.Pass.Description,
+    )
+
+    arr, ok := values.([]any)
+    if !ok || len(arr) == 0 {
+        return
+    }
+
+    // APPDESC-021
+    msg021 := messages["matchExpressions.in-notin.validType"]
+
+    check(
+        report,
+        msg021.CRID,
+        "matchExpressions.in-notin.validType",
+        msg021.Check.Datatype,
+        msg021.Check.Expected,
+    )
+
+    boolCount := 0
+
+    for _, v := range arr {
+
+        switch v.(type) {
+
+        case bool:
+            boolCount++
+
+        case string,
+            int,
+            int64,
+            float64:
+
+        default:
+
+            fail(
+                report,
+                fmt.Sprintf("%v", v),
+                msg021.Fail.Invalid,
+            )
+
+            return
+        }
+    }
+
+    if boolCount > 0 && len(arr) != 1 {
+
+        fail(
+            report,
+            fmt.Sprintf("%v", arr),
+            msg021.Fail.Invalid,
+        )
+
+        return
+    }
+
+    pass(
+        report,
+        formatActual(arr),
+        msg021.Pass.Description,
+    )
+
+    // APPDESC-022
+    msg022 := messages["matchExpressions.in-notin.sameType"]
+
+    check(
+        report,
+        msg022.CRID,
+        "matchExpressions.in-notin.sameType",
+        msg022.Check.Datatype,
+        msg022.Check.Expected,
+    )
+
+    firstType := fmt.Sprintf("%T", arr[0])
+
+    for _, v := range arr[1:] {
+
+        if fmt.Sprintf("%T", v) != firstType {
+
+            fail(
+                report,
+                fmt.Sprintf("%v", arr),
+                msg022.Fail.Invalid,
+            )
+
+            return
+        }
+    }
+
+    pass(
+        report,
+        firstType,
+        msg022.Pass.Description,
     )
 }
 func validateExistsOperator(
@@ -780,6 +876,56 @@ func validateGtLtOperator(
         fmt.Sprintf("%v", arr[0]),
         msg026.Pass.Description,
     )
+    // APPDESC-025
+    msg025 := messages["matchExpressions.gtlt.numeric"]
+
+    check(
+        report,
+        msg025.CRID,
+        "matchExpressions.gtlt.numeric",
+        msg025.Check.Datatype,
+        msg025.Check.Expected,
+    )
+
+    switch v := arr[0].(type) {
+
+    case int,
+        int64,
+        float64:
+
+        pass(
+            report,
+            fmt.Sprintf("%v", v),
+            msg025.Pass.Description,
+        )
+
+    case string:
+
+        if _, err := strconv.ParseFloat(v, 64); err != nil {
+
+            fail(
+                report,
+                v,
+                msg025.Fail.Invalid,
+            )
+
+            return
+        }
+
+        pass(
+            report,
+            v,
+            msg025.Pass.Description,
+        )
+
+    default:
+
+        fail(
+            report,
+            fmt.Sprintf("%v", arr[0]),
+            msg025.Fail.Invalid,
+        )
+    }
 }
 func validateContainsOperator(
     expr map[string]any,
@@ -812,6 +958,49 @@ func validateContainsOperator(
             "present",
             msg027.Pass.Description,
         )
+    }
+        // APPDESC-028
+    msg028 := messages["matchExpressions.contains.matchExpressions"]
+
+    check(
+        report,
+        msg028.CRID,
+        "matchExpressions.contains.matchExpressions",
+        msg028.Check.Datatype,
+        msg028.Check.Expected,
+    )
+
+    itemSelector, ok := expr["itemSelector"].(map[string]any)
+
+    if !ok {
+
+        fail(
+            report,
+            "(missing)",
+            msg028.Fail.Missing,
+        )
+
+    } else {
+
+        matchExpr, ok :=
+            itemSelector["matchExpressions"].([]any)
+
+        if !ok || len(matchExpr) == 0 {
+
+            fail(
+                report,
+                "(missing)",
+                msg028.Fail.Missing,
+            )
+
+        } else {
+
+            pass(
+                report,
+                fmt.Sprintf("%d item(s)", len(matchExpr)),
+                msg028.Pass.Description,
+            )
+        }
     }
 
     msg029 := messages["matchExpressions.contains.values"]
