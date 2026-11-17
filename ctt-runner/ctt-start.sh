@@ -1445,7 +1445,16 @@ run_application_supplier() {
 
     log "Running Application Validation..."
 
-    go run . "$selected_app"
+    local ctt_source_revision=""
+    if command -v git >/dev/null 2>&1; then
+        ctt_source_revision=$(git -C "$SCRIPT_DIR/.." rev-parse --verify HEAD 2>/dev/null || true)
+        if [[ -n "$ctt_source_revision" ]] &&
+           [[ -n "$(git -C "$SCRIPT_DIR/.." status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+            ctt_source_revision+=" (modified working tree)"
+        fi
+    fi
+
+    CTT_SOURCE_REVISION="$ctt_source_revision" go run . "$selected_app"
 
     local result=$?
 

@@ -23,6 +23,9 @@ type ValidationReport struct {
     Status             string
     ApplicationName    string
     ApplicationVersion string
+    InputSource        string
+    ManifestDigest     string
+    CTTRevision        string
 }
 // reportTemplate defines the HTML template used to generate the application conformance report.
 const reportTemplate = `
@@ -174,6 +177,27 @@ th {
         <strong>Application Version:</strong>
         {{.ApplicationVersion}}
     </p>
+
+    {{if .InputSource}}
+    <p>
+        <strong>Input source:</strong>
+        {{.InputSource}}
+    </p>
+    {{end}}
+
+    {{if .ManifestDigest}}
+    <p>
+        <strong>OCI manifest digest:</strong>
+        {{.ManifestDigest}}
+    </p>
+    {{end}}
+
+    {{if .CTTRevision}}
+    <p>
+        <strong>CTT source revision:</strong>
+        {{.CTTRevision}}
+    </p>
+    {{end}}
 
     <p>
         <strong>Generated:</strong>
