@@ -435,11 +435,11 @@ for _, profile := range app.DeploymentProfile {
 	} else {
 
 		report.Check(
-			"MARGO-APP-APPLICATIONREGISTRY-001, MARGO-APP-APPLICATIONREGISTRY-002, MARGO-APP-APPLICATIONREGISTRY-003, MARGO-APP-APPLICATIONREGISTRY-004",
-			"Application Registry checks",
-			"registry",
-			"Application Package in the Application Registry",
-		)
+    "MARGO-APP-REG-001, MARGO-APP-REG-003, MARGO-APP-REG-005, MARGO-APP-REG-006, MARGO-APP-REG-007, MARGO-APP-REG-009, MARGO-APP-REG-010, MARGO-APP-REG-011, MARGO-APP-REG-012, MARGO-APP-REG-013, MARGO-APP-REG-014, MARGO-APP-REG-015, MARGO-APP-REG-016, MARGO-APP-REG-019",
+    "Application Registry checks",
+    "registry",
+    "Application Package in the Application Registry",
+)
 
 		report.Mark(
 			"NOT RUN",

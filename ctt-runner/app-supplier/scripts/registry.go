@@ -286,11 +286,11 @@ func ValidateRegistry(
     ref = strings.TrimPrefix(ref, schemeOCI)
 
     //--------------------------------------------------
-    // MARGO-APP-APPLICATIONREGISTRY-003
+    // MARGO-APP-REG-003
     //--------------------------------------------------
 
     report.Check(
-        "MARGO-APP-APPLICATIONREGISTRY-003",
+        "MARGO-APP-REG-003",
         "Application Package Manifest (pull by reference)",
         "registry",
         "GET /v2/<name>/manifests/<reference> returns the manifest; its sha256 is the digest the registry reports",
@@ -308,11 +308,15 @@ func ValidateRegistry(
 
         report.Fail(
             "not retrievable",
-            fmt.Sprintf("The manifest of %s could not be retrieved: %v", ref, err),
+            fmt.Sprintf(
+                "The manifest of %s could not be retrieved: %v",
+                ref,
+                err,
+            ),
         )
 
         report.Check(
-            "MARGO-APP-APPLICATIONREGISTRY-001, MARGO-APP-APPLICATIONREGISTRY-002, MARGO-APP-APPLICATIONREGISTRY-004",
+            "MARGO-APP-REG-001, MARGO-APP-REG-005, MARGO-APP-REG-003",
             "Application Registry checks",
             "registry",
             "Manifest retrievable",
@@ -327,13 +331,20 @@ func ValidateRegistry(
         return
     }
 
-    digest, err := resolveDigest(repo, repo.Reference.Reference)
+    digest, err := resolveDigest(
+        repo,
+        repo.Reference.Reference,
+    )
 
     if err != nil || digest != sha256Digest(body) {
 
         report.Fail(
             sha256Digest(body),
-            fmt.Sprintf("The registry reports digest %q for %s, but the manifest content has a different sha256.", digest, ref),
+            fmt.Sprintf(
+                "The registry reports digest %q for %s, but the manifest content has a different sha256.",
+                digest,
+                ref,
+            ),
         )
 
     } else {
@@ -346,8 +357,12 @@ func ValidateRegistry(
 
     var manifest Manifest
 
+    //--------------------------------------------------
+    // MARGO-APP-REG-006
+    //--------------------------------------------------
+
     report.Check(
-        "MARGO-APP-APPLICATIONREGISTRY-003",
+        "MARGO-APP-REG-006",
         "Application Package Manifest (OCI image manifest)",
         "manifest",
         "schemaVersion 2, mediaType "+mediaTypeOCIManifest,
@@ -357,7 +372,10 @@ func ValidateRegistry(
 
         report.Fail(
             "not JSON",
-            fmt.Sprintf("The manifest is not valid JSON: %v", err),
+            fmt.Sprintf(
+                "The manifest is not valid JSON: %v",
+                err,
+            ),
         )
 
         return
@@ -367,20 +385,29 @@ func ValidateRegistry(
         manifest.MediaType != mediaTypeOCIManifest {
 
         report.Fail(
-            fmt.Sprintf("schemaVersion %d, mediaType %q", manifest.SchemaVersion, manifest.MediaType),
+            fmt.Sprintf(
+                "schemaVersion %d, mediaType %q",
+                manifest.SchemaVersion,
+                manifest.MediaType,
+            ),
             "The manifest is not an OCI image manifest.",
         )
 
     } else {
 
         report.Pass(
-            fmt.Sprintf("schemaVersion 2, %s", manifest.MediaType),
+            fmt.Sprintf(
+                "schemaVersion 2, %s",
+                manifest.MediaType,
+            ),
             "The manifest is an OCI image manifest.",
         )
     }
 
     //--------------------------------------------------
-    // MARGO-APP-APPLICATIONREGISTRY-004
+    // REG-009 / REG-010 / REG-011 /
+    // REG-012 / REG-013 / REG-014 /
+    // REG-015 / REG-016 / REG-019
     //--------------------------------------------------
 
     validateManifestConstraints(
@@ -390,7 +417,7 @@ func ValidateRegistry(
     )
 
     //--------------------------------------------------
-    // MARGO-APP-APPLICATIONREGISTRY-001
+    // MARGO-APP-REG-001
     //--------------------------------------------------
 
     validateBlobs(
@@ -400,7 +427,7 @@ func ValidateRegistry(
     )
 
     //--------------------------------------------------
-    // MARGO-APP-APPLICATIONREGISTRY-002
+    // MARGO-APP-REG-005
     //--------------------------------------------------
 
     validateTags(
@@ -419,54 +446,91 @@ func validateManifestConstraints(
     report *ValidationReport,
 ) {
 
-    const crID = "MARGO-APP-APPLICATIONREGISTRY-004"
-
-    // artifactType
-    report.Check(crID, "manifest.artifactType", "manifest", artifactTypeApp)
+    // REG-011
+    report.Check(
+        "MARGO-APP-REG-011",
+        "manifest.artifactType",
+        "manifest",
+        artifactTypeApp,
+    )
 
     if manifest.ArtifactType == artifactTypeApp {
-        report.Pass(manifest.ArtifactType, "The manifest is marked as a Margo Application Package.")
+        report.Pass(
+            manifest.ArtifactType,
+            "The manifest is marked as a Margo Application Package.",
+        )
     } else {
-        report.Fail(orMissing(manifest.ArtifactType), "The artifactType of the manifest MUST be "+artifactTypeApp+".")
+        report.Fail(
+            orMissing(manifest.ArtifactType),
+            "The artifactType of the manifest MUST be "+artifactTypeApp+".",
+        )
     }
 
-    // empty config
-    report.Check(crID, "manifest.config", "manifest", "Empty descriptor ("+mediaTypeEmptyConfig+", size 2)")
+    // REG-009
+    report.Check(
+        "MARGO-APP-REG-009",
+        "manifest.config",
+        "manifest",
+        "Empty descriptor ("+mediaTypeEmptyConfig+", size 2)",
+    )
 
     if manifest.Config.MediaType == mediaTypeEmptyConfig &&
         manifest.Config.Digest == digestEmptyConfig &&
         manifest.Config.Size == 2 {
 
-        report.Pass(manifest.Config.MediaType, "The config is the OCI empty descriptor.")
+        report.Pass(
+            manifest.Config.MediaType,
+            "The config is the OCI empty descriptor.",
+        )
 
     } else {
 
         report.Fail(
-            fmt.Sprintf("%s, %s, size %d", orMissing(manifest.Config.MediaType), manifest.Config.Digest, manifest.Config.Size),
+            fmt.Sprintf(
+                "%s, %s, size %d",
+                orMissing(manifest.Config.MediaType),
+                manifest.Config.Digest,
+                manifest.Config.Size,
+            ),
             "The config MUST be the empty descriptor defined by the OCI Image Specification.",
         )
     }
 
-    // exactly one Application Description layer
-    report.Check(crID, "manifest.layers (Application Description)", "manifest", "Exactly one layer of mediaType "+mediaTypeDescription)
+    // REG-012
+    report.Check(
+        "MARGO-APP-REG-012",
+        "manifest.layers (Application Description)",
+        "manifest",
+        "Exactly one layer of mediaType "+mediaTypeDescription,
+    )
 
     descriptions := 0
 
     for _, l := range manifest.Layers {
-
         if l.MediaType == mediaTypeDescription {
             descriptions++
         }
     }
 
     if descriptions == 1 {
-        report.Pass("1 layer", "The Application Description is one layer of the manifest.")
+        report.Pass(
+            "1 layer",
+            "The Application Description is one layer of the manifest.",
+        )
     } else {
-        report.Fail(fmt.Sprintf("%d layers", descriptions), "The Application Description MUST be referred to in one element of the layers array.")
+        report.Fail(
+            fmt.Sprintf("%d layers", descriptions),
+            "The Application Description MUST be referred to in one element of the layers array.",
+        )
     }
 
-    // resource layer media types
-    report.Check(crID, "manifest.layers (resource media types)", "manifest", "application/vnd.margo.app.<icon|descriptionFile|licenseFile|releaseNotes>.v1+<format>")
+    // REG-013 / REG-014 / REG-015 / REG-016
+    report.Check(
+        "MARGO-APP-REG-013,MARGO-APP-REG-014,MARGO-APP-REG-015,MARGO-APP-REG-016",
+        "manifest.layers (resource media types)",
+        "manifest",
+        "application/vnd.margo.app.<icon|descriptionFile|licenseFile|releaseNotes>.v1+<format>",
+    )
 
     var badTypes []string
 
@@ -475,18 +539,39 @@ func validateManifestConstraints(
         if l.MediaType != mediaTypeDescription &&
             !resourceMediaType.MatchString(l.MediaType) {
 
-            badTypes = append(badTypes, fmt.Sprintf("%s (%s)", layerTitle(l), l.MediaType))
+            badTypes = append(
+                badTypes,
+                fmt.Sprintf(
+                    "%s (%s)",
+                    layerTitle(l),
+                    l.MediaType,
+                ),
+            )
         }
     }
 
     if len(badTypes) == 0 {
-        report.Pass(fmt.Sprintf("%d layer(s)", len(manifest.Layers)), "Every resource layer carries a Margo-specific media type.")
+
+        report.Pass(
+            fmt.Sprintf("%d layer(s)", len(manifest.Layers)),
+            "Every resource layer carries a Margo-specific media type.",
+        )
+
     } else {
-        report.Fail(strings.Join(badTypes, "; "), "Each resource layer MUST be marked with the Margo media type of its kind of resource.")
+
+        report.Fail(
+            strings.Join(badTypes, "; "),
+            "Each resource layer MUST be marked with the Margo media type of its kind of resource.",
+        )
     }
 
-    // every resource of the Application Description is a layer of its kind
-    report.Check(crID, "manifest.layers (resources of the Application Description)", "manifest", "Each file in metadata.catalog.application is a layer with the media type of its kind")
+    // REG-010
+    report.Check(
+        "MARGO-APP-REG-010",
+        "manifest.layers (resources of the Application Description)",
+        "manifest",
+        "Each file in metadata.catalog.application is a layer with the media type of its kind",
+    )
 
     resources := catalogResources(raw)
 
@@ -498,33 +583,60 @@ func validateManifestConstraints(
 
         for _, l := range manifest.Layers {
 
-            m := resourceMediaType.FindStringSubmatch(l.MediaType)
+            m := resourceMediaType.FindStringSubmatch(
+                l.MediaType,
+            )
 
-            if m != nil && m[1] == kind && layerTitle(l) == file {
+            if m != nil &&
+                m[1] == kind &&
+                layerTitle(l) == file {
+
                 found = true
                 break
             }
         }
 
         if !found {
-            missing = append(missing, fmt.Sprintf("%s %s", kind, file))
+
+            missing = append(
+                missing,
+                fmt.Sprintf("%s %s", kind, file),
+            )
         }
     }
 
     switch {
 
     case len(resources) == 0:
-        report.Mark("N/A", "no resources", "The Application Description refers to no resource files.")
+
+        report.Mark(
+            "N/A",
+            "no resources",
+            "The Application Description refers to no resource files.",
+        )
 
     case len(missing) == 0:
-        report.Pass(fmt.Sprintf("%d resource(s)", len(resources)), "Each resource of the Application Description is a layer of the manifest.")
+
+        report.Pass(
+            fmt.Sprintf("%d resource(s)", len(resources)),
+            "Each resource of the Application Description is a layer of the manifest.",
+        )
 
     default:
-        report.Fail(strings.Join(missing, "; "), "Each Application Package part (file) MUST be listed as an element of the layers array, with the media type of its kind.")
+
+        report.Fail(
+            strings.Join(missing, "; "),
+            "Each Application Package part (file) MUST be listed as an element of the layers array, with the media type of its kind.",
+        )
     }
 
-    // org.margo.app.resource annotation
-    report.Check(crID, "manifest.layers (annotation "+annotationAppResource+")", "manifest", "Resource layers are annotated with "+annotationAppResource)
+    // REG-019
+    report.Check(
+        "MARGO-APP-REG-019",
+        "manifest.layers (annotation "+annotationAppResource+")",
+        "manifest",
+        "Resource layers are annotated with "+annotationAppResource,
+    )
 
     var unannotated []string
 
@@ -533,24 +645,28 @@ func validateManifestConstraints(
         if resourceMediaType.MatchString(l.MediaType) {
 
             if _, ok := l.Annotations[annotationAppResource]; !ok {
-                unannotated = append(unannotated, layerTitle(l))
+
+                unannotated = append(
+                    unannotated,
+                    layerTitle(l),
+                )
             }
         }
     }
 
     if len(unannotated) == 0 {
 
-        report.Pass("annotated", "Every resource layer carries the "+annotationAppResource+" annotation.")
+        report.Pass(
+            "annotated",
+            "Every resource layer carries the "+annotationAppResource+" annotation.",
+        )
 
     } else {
 
-        // The specification's table makes the annotation a MUST, but its own
-        // manifest example does not use it and no value is defined: a warning
-        // until the specification is consistent.
         report.Mark(
             "WARN",
             strings.Join(unannotated, "; "),
-            "Not annotated with "+annotationAppResource+". The table of Margo-specific annotation keys requires it, but the manifest example of the specification does not use it and defines no value, so this is reported as a warning.",
+            "Not annotated with "+annotationAppResource+".",
         )
     }
 }
@@ -564,7 +680,7 @@ func validateBlobs(
 ) {
 
     report.Check(
-        "MARGO-APP-APPLICATIONREGISTRY-001",
+        "MARGO-APP-REG-001",
         "Application Package parts (blobs)",
         "registry",
         "GET /v2/<name>/blobs/<digest> returns each layer and the config; digest and size match the descriptor",
@@ -644,7 +760,7 @@ func validateTags(
 ) {
 
     report.Check(
-        "MARGO-APP-APPLICATIONREGISTRY-002",
+        "MARGO-APP-REG-005",
         "Tags of the Application Package",
         "registry",
         "Each tag of this manifest is metadata.version ("+orMissing(version)+")",
@@ -656,7 +772,14 @@ func validateTags(
 
     if err != nil {
 
-        report.Fail("tags not listed", fmt.Sprintf("The tags of %s could not be listed: %v", name, err))
+        report.Fail(
+            "tags not listed",
+            fmt.Sprintf(
+                "The tags of %s could not be listed: %v",
+                name,
+                err,
+            ),
+        )
 
         return
     }
@@ -666,7 +789,10 @@ func validateTags(
 
     for _, tag := range allTags {
 
-        tagDigest, err := resolveDigest(repo, tag)
+        tagDigest, err := resolveDigest(
+            repo,
+            tag,
+        )
 
         if err != nil || tagDigest != digest {
             continue
@@ -682,16 +808,30 @@ func validateTags(
     switch {
 
     case len(tags) == 0:
-        report.Fail("no tag", "No tag of "+name+" points to this manifest; it MUST be tagged with metadata.version.")
+
+        report.Fail(
+            "no tag",
+            "No tag of "+name+
+                " points to this manifest; it MUST be tagged with metadata.version.",
+        )
 
     case len(wrong) > 0:
+
         report.Fail(
             strings.Join(tags, ", "),
-            fmt.Sprintf("Tag(s) %s are not metadata.version %q. Each tag MUST be the value of metadata.version of the Application Description.", strings.Join(wrong, ", "), version),
+            fmt.Sprintf(
+                "Tag(s) %s are not metadata.version %q. Each tag MUST be the value of metadata.version of the Application Description.",
+                strings.Join(wrong, ", "),
+                version,
+            ),
         )
 
     default:
-        report.Pass(strings.Join(tags, ", "), "The tag of the Application Package is its metadata.version.")
+
+        report.Pass(
+            strings.Join(tags, ", "),
+            "The tag of the Application Package matches metadata.version.",
+        )
     }
 }
 
