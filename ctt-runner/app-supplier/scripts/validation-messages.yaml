@@ -134,6 +134,7 @@ deploymentProfiles.components.name:
 
   fail:
     missing: Component name is required but was not provided.
+    invalid: Component name must contain only lowercase letters, digits and dashes.
 
 deploymentProfiles.components.properties:
   crId: MARGO-APP-APPDESC-031
@@ -464,3 +465,17 @@ matchExpressions.gtlt.values:
 
   fail:
     missing: Values must be specified for Gt and Lt operators.
+
+
+matchExpressions.contains.matchExpressions:
+  crId: MARGO-APP-APPDESC-028
+
+  check:
+    datatype: array
+    expected: itemSelector.matchExpressions with one or more expressions
+
+  pass:
+    description: itemSelector contains one or more match expressions.
+
+  fail:
+    missing: itemSelector.matchExpressions must contain one or more expressions.

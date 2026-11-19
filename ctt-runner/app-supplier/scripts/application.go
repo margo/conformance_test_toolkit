@@ -20,6 +20,7 @@ type Rule struct {
     Reference    string            `json:"reference,omitempty"`
     RequiredWhen map[string]string `json:"requiredWhen,omitempty"`
     MinItems     int               `json:"minItems,omitempty"`
+    Parent       string            `json:"parent,omitempty"`
 
     DisplayName  string            `json:"displayName,omitempty"`
     Expected     string            `json:"expected,omitempty"`
@@ -68,7 +69,29 @@ ValidateMatchExpressions(
     report,
     messages,
 )
+ValidateRevisionPlus(
+    raw,
+    report,
+    messages,
+)
     return nil
+}
+func typeClass(v any) string {
+
+    switch v.(type) {
+
+    case int, int64, float64:
+        return "number"
+
+    case string:
+        return "string"
+
+    case bool:
+        return "boolean"
+
+    default:
+        return "unknown"
+    }
 }
 
 // LoadMessages loads validation messages and CR-ID mappings from the YAML configuration file.
@@ -328,6 +351,11 @@ func validateRule(
             rule.Expected
     }
 
+    if rule.Parent != "" &&
+    len(GetValues(raw, rule.Parent)) == 0 {
+
+    return
+}
     if rule.Required &&
         len(values) == 0 {
 
@@ -408,7 +436,23 @@ func validateValue(
 
 	actual := formatActual(value)
 
-	if len(rule.Enum) > 0 {
+if rule.MinItems > 0 {
+
+    items, ok := value.([]any)
+
+    if !ok || len(items) < rule.MinItems {
+
+        failInvalid(
+            report,
+            actual,
+            msg,
+        )
+
+        return
+    }
+}
+
+if len(rule.Enum) > 0 {
 
 		valid := false
 
@@ -608,46 +652,11 @@ func ValidateMatchExpressions(
             continue
         }
 
-        for _, expression := range expressions {
-
-            m, ok := expression.(map[string]any)
-            if !ok {
-                continue
-            }
-
-            operator, _ := m["operator"].(string)
-
-            switch operator {
-
-            case "In", "NotIn":
-                validateInOperator(
-                    m,
-                    report,
-                    messages,
-                )
-
-            case "Exists", "DoesNotExist":
-                validateExistsOperator(
-                    m,
-                    report,
-                    messages,
-                )
-
-            case "Gt", "Lt":
-                validateGtLtOperator(
-                    m,
-                    report,
-                    messages,
-                )
-
-            case "ContainsAll", "ContainsAny":
-                validateContainsOperator(
-                    m,
-                    report,
-                    messages,
-                )
-            }
-        }
+        validateExpressionList(
+            expressions,
+            report,
+            messages,
+        )
     }
 }
 func validateInOperator(
@@ -745,38 +754,38 @@ func validateInOperator(
         msg021.Pass.Description,
     )
 
-    // APPDESC-022
-    msg022 := messages["matchExpressions.in-notin.sameType"]
+// APPDESC-022
+msg022 := messages["matchExpressions.in-notin.sameType"]
 
-    check(
-        report,
-        msg022.CRID,
-        "matchExpressions.in-notin.sameType",
-        msg022.Check.Datatype,
-        msg022.Check.Expected,
-    )
+check(
+    report,
+    msg022.CRID,
+    "matchExpressions.in-notin.sameType",
+    msg022.Check.Datatype,
+    msg022.Check.Expected,
+)
 
-    firstType := fmt.Sprintf("%T", arr[0])
+firstType := typeClass(arr[0])
 
-    for _, v := range arr[1:] {
+for _, v := range arr[1:] {
 
-        if fmt.Sprintf("%T", v) != firstType {
+    if typeClass(v) != firstType {
 
-            fail(
-                report,
-                fmt.Sprintf("%v", arr),
-                msg022.Fail.Invalid,
-            )
+        fail(
+            report,
+            fmt.Sprintf("%v", arr),
+            msg022.Fail.Invalid,
+        )
 
-            return
-        }
+        return
     }
+}
 
-    pass(
-        report,
-        firstType,
-        msg022.Pass.Description,
-    )
+pass(
+    report,
+    firstType,
+    msg022.Pass.Description,
+)
 }
 func validateExistsOperator(
     expr map[string]any,
@@ -1000,6 +1009,11 @@ func validateContainsOperator(
                 fmt.Sprintf("%d item(s)", len(matchExpr)),
                 msg028.Pass.Description,
             )
+            validateExpressionList(
+    matchExpr,
+    report,
+    messages,
+)
         }
     }
 
@@ -1064,4 +1078,94 @@ func runCustomCheck(
         actual,
         msg.Fail.Invalid,
     )
+}
+func ValidateRevisionPlus(
+    raw map[string]any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+    msg034 := messages["deploymentProfiles.components.properties.revisionPlus"]
+
+    revisions := GetValues(
+        raw,
+        "deploymentProfiles.components.properties.revision",
+    )
+
+    for _, r := range revisions {
+
+        rev := fmt.Sprintf("%v", r)
+
+        check(
+            report,
+            msg034.CRID,
+            "revision (+)",
+            msg034.Check.Datatype,
+            msg034.Check.Expected,
+        )
+
+        if strings.Contains(rev, "+") {
+
+            fail(
+                report,
+                rev,
+                msg034.Fail.Invalid,
+            )
+
+        } else {
+
+            pass(
+                report,
+                rev,
+                msg034.Pass.Description,
+            )
+        }
+    }
+}
+
+func validateExpressionList(
+    expressions []any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+
+    for _, expression := range expressions {
+
+        m, ok := expression.(map[string]any)
+        if !ok {
+            continue
+        }
+
+        operator, _ := m["operator"].(string)
+
+        switch operator {
+
+        case "In", "NotIn":
+            validateInOperator(
+                m,
+                report,
+                messages,
+            )
+
+        case "Exists", "DoesNotExist":
+            validateExistsOperator(
+                m,
+                report,
+                messages,
+            )
+
+        case "Gt", "Lt":
+            validateGtLtOperator(
+                m,
+                report,
+                messages,
+            )
+
+        case "ContainsAll", "ContainsAny":
+            validateContainsOperator(
+                m,
+                report,
+                messages,
+            )
+        }
+    }
 }

@@ -57,11 +57,12 @@
     "type": "string",
     "required": true,
     "enum": [
-      "helm",
-      "compose"
-    ],
+  "helm",
+  "compose",
+  "custom"
+],
     "displayName": "deploymentProfile.type",
-    "expected": "helm | compose"
+    "expected": "helm | compose | custom"
   },
 
   "deploymentProfiles.id": {
@@ -82,7 +83,7 @@
   "deploymentProfiles.components.name": {
     "type": "string",
     "required": true,
-    "regex": "^[a-z0-9-]{1,200}$",
+    "regex": "^[a-z0-9-]+$",
     "displayName": "component.name",
     "expected": "Required (non-empty)"
   },
@@ -101,19 +102,21 @@
   "expected": "Repository URL required"
 },
 
-  "configuration.schema.name": {
-    "type": "string",
-    "required": true,
-    "displayName": "schema",
-    "expected": "Schema name required"
-  },
+"configuration.schema.name": {
+  "type": "string",
+  "required": true,
+  "parent": "configuration.schema",
+  "displayName": "schema",
+  "expected": "Schema name required"
+},
 
-  "configuration.schema.dataType": {
-    "type": "string",
-    "required": true,
-    "displayName": "schema.dataType",
-    "expected": "Schema data type required",
-    "enum": [
+"configuration.schema.dataType": {
+  "type": "string",
+  "required": true,
+  "parent": "configuration.schema",
+  "displayName": "schema.dataType",
+  "expected": "Schema data type required",
+  "enum": [
     "string",
     "integer",
     "double",
@@ -123,45 +126,51 @@
     "array[double]",
     "array[boolean]"
   ]
-  },
+},
 
-  "configuration.sections.settings.parameter": {
-    "type": "reference",
-    "reference": "parameters",
-    "displayName": "setting.parameter",
-    "expected": "Must match a parameter definition"
-  },
+"configuration.sections.settings.parameter": {
+  "type": "reference",
+  "parent": "configuration.sections.settings",
+  "reference": "parameters",
+  "displayName": "setting.parameter",
+  "expected": "Must match a parameter definition"
+},
 
-  "configuration.sections.settings.schema": {
-    "type": "reference",
-    "reference": "configuration.schema",
-    "displayName": "setting.schema",
-    "expected": "Must match a schema definition"
-  },
+"configuration.sections.settings.schema": {
+  "type": "reference",
+  "parent": "configuration.sections.settings",
+  "reference": "configuration.schema",
+  "displayName": "setting.schema",
+  "expected": "Must match a schema definition"
+},
 
-  "parameters.targets.components": {
-    "type": "reference",
-    "reference": "deploymentProfiles.components.name",
-    "displayName": "parameter.target.component",
-    "expected": "Must match a deployment component"
-  },
+"parameters.targets.components": {
+  "type": "reference",
+  "parent": "parameters.targets",
+  "reference": "deploymentProfiles.components.name",
+  "displayName": "parameter.target.component",
+  "expected": "Must match a deployment component"
+},
 
-  "parameters.targets.pointer": {
-    "type": "string",
-    "required": true,
-    "displayName": "parameter.target.pointer",
-    "expected": "Required (non-empty)"
-  },
+"parameters.targets.pointer": {
+  "type": "string",
+  "required": true,
+  "parent": "parameters.targets",
+  "displayName": "parameter.target.pointer",
+  "expected": "Required (non-empty)"
+},
 
-  "deploymentProfiles.deviceConstraints.capacityRequirements.cpu.cores": {
+"deploymentProfiles.deviceConstraints.capacityRequirements.cpu.cores": {
   "type": "number",
   "required": true,
+  "parent": "deploymentProfiles.deviceConstraints.capacityRequirements.cpu",
   "displayName": "cpu.cores",
   "expected": "Required when cpu is present"
 },
 "propertySelector.matchExpressions.key": {
   "type": "string",
   "required": true,
+  "parent": "propertySelector.matchExpressions",
   "regex": "^/.*",
   "displayName": "propertySelector.key",
   "expected": "RFC6901 JSON Pointer"
@@ -169,25 +178,40 @@
 "propertySelector.matchExpressions": {
   "type": "array",
   "required": true,
+  "parent": "propertySelector",
   "minItems": 1
 },
 "matchExpressions.key": {
   "type": "string",
-  "required": true
+  "required": true,
+  "parent": "matchExpressions"
 },
 "matchExpressions.operator": {
   "type": "string",
-  "required": true
+  "required": true,
+  "parent": "matchExpressions",
+  "enum": [
+    "In",
+    "NotIn",
+    "Exists",
+    "DoesNotExist",
+    "Gt",
+    "Lt",
+    "ContainsAll",
+    "ContainsAny"
+  ]
 },
 "configuration.sections.name": {
   "type": "string",
   "required": true,
+  "parent": "configuration.sections",
   "displayName": "configuration.section.name",
   "expected": "Required (non-empty)"
 },
 "configuration.sections.settings": {
   "type": "array",
   "required": true,
+  "parent": "configuration.sections",
   "minItems": 1,
   "displayName": "configuration.section.settings",
   "expected": "At least one setting"
@@ -195,6 +219,7 @@
 "parameters.targets": {
   "type": "array",
   "required": true,
+  "parent": "parameters",
   "minItems": 1,
   "displayName": "parameter.targets",
   "expected": "At least one target"
@@ -220,7 +245,7 @@
   "type": "string",
   "required": true,
   "displayName": "revision",
-  "regex": "^[^+]+$"
+  "regex": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:[_+]([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
 },
 "configuration.schema.options": {
   "requiredWhen": {
