@@ -411,6 +411,9 @@ for _, profile := range app.DeploymentProfile {
         fmt.Println(
             "PASS: OCI Repository Reachable",
         )
+        if profile.Type == "compose" {
+            ValidateComposeRegistry(component, report)
+        }
     }
 
     default:
