@@ -91,11 +91,13 @@
       "MARGO-WFM-IDENT-007",
       "MARGO-WFM-IDENT-029",
       "MARGO-WFM-IDENT-031",
+      "MARGO-WFM-IDENT-032",
       "MARGO-WFM-IDENT-043",
       "MARGO-WFM-IDENT-080",
       "MARGO-WFM-IDENT-081",
       "MARGO-WFM-IDENT-085",
       "MARGO-WFM-IDENT-098",
+      "MARGO-WFM-IDENT-117",
       "MARGO-WFM-MGMT-002",
       "MARGO-WFM-MGMT-003"
     ],
@@ -313,6 +315,30 @@
         "extract_context": {},
         "tls_max_version": "TLSv1.1",
         "expect_transport_error": true
+      },
+      {
+        "id": "wfm-identity-tls-tls12-rfc9325",
+        "name": "TLS 1.2 Follows RFC 9325 — WFM Refuses NULL-Encryption Cipher Suites",
+        "crIds": [
+          "MARGO-WFM-IDENT-032",
+          "MARGO-WFM-IDENT-117"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "tls_max_version": "TLSv1.2",
+        "tls_ciphers": "eNULL:!aNULL@SECLEVEL=0",
+        "expect_transport_error": true,
+        "not_run_if": {
+          "error": "protocol version|unsupported protocol|wrong version number",
+          "reason": "the WFM does not accept TLS 1.2 at all, so the TLS 1.2 (RFC 9325) rules do not apply"
+        }
       },
       {
         "id": "wfm-identity-tls-wfm-id-not-empty",

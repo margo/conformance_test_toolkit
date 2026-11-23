@@ -25,6 +25,7 @@
     "wfm-identity-tls-rsa-bits",
     "wfm-identity-tls-rsa-sha256",
     "wfm-identity-tls-spiffe-margo",
+    "wfm-identity-tls-tls12-rfc9325",
     "wfm-identity-tls-tls13-default",
     "wfm-identity-tls-wfm-id-chars",
     "wfm-identity-tls-wfm-id-not-dots",

@@ -3,11 +3,17 @@
     "id": "wfm-core-capabilities",
     "name": "Device Capabilities — Report, Update, and Validation",
     "crIds": [
+      "MARGO-WFM-EXT-001",
+      "MARGO-WFM-EXT-004",
       "MARGO-WFM-MGMT-001",
       "MARGO-WFM-MGMT-024",
-      "MARGO-WFM-MGMT-025"
+      "MARGO-WFM-MGMT-025",
+      "MARGO-WFM-MGMT-026",
+      "MARGO-WFM-MGMT-027",
+      "MARGO-WFM-MGMT-029",
+      "MARGO-WFM-MGMT-094"
     ],
-    "description": "Device capabilities: the first report creates the device, a second report updates it, a report with an unknown runtime or deployment type value is accepted, and a report without a required field is rejected with problem details.",
+    "description": "Device capabilities: the first report creates the device, a second report updates it, a report with an unknown runtime or deployment type value is accepted, and a report without a required field is rejected with problem details. A child device reported before its gateway is rejected with 404 (NOT RUN when the WFM refuses the new gateway deviceId by local policy with 403), and a report with an unknown specification extension at the document root is accepted.",
     "steps": [
       {
         "id": "wfm-core-cap-1",
@@ -188,6 +194,175 @@
             "supportedDeploymentTypes": [
               "compose"
             ]
+          }
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          201
+        ]
+      },
+      {
+        "id": "wfm-core-cap-child-before-gateway",
+        "name": "Child Device Reported Before Its Gateway Is Rejected With 404",
+        "crIds": [
+          "MARGO-WFM-MGMT-026"
+        ],
+        "method": "PUT",
+        "endpoint": "/api/v1/capabilities/ctt-unreported-gateway/ctt-child-device",
+        "mtls": true,
+        "request_body": {
+          "properties": {
+            "id": "ctt-unreported-gateway/ctt-child-device",
+            "vendor": "Conformance Test Suite",
+            "modelNumber": "CTS-CHILD-1",
+            "serialNumber": "SN-CHILD-001",
+            "cpus": [
+              {
+                "cores": 4,
+                "architecture": "amd64"
+              }
+            ],
+            "memory": "8Gi",
+            "storage": "64Gi",
+            "peripherals": [],
+            "interfaces": [
+              {
+                "type": "ethernet"
+              }
+            ],
+            "otelCollector": true,
+            "supportedRuntimes": [
+              "oci"
+            ],
+            "supportedDeploymentTypes": [
+              "compose"
+            ]
+          }
+        },
+        "headers": {},
+        "expected_status": 404,
+        "validations": [],
+        "extract_context": {},
+        "not_run_if": {
+          "status": 403,
+          "reason": "the WFM refused the new gateway deviceId by local policy (403), so the child-before-gateway rule could not be observed"
+        }
+      },
+      {
+        "id": "wfm-core-cap-child-before-gateway-type",
+        "name": "Child Before Gateway 404 — type Is The Catalogue URI #gateway-not-found",
+        "crIds": [
+          "MARGO-WFM-MGMT-094"
+        ],
+        "method": "PUT",
+        "endpoint": "/api/v1/capabilities/ctt-unreported-gateway/ctt-child-device",
+        "mtls": true,
+        "request_body": {
+          "properties": {
+            "id": "ctt-unreported-gateway/ctt-child-device",
+            "vendor": "Conformance Test Suite",
+            "modelNumber": "CTS-CHILD-1",
+            "serialNumber": "SN-CHILD-001",
+            "cpus": [
+              {
+                "cores": 4,
+                "architecture": "amd64"
+              }
+            ],
+            "memory": "8Gi",
+            "storage": "64Gi",
+            "peripherals": [],
+            "interfaces": [
+              {
+                "type": "ethernet"
+              }
+            ],
+            "otelCollector": true,
+            "supportedRuntimes": [
+              "oci"
+            ],
+            "supportedDeploymentTypes": [
+              "compose"
+            ]
+          }
+        },
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#gateway-not-found"
+          }
+        ],
+        "extract_context": {},
+        "not_run_if": {
+          "status": 403,
+          "reason": "the WFM refused the new gateway deviceId by local policy (403), so the child-before-gateway rule could not be observed"
+        }
+      },
+      {
+        "id": "wfm-core-cap-extension",
+        "name": "Capabilities With An Unknown Specification Extension Are Accepted (extension ignored)",
+        "crIds": [
+          "MARGO-WFM-EXT-001",
+          "MARGO-WFM-EXT-004",
+          "MARGO-WFM-MGMT-027",
+          "MARGO-WFM-MGMT-029"
+        ],
+        "method": "PUT",
+        "endpoint": "/api/v1/capabilities/wfm-core-device",
+        "mtls": true,
+        "request_body": {
+          "properties": {
+            "id": "wfm-core-device",
+            "vendor": "Conformance Test Suite",
+            "modelNumber": "CTS-WFMCORE-1",
+            "serialNumber": "SN-WFMCORE-001",
+            "cpus": [
+              {
+                "cores": 8,
+                "architecture": "amd64"
+              }
+            ],
+            "memory": "32Gi",
+            "storage": "512Gi",
+            "interfaces": [
+              {
+                "type": "ethernet"
+              },
+              {
+                "type": "wifi"
+              }
+            ],
+            "peripherals": [],
+            "otelCollector": false,
+            "supportedRuntimes": [
+              "oci"
+            ],
+            "supportedDeploymentTypes": [
+              "helm",
+              "compose"
+            ]
+          },
+          "x-ctt-conformance-extensions": {
+            "purpose": "unknown extension the WFM must ignore",
+            "settings": {
+              "level": 3,
+              "enabled": true,
+              "tags": [
+                "ctt",
+                "conformance"
+              ]
+            }
           }
         },
         "headers": {},
@@ -2333,11 +2508,13 @@
       "MARGO-WFM-IDENT-007",
       "MARGO-WFM-IDENT-029",
       "MARGO-WFM-IDENT-031",
+      "MARGO-WFM-IDENT-032",
       "MARGO-WFM-IDENT-043",
       "MARGO-WFM-IDENT-080",
       "MARGO-WFM-IDENT-081",
       "MARGO-WFM-IDENT-085",
       "MARGO-WFM-IDENT-098",
+      "MARGO-WFM-IDENT-117",
       "MARGO-WFM-MGMT-002",
       "MARGO-WFM-MGMT-003"
     ],
@@ -2555,6 +2732,30 @@
         "extract_context": {},
         "tls_max_version": "TLSv1.1",
         "expect_transport_error": true
+      },
+      {
+        "id": "wfm-identity-tls-tls12-rfc9325",
+        "name": "TLS 1.2 Follows RFC 9325 — WFM Refuses NULL-Encryption Cipher Suites",
+        "crIds": [
+          "MARGO-WFM-IDENT-032",
+          "MARGO-WFM-IDENT-117"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "tls_max_version": "TLSv1.2",
+        "tls_ciphers": "eNULL:!aNULL@SECLEVEL=0",
+        "expect_transport_error": true,
+        "not_run_if": {
+          "error": "protocol version|unsupported protocol|wrong version number",
+          "reason": "the WFM does not accept TLS 1.2 at all, so the TLS 1.2 (RFC 9325) rules do not apply"
+        }
       },
       {
         "id": "wfm-identity-tls-wfm-id-not-empty",

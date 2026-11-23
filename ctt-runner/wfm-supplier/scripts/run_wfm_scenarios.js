@@ -795,7 +795,9 @@ function request(method, url, headers, bodyText, mtls) {
     if (mtls && mtls.maxVersion) {
       // step.tls_max_version: offer only protocol versions up to this one, e.g.
       // "TLSv1.1" to check that the WFM refuses anything older than TLS 1.2.
-      Object.assign(options, { minVersion: 'TLSv1', maxVersion: mtls.maxVersion, ciphers: 'DEFAULT@SECLEVEL=0' });
+      // step.tls_ciphers: offer only these cipher suites (e.g. the NULL and
+      // anonymous suites RFC 9325 forbids for TLS 1.2).
+      Object.assign(options, { minVersion: 'TLSv1', maxVersion: mtls.maxVersion, ciphers: mtls.ciphers || 'DEFAULT@SECLEVEL=0' });
     }
 
     const req = https.request(options, (res) => {
@@ -1476,7 +1478,7 @@ async function performHTTPStep(step) {
       ? { cert: ownIdentity.cert, key: ownIdentity.key, ca: caCertificate }
       : ownIdentity;
     const response = await request(method, url, headers, bodyText,
-      step.tls_max_version ? { ...identity, maxVersion: step.tls_max_version } : identity);
+      step.tls_max_version ? { ...identity, maxVersion: step.tls_max_version, ciphers: step.tls_ciphers } : identity);
     const parsed = parseBody(response.body);
     const responseSource = { ...parsed, _headers: response.headers, _body: response.body, _rawBody: response.rawBody, _tls: response.tls };
     return { method, endpoint, bodyText, response, responseSource };
@@ -1793,9 +1795,18 @@ async function runStep(scenario, step) {
     // step.applies_if = { field, reason }: the requirement only applies when the
     // response has that field (e.g. a deployment with deviceConstraints). When
     // it has none, the step is NOT RUN instead of passing with nothing checked.
-    if (step.applies_if && response.status === step.expected_status &&
-        getAll(responseSource, step.applies_if.field).length === 0) {
-      const reason = step.applies_if.reason;
+    // step.not_run_if = { status | error, reason }: that status (e.g. 403 local
+    // policy) or a transport error matching that regex (e.g. TLS 1.2 refused
+    // outright) means the requirement could not be observed.
+    const notRun = step.not_run_if || {};
+    const notRunReason =
+      step.not_run_if && (response.status === notRun.status ||
+        (notRun.error && new RegExp(notRun.error, 'i').test(response.transportError || ''))) ? notRun.reason
+      : step.applies_if && response.status === step.expected_status &&
+        getAll(responseSource, step.applies_if.field).length === 0 ? step.applies_if.reason
+      : '';
+    if (notRunReason) {
+      const reason = notRunReason;
       results.push({
         scenario: scenario.id,
         scenarioName: scenario.name,
@@ -1826,7 +1837,7 @@ async function runStep(scenario, step) {
         if (!(step.accepted_statuses || []).includes(response.status)) {
           assertionFailures.push(`expected the connection to be rejected but got HTTP ${response.status}`);
         }
-      } else if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|timed out|no protocols available/i.test(response.transportError)) {
+      } else if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|timed out|no protocols available|no cipher match|no ciphers available/i.test(response.transportError)) {
         assertionFailures.push(`could not reach the WFM (${response.transportError}) — the TLS behaviour was not tested`);
       }
     } else {
