@@ -126,6 +126,7 @@ type DeploymentData struct {
 type ValidationError struct {
 	RuleID string `json:"rule_id"`
 	Error  string `json:"error"`
+	Field  string `json:"field,omitempty"` // request body field the rule checks
 }
 
 type ResponseError struct {
@@ -167,6 +168,7 @@ func validateRequest(endpointKey string, body map[string]interface{}) []Validati
 	// Apply each validation rule from assertions
 	for _, rule := range endpoint.Validations {
 		if err := applyRule(rule, body); err != nil {
+			err.Field = rule.Field
 			errors = append(errors, *err)
 		}
 	}

@@ -114,25 +114,32 @@ const problemTypeBase = "https://docs.margo.org/specification/problem-types#"
 // respondProblem writes an RFC 9457 problem+json error. problemType is a
 // fragment of the Margo problem-type registry, or "" for about:blank.
 // "error" and errors[].rule_id are extension members (RFC 9457 §3.2) carrying
-// the mock's own diagnostics.
+// the mock's own diagnostics. retryable/backoffStrategy follow the rc.3 retry
+// semantics table: 429, 500 and 503 are retryable with exponential backoff,
+// every other error is not retryable (backoffStrategy none).
 func respondProblem(w http.ResponseWriter, r *http.Request, status int, problemType, title, detail string, errs ...ValidationError) {
 	typeURI := "about:blank"
 	if problemType != "" {
 		typeURI = problemTypeBase + problemType
 	}
 	body := map[string]interface{}{
-		"type":     typeURI,
-		"title":    title,
-		"status":   status,
-		"detail":   detail,
-		"instance": r.URL.Path,
-		"error":    detail,
+		"type":            typeURI,
+		"title":           title,
+		"status":          status,
+		"detail":          detail,
+		"instance":        r.URL.Path,
+		"error":           detail,
+		"retryable":       false,
+		"backoffStrategy": "none",
+	}
+	if status == 429 || status == 500 || status == 503 {
+		body["retryable"], body["backoffStrategy"] = true, "exponential"
 	}
 	reasons := detail
 	if len(errs) > 0 {
 		fieldErrors := make([]map[string]string, 0, len(errs))
 		for _, e := range errs {
-			fieldErrors = append(fieldErrors, map[string]string{"message": e.Error, "rule_id": e.RuleID})
+			fieldErrors = append(fieldErrors, map[string]string{"field": e.Field, "message": e.Error, "rule_id": e.RuleID})
 			reasons += " | " + e.RuleID + ": " + e.Error
 		}
 		body["errors"] = fieldErrors
@@ -438,7 +445,7 @@ func handleMIAFPostStatus(w http.ResponseWriter, r *http.Request) {
 	if bodyDeploymentID, ok := getFieldValue(body, "deploymentId"); ok {
 		if s, ok := bodyDeploymentID.(string); !ok || s != deploymentID {
 			respondProblem(w, r, 422, "semantic-error", "Semantic Error", "Request body includes a semantic error.",
-				ValidationError{RuleID: "status-path-001", Error: "deploymentId in body must match deploymentId in path"})
+				ValidationError{RuleID: "status-path-001", Error: "deploymentId in body must match deploymentId in path", Field: "deploymentId"})
 			return
 		}
 	}
@@ -566,6 +573,11 @@ func loadWFMSPIFFEID(certFile, keyFile string) (string, error) {
 // mTLS listener (port 3003) that serves them. The router is shared with the
 // plain-TLS port, where requireSVID turns every one of these routes into a 403.
 func startMIAFServer(router *mux.Router) {
+	// Unknown paths: about:blank 404 with the standard status phrase (rc.3
+	// problem-types), instead of the router's plain-text "404 page not found".
+	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondProblem(w, r, 404, "", "Not Found", fmt.Sprintf("No resource exists at %s.", r.URL.Path))
+	})
 	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId}", requireSVID(handleMIAFPutCapabilities)).Methods("PUT")
 	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId}", requireSVID(handleMIAFDeleteCapabilities)).Methods("DELETE")
 	router.HandleFunc("/v1alpha2/margo/api/v1/deployments", requireSVID(handleMIAFGetDeployments)).Methods("GET")
