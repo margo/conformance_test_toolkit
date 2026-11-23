@@ -5,6 +5,9 @@ const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+// js-yaml 4.1.0 (MIT), vendored so no npm install is needed: the WFM serves an
+// ApplicationDeployment as YAML, read through the "_yaml." field prefix.
+const yaml = require('./vendor/js-yaml.min.js');
 
 function usage() {
   console.error(
@@ -626,6 +629,7 @@ function getField(source, field) {
   let inHeaders = false;
   for (const part of parts) {
     if (current == null) return undefined;
+    if (part === '_yaml') { current = parseYaml(current._body); continue; }
     if (part === '_headers') { current = current._headers; inHeaders = true; continue; }
     if (inHeaders) {
       // Node.js lowercases all response header names; do case-insensitive lookup
@@ -639,6 +643,35 @@ function getField(source, field) {
     current = current[part];
   }
   return current;
+}
+
+// The response body read as YAML, e.g. "_yaml.spec.applicationId" for an
+// ApplicationDeployment; undefined when the body is not a YAML mapping.
+function parseYaml(text) {
+  try {
+    const doc = yaml.load(String(text ?? ''));
+    return doc && typeof doc === 'object' ? doc : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Every value a field path reaches, where "*" means each item of a list or
+// each value of a map: "_yaml.spec.parameters.*.targets.*" gives every target.
+// Parts that are missing give nothing, so the result can be [].
+function getAll(source, field) {
+  let values = [source];
+  for (const part of field.split('.')) {
+    const next = [];
+    for (const v of values) {
+      if (v == null || typeof v !== 'object') continue;
+      if (part === '_yaml') { const doc = parseYaml(v._body); if (doc) next.push(doc); }
+      else if (part === '*') next.push(...Object.values(v));
+      else if (v[part] !== undefined) next.push(v[part]);
+    }
+    values = next;
+  }
+  return values;
 }
 
 // Signs the request following RFC 9421 HTTP Message Signatures.
@@ -689,6 +722,48 @@ function prepareContentDigest(headers, bodyText) {
   headers['Content-Digest'] = `sha-256=:${digest}:`;
 }
 
+// What the mTLS connection itself shows, read as "_tls.<name>" in validations:
+// negotiated protocol, HTTP version, port, and the WFM's SVID (SPIFFE ID, key,
+// signature algorithm). sameWfmId: the WFM's wfm-id is the one in the CTT's SVID.
+function tlsDetails(res, port, mtls) {
+  const socket = res.socket;
+  const peer = socket.getPeerX509Certificate();
+  const wfmIdOf = (id) => (/\/margo\/wfm\/([^/]*)/.exec(id || '') || [])[1];
+  const peerSpiffeId = peer ? spiffeIdOf(peer.subjectAltName) : null;
+  return {
+    protocol: socket.getProtocol(),
+    httpVersion: res.httpVersion,
+    port: Number(port),
+    authorized: socket.authorized === true,
+    peerSpiffeId,
+    sameWfmId: !!peerSpiffeId && wfmIdOf(peerSpiffeId) === wfmIdOf(ownSpiffeId),
+    ...(peer ? svidKey(peer.toString()) : {}),
+  };
+}
+
+// Key type and signature algorithm of an SVID. Only the entry for its own key
+// type is set (ec, eddsa or rsa), so a step about RSA keys can use
+// applies_if "_tls.rsa"; rsaSignature is set when the CA signed it with RSA.
+const svidKeyCache = new Map();
+function svidKey(pem) {
+  if (svidKeyCache.has(pem)) return svidKeyCache.get(pem);
+  const key = new crypto.X509Certificate(pem).publicKey;
+  const details = key.asymmetricKeyDetails || {};
+  let sigAlg = '';
+  try {
+    const text = execFileSync('openssl', ['x509', '-noout', '-text'], { input: pem, encoding: 'utf8' });
+    sigAlg = [/Signature Algorithm: (\S+)/.exec(text), /Hash Algorithm: (\S+)/.exec(text)]
+      .filter(Boolean).map((m) => m[1]).join(' ');
+  } catch {}
+  const out = { sigAlg };
+  if (key.asymmetricKeyType === 'ec') out.ec = { curve: details.namedCurve };
+  if (/^ed/.test(key.asymmetricKeyType)) out.eddsa = { type: key.asymmetricKeyType };
+  if (/^rsa/.test(key.asymmetricKeyType)) out.rsa = { bits: details.modulusLength };
+  if (/rsa/i.test(sigAlg)) out.rsaSignature = sigAlg;
+  svidKeyCache.set(pem, out);
+  return out;
+}
+
 // `mtls` is optional: { cert, key, ca } to present a client certificate for MIAF's
 // mutual-TLS handshake. Omitted for every existing (RFC 9421 / server-TLS-only)
 // call site — this only changes behavior for callers that opt in.
@@ -712,14 +787,24 @@ function request(method, url, headers, bodyText, mtls) {
     if (mtls) {
       options.cert = mtls.cert;
       options.key = mtls.key;
+      // A full handshake per step, never a resumed TLS session: the WFM then
+      // validates the SVID on every connection, and the WFM's own SVID is
+      // readable for the _tls checks (Node gives no peer certificate on resume).
+      options.agent = false;
+    }
+    if (mtls && mtls.maxVersion) {
+      // step.tls_max_version: offer only protocol versions up to this one, e.g.
+      // "TLSv1.1" to check that the WFM refuses anything older than TLS 1.2.
+      Object.assign(options, { minVersion: 'TLSv1', maxVersion: mtls.maxVersion, ciphers: 'DEFAULT@SECLEVEL=0' });
     }
 
     const req = https.request(options, (res) => {
       const chunks = [];
+      const tls = mtls ? tlsDetails(res, options.port, mtls) : undefined;
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const rawBody = Buffer.concat(chunks);
-        resolve({ status: res.statusCode, headers: res.headers, body: rawBody.toString('utf8'), rawBody });
+        resolve({ status: res.statusCode, headers: res.headers, body: rawBody.toString('utf8'), rawBody, tls });
       });
     });
 
@@ -1011,6 +1096,19 @@ function validate(responseSource, validation) {
       return !String(actual ?? '').includes(String(expected))
         ? ''
         : `${validation.field} must not contain ${JSON.stringify(expected)} (got ${JSON.stringify(actual)})`;
+    case 'each_has_keys': {
+      // Every object the path reaches ("*" = each item) has all keys in `value`.
+      const missing = getAll(responseSource, validation.field)
+        .map((obj, i) => [i + 1, validation.value.filter((k) => obj == null || obj[k] == null)])
+        .filter(([, keys]) => keys.length)
+        .map(([n, keys]) => `#${n} has no ${keys.join(', ')}`);
+      return missing.length ? `${validation.field}: ${missing.join('; ')}` : '';
+    }
+    case 'each_matches_regex': {
+      // Every value the path reaches ("*" = each item) matches the pattern.
+      const bad = getAll(responseSource, validation.field).filter((v) => !new RegExp(validation.value).test(String(v)));
+      return bad.length ? `${validation.field}: ${bad.map((v) => JSON.stringify(v)).join(', ')} does not match ${validation.value}` : '';
+    }
     case 'etag_is_body_digest': {
       // MI-015: the State Manifest ETag MUST be a strong validator computed as
       // sha256 of the exact serialized JSON response body.
@@ -1377,9 +1475,10 @@ async function performHTTPStep(step) {
     const identity = step.mtls_wrong_server_ca
       ? { cert: ownIdentity.cert, key: ownIdentity.key, ca: caCertificate }
       : ownIdentity;
-    const response = await request(method, url, headers, bodyText, identity);
+    const response = await request(method, url, headers, bodyText,
+      step.tls_max_version ? { ...identity, maxVersion: step.tls_max_version } : identity);
     const parsed = parseBody(response.body);
-    const responseSource = { ...parsed, _headers: response.headers, _body: response.body, _rawBody: response.rawBody };
+    const responseSource = { ...parsed, _headers: response.headers, _body: response.body, _rawBody: response.rawBody, _tls: response.tls };
     return { method, endpoint, bodyText, response, responseSource };
   }
 
@@ -1691,6 +1790,32 @@ async function runStep(scenario, step) {
       ({ method, endpoint, bodyText, response, responseSource } = await performStep(step));
     }
 
+    // step.applies_if = { field, reason }: the requirement only applies when the
+    // response has that field (e.g. a deployment with deviceConstraints). When
+    // it has none, the step is NOT RUN instead of passing with nothing checked.
+    if (step.applies_if && response.status === step.expected_status &&
+        getAll(responseSource, step.applies_if.field).length === 0) {
+      const reason = step.applies_if.reason;
+      results.push({
+        scenario: scenario.id,
+        scenarioName: scenario.name,
+        step: step.id,
+        name: step.name,
+        crIds: step.crIds || [],
+        method,
+        endpoint,
+        expected: step.expected_status,
+        actual: response.status,
+        passed: false,
+        skipped: true,
+        reason,
+      });
+      console.log('');
+      console.log(`  [${step.id}]  ${step.name}`);
+      console.log(`   ⏭  NOT RUN  ${reason}`);
+      return 'skipped';
+    }
+
     const assertionFailures = [];
 
     // expect_transport_error: true — a TLS rejection IS the passing outcome (or
@@ -1701,7 +1826,7 @@ async function runStep(scenario, step) {
         if (!(step.accepted_statuses || []).includes(response.status)) {
           assertionFailures.push(`expected the connection to be rejected but got HTTP ${response.status}`);
         }
-      } else if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|timed out/i.test(response.transportError)) {
+      } else if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|timed out|no protocols available/i.test(response.transportError)) {
         assertionFailures.push(`could not reach the WFM (${response.transportError}) — the TLS behaviour was not tested`);
       }
     } else {
