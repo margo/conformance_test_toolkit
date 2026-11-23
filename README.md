@@ -190,6 +190,20 @@ the new results. For the setup itself, follow the
 | Let the CTT's WFM Client report the deviceId `ctt-unreported-gateway/ctt-child-device` | MGMT-026 checks that a child device reported before its gateway is rejected with `404 Not Found`. If the WFM refuses that deviceId by local policy (`403 Forbidden`), the step is NOT RUN. |
 | Accept a Device Capabilities document that has an `x-ctt-conformance-extensions` property at its root | MGMT-027, MGMT-029, EXT-001 and EXT-004: the WFM must accept the document and ignore the unknown specification extension. |
 | Optional: a second WFM Client SVID from the same MIS for another `wfm-id`, placed in `ctt-runner/wfm-supplier/utils/certs/` as `other-wfm-client-svid-cert.pem` and `other-wfm-client-svid-key.pem` | IDENT-108: the WFM must refuse a validly issued client of another WFM. For the sandbox MIS: `cd ~/mis-deployment && sudo -E bash ~/sandbox/scripts/lib/mis/svid-gen.sh --automated --principal wfm-client --spiffe-id spiffe://<trust-domain>/margo/wfm/<another-wfm-id>/client/ctt-client`. Without this SVID the step is NOT RUN. |
+| Optional: three more SVIDs from the same MIS, placed in the same folder as `<name>-cert.pem` and `<name>-key.pem` (see the table below) | Each one lets more identity and caller-scope checks run. Without it, those steps are NOT RUN and the report names the missing file. |
+
+| SVID file name | SPIFFE ID to issue | Requirements |
+|---|---|---|
+| `non-client-svid` | `spiffe://<trust-domain>/margo/wfm/<wfm-id>`, without `/client/<id>` | IDENT-092, IDENT-093, IDENT-101: the WFM must not treat it as a client |
+| `expired-client-svid` | The CTT's own client SPIFFE ID with a short TTL (for example 60 seconds), used after it has expired | IDENT-015, IDENT-036, IDENT-037: the WFM must refuse an expired SVID |
+| `second-client-svid` | `spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<another-client-id>`, also added to the WFM's accepted clients | MGMT-016: the second client must not see the CTT client's deployment, deployment YAML or bundle |
+
+On the sandbox MIS, issue each one with
+`sudo docker exec margo-identity-service sh -c 'mkdir -p /tmp/ctt-svid && ./mis-cli mint x509 --spiffeID <spiffe-id> --ttl <seconds> --outputDir /tmp/ctt-svid'`,
+then copy `/tmp/ctt-svid/payload-cert.pem` and `payload-key.pem` out of the
+container with `docker cp`. The `svid-gen.sh` command above accepts only
+client and WFM SPIFFE IDs with its default TTL, so use `mis-cli` directly for
+the short-lived SVID.
 
 Every mTLS step opens a new TLS connection with a full handshake, so the WFM
 validates the client SVID on every request. Expect one handshake per step in
@@ -207,6 +221,8 @@ not a failure.
 | MGMT-026, MGMT-094 (child device) | The WFM answers `403 Forbidden` for the child deviceId. | Allow the CTT's WFM Client to report `ctt-unreported-gateway/ctt-child-device`. |
 | MGMT-069 to MGMT-072, MGMT-075, MGMT-076 | The assigned deployment has no `deviceConstraints` or `parameters`. | Assign a deployment that has them. |
 | IDENT-108 | No SVID for another `wfm-id` is in the cert folder. | Issue one and place it as described in [Before the run](#before-the-run). |
+| IDENT-015, IDENT-036, IDENT-037, IDENT-092, IDENT-101, MGMT-016 | The optional SVID for the check is not in the cert folder, the expired SVID has not expired yet, or the WFM does not accept the second client. | Issue the SVID and place it as described in [Before the run](#before-the-run). |
+| EXT-002, EXT-003 | The served ApplicationDeployment has no `x-…-extensions` property in `spec`. | Nothing to do. If the WFM adds extensions, they must be named `x-<unique-name>-extensions` with an object value. |
 | MGMT-087, MGMT-088, MGMT-090, MGMT-091, MGMT-092 | The WFM does not compress the deployment YAML or the bundle when the CTT sends `Accept-Encoding: gzip, br` (compression is optional). | Nothing to do. If the WFM compresses, it must use an advertised coding, send `Vary: Accept-Encoding`, and keep the digest valid for the decoded body. |
 | MGMT-093 | The WFM answers `200` to `If-None-Match` with the current digest (a `304` is optional). | Nothing to do. If the WFM answers `304`, the response must have no body. |
 
