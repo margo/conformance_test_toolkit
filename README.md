@@ -223,6 +223,10 @@ not a failure.
 | IDENT-108 | No SVID for another `wfm-id` is in the cert folder. | Issue one and place it as described in [Before the run](#before-the-run). |
 | IDENT-015, IDENT-036, IDENT-037, IDENT-092, IDENT-101, MGMT-016 | The optional SVID for the check is not in the cert folder, the expired SVID has not expired yet, or the WFM does not accept the second client. | Issue the SVID and place it as described in [Before the run](#before-the-run). |
 | EXT-002, EXT-003 | The served ApplicationDeployment has no `x-…-extensions` property in `spec`. | Nothing to do. If the WFM adds extensions, they must be named `x-<unique-name>-extensions` with an object value. |
+| MGMT-035 | This is the first run against this WFM for the CTT's client, or the manifest has not changed since the last run. | Run the group, change the deployment assigned to the CTT's client, then run the group again. The CTT keeps the last `manifestVersion` and ETag per WFM URL and client in `ctt-runner/wfm-supplier/utils/certs/.manifest-history.json`, as a WFM Client must. |
+| MGMT-036 | The `second-client-svid` is not in the cert folder, or the WFM does not accept that client. | Issue the second client SVID as described in [Before the run](#before-the-run). It must never have had a deployment assigned. |
+| IDENT-008 | The WFM SVID key is not RSA, or the WFM does not accept TLS 1.2 (TLS 1.3 always signs the handshake with RSASSA-PSS). | Nothing to do. |
+| IDENT-009 | The CTT's client SVID is not ECDSA P-256 with SHA-256. | Issue the client SVID with ECDSA P-256 (the MIS default). |
 | MGMT-087, MGMT-088, MGMT-090, MGMT-091, MGMT-092 | The WFM does not compress the deployment YAML or the bundle when the CTT sends `Accept-Encoding: gzip, br` (compression is optional). | Nothing to do. If the WFM compresses, it must use an advertised coding, send `Vary: Accept-Encoding`, and keep the digest valid for the decoded body. |
 | MGMT-093 | The WFM answers `200` to `If-None-Match` with the current digest (a `304` is optional). | Nothing to do. If the WFM answers `304`, the response must have no body. |
 
