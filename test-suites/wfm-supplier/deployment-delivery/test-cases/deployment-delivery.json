@@ -39,6 +39,12 @@
       "MARGO-WFM-MGMT-080",
       "MARGO-WFM-MGMT-085",
       "MARGO-WFM-MGMT-086",
+      "MARGO-WFM-MGMT-087",
+      "MARGO-WFM-MGMT-088",
+      "MARGO-WFM-MGMT-090",
+      "MARGO-WFM-MGMT-091",
+      "MARGO-WFM-MGMT-092",
+      "MARGO-WFM-MGMT-093",
       "MARGO-WFM-MGMT-094",
       "MARGO-WFM-MGMT-103"
     ],
@@ -753,6 +759,94 @@
         }
       },
       {
+        "id": "wfm-mc-deployment-encoding",
+        "name": "Compressed Deployment YAML — Advertised Content-Encoding, Digest Over The Decoded Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-091",
+          "MARGO-WFM-MGMT-056"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.content-encoding",
+            "operation": "one_of",
+            "value": [
+              "gzip",
+              "br"
+            ]
+          },
+          {
+            "field": "deploymentDigest",
+            "operation": "body_sha256_equals",
+            "value": "{deploymentDigest}"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment YAML (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-deployment-vary",
+        "name": "Compressed Deployment YAML — Vary: Accept-Encoding",
+        "crIds": [
+          "MARGO-WFM-MGMT-087",
+          "MARGO-WFM-MGMT-090"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.vary",
+            "operation": "matches_regex",
+            "value": "[Aa]ccept-[Ee]ncoding"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment YAML (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-deployment-not-modified",
+        "name": "Deployment YAML Revalidated With If-None-Match — 304 Not Modified Has No Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-093"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "expected_status": 304,
+        "validations": [
+          {
+            "field": "_body",
+            "operation": "equals",
+            "value": ""
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "If-None-Match": "\"{deploymentDigest}\""
+        },
+        "not_run_if": {
+          "status": 200,
+          "reason": "the WFM answered 200: a 304 for an unchanged deployment YAML is optional"
+        }
+      },
+      {
         "id": "wfm-mc-deployment-wrong-digest",
         "name": "Deployment YAML With A Digest The WFM Does Not Have Returns 404",
         "crIds": [
@@ -861,6 +955,94 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-bundle-encoding",
+        "name": "Compressed Deployment Bundle — Advertised Content-Encoding, Digest Over The Decoded Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-092",
+          "MARGO-WFM-MGMT-056"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.content-encoding",
+            "operation": "one_of",
+            "value": [
+              "gzip",
+              "br"
+            ]
+          },
+          {
+            "field": "bundleDigest",
+            "operation": "body_sha256_equals",
+            "value": "{bundleDigest}"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment bundle (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-bundle-vary",
+        "name": "Compressed Deployment Bundle — Vary: Accept-Encoding",
+        "crIds": [
+          "MARGO-WFM-MGMT-088",
+          "MARGO-WFM-MGMT-090"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.vary",
+            "operation": "matches_regex",
+            "value": "[Aa]ccept-[Ee]ncoding"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment bundle (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-bundle-not-modified",
+        "name": "Deployment Bundle Revalidated With If-None-Match — 304 Not Modified Has No Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-093"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "expected_status": 304,
+        "validations": [
+          {
+            "field": "_body",
+            "operation": "equals",
+            "value": ""
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "If-None-Match": "\"{bundleDigest}\""
+        },
+        "not_run_if": {
+          "status": 200,
+          "reason": "the WFM answered 200: a 304 for an unchanged deployment bundle is optional"
+        }
       },
       {
         "id": "wfm-mc-bundle-wrong-digest",

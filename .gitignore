@@ -39,6 +39,8 @@ ctt-runner/wfm-supplier/utils/certs/svid-key.pem
 ctt-runner/wfm-supplier/utils/certs/svid-ca.pem
 ctt-runner/wfm-supplier/utils/certs/svid-previous-cert.pem
 ctt-runner/wfm-supplier/utils/certs/svid-previous-key.pem
+ctt-runner/wfm-supplier/utils/certs/other-wfm-client-svid-cert.pem
+ctt-runner/wfm-supplier/utils/certs/other-wfm-client-svid-key.pem
 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/previous-client-svid-cert.pem
 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/previous-client-svid-key.pem
 

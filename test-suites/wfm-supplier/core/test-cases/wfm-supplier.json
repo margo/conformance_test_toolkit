@@ -1241,6 +1241,12 @@
       "MARGO-WFM-MGMT-080",
       "MARGO-WFM-MGMT-085",
       "MARGO-WFM-MGMT-086",
+      "MARGO-WFM-MGMT-087",
+      "MARGO-WFM-MGMT-088",
+      "MARGO-WFM-MGMT-090",
+      "MARGO-WFM-MGMT-091",
+      "MARGO-WFM-MGMT-092",
+      "MARGO-WFM-MGMT-093",
       "MARGO-WFM-MGMT-094",
       "MARGO-WFM-MGMT-103"
     ],
@@ -1955,6 +1961,94 @@
         }
       },
       {
+        "id": "wfm-mc-deployment-encoding",
+        "name": "Compressed Deployment YAML — Advertised Content-Encoding, Digest Over The Decoded Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-091",
+          "MARGO-WFM-MGMT-056"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.content-encoding",
+            "operation": "one_of",
+            "value": [
+              "gzip",
+              "br"
+            ]
+          },
+          {
+            "field": "deploymentDigest",
+            "operation": "body_sha256_equals",
+            "value": "{deploymentDigest}"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment YAML (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-deployment-vary",
+        "name": "Compressed Deployment YAML — Vary: Accept-Encoding",
+        "crIds": [
+          "MARGO-WFM-MGMT-087",
+          "MARGO-WFM-MGMT-090"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.vary",
+            "operation": "matches_regex",
+            "value": "[Aa]ccept-[Ee]ncoding"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment YAML (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-deployment-not-modified",
+        "name": "Deployment YAML Revalidated With If-None-Match — 304 Not Modified Has No Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-093"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "expected_status": 304,
+        "validations": [
+          {
+            "field": "_body",
+            "operation": "equals",
+            "value": ""
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "If-None-Match": "\"{deploymentDigest}\""
+        },
+        "not_run_if": {
+          "status": 200,
+          "reason": "the WFM answered 200: a 304 for an unchanged deployment YAML is optional"
+        }
+      },
+      {
         "id": "wfm-mc-deployment-wrong-digest",
         "name": "Deployment YAML With A Digest The WFM Does Not Have Returns 404",
         "crIds": [
@@ -2063,6 +2157,94 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-bundle-encoding",
+        "name": "Compressed Deployment Bundle — Advertised Content-Encoding, Digest Over The Decoded Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-092",
+          "MARGO-WFM-MGMT-056"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.content-encoding",
+            "operation": "one_of",
+            "value": [
+              "gzip",
+              "br"
+            ]
+          },
+          {
+            "field": "bundleDigest",
+            "operation": "body_sha256_equals",
+            "value": "{bundleDigest}"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment bundle (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-bundle-vary",
+        "name": "Compressed Deployment Bundle — Vary: Accept-Encoding",
+        "crIds": [
+          "MARGO-WFM-MGMT-088",
+          "MARGO-WFM-MGMT-090"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_headers.vary",
+            "operation": "matches_regex",
+            "value": "[Aa]ccept-[Ee]ncoding"
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "Accept-Encoding": "gzip, br"
+        },
+        "applies_if": {
+          "field": "_headers.content-encoding",
+          "reason": "the WFM did not compress the deployment bundle (Content-Encoding is optional), so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-bundle-not-modified",
+        "name": "Deployment Bundle Revalidated With If-None-Match — 304 Not Modified Has No Body",
+        "crIds": [
+          "MARGO-WFM-MGMT-093"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "expected_status": 304,
+        "validations": [
+          {
+            "field": "_body",
+            "operation": "equals",
+            "value": ""
+          }
+        ],
+        "extract_context": {},
+        "headers": {
+          "If-None-Match": "\"{bundleDigest}\""
+        },
+        "not_run_if": {
+          "status": 200,
+          "reason": "the WFM answered 200: a 304 for an unchanged deployment bundle is optional"
+        }
       },
       {
         "id": "wfm-mc-bundle-wrong-digest",
@@ -2888,6 +3070,302 @@
           }
         ],
         "extract_context": {}
+      }
+    ]
+  },
+  {
+    "id": "wfm-identity-client-auth",
+    "name": "MIAF Identity — Client SVID Validation, Authorization And Forwarded Identity Headers",
+    "crIds": [
+      "MARGO-WFM-IDENT-014",
+      "MARGO-WFM-IDENT-030",
+      "MARGO-WFM-IDENT-040",
+      "MARGO-WFM-IDENT-041",
+      "MARGO-WFM-IDENT-042",
+      "MARGO-WFM-IDENT-108",
+      "MARGO-WFM-IDENT-112",
+      "MARGO-WFM-IDENT-114",
+      "MARGO-WFM-IDENT-115",
+      "MARGO-WFM-IDENT-116",
+      "MARGO-WFM-IDENT-120"
+    ],
+    "description": "How the WFM authenticates the caller: every Management Interface endpoint refuses a request without a client certificate; the client SVID must chain to the Trust Bundle through CA certificates (a self-signed substitute and a leaf signed by an SVID are refused); a validly issued SVID of another wfm-id is refused (NOT RUN unless that SVID is placed in the cert folder); and forged RFC 9440 Client-Cert / Client-Cert-Chain headers never authenticate a request.",
+    "steps": [
+      {
+        "id": "wfm-identity-ca-nocert-capabilities",
+        "name": "No Client Certificate — PUT Capabilities Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-120"
+        ],
+        "method": "PUT",
+        "endpoint": "/api/v1/capabilities/wfm-core-device",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "request_body": {
+          "properties": {
+            "id": "wfm-core-device",
+            "vendor": "Conformance Test Suite",
+            "modelNumber": "CTS-WFMCORE-1",
+            "serialNumber": "SN-WFMCORE-001",
+            "cpus": [
+              {
+                "cores": 4,
+                "architecture": "amd64"
+              }
+            ],
+            "memory": "16Gi",
+            "storage": "256Gi",
+            "interfaces": [
+              {
+                "type": "ethernet"
+              }
+            ],
+            "peripherals": [],
+            "otelCollector": true,
+            "supportedRuntimes": [
+              "oci"
+            ],
+            "supportedDeploymentTypes": [
+              "compose"
+            ]
+          }
+        },
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "none"
+      },
+      {
+        "id": "wfm-identity-ca-nocert-deployments",
+        "name": "No Client Certificate — GET Desired State Manifest Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-120"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "none"
+      },
+      {
+        "id": "wfm-identity-ca-nocert-deployment",
+        "name": "No Client Certificate — GET Deployment Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-120"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "none"
+      },
+      {
+        "id": "wfm-identity-ca-nocert-bundle",
+        "name": "No Client Certificate — GET Bundle Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-120"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "none"
+      },
+      {
+        "id": "wfm-identity-ca-nocert-status",
+        "name": "No Client Certificate — POST Deployment Status Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-120"
+        ],
+        "method": "POST",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/status",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "request_body": {
+          "deploymentId": "ctt-unknown-deployment",
+          "adoptedManifestVersion": 1,
+          "status": {
+            "state": "pending"
+          },
+          "components": [
+            {
+              "name": "ctt-component",
+              "state": "pending"
+            }
+          ]
+        },
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "none"
+      },
+      {
+        "id": "wfm-identity-ca-chain-accepted",
+        "name": "Client SVID That Chains To The Trust Bundle Is Accepted",
+        "crIds": [
+          "MARGO-WFM-IDENT-014"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-ca-substituted-cert",
+        "name": "Substituted Client Certificate (same SPIFFE ID, not issued by the MIS) Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-030",
+          "MARGO-WFM-IDENT-112",
+          "MARGO-WFM-IDENT-114"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "untrusted"
+      },
+      {
+        "id": "wfm-identity-ca-forged-chain",
+        "name": "Leaf Signed By An SVID (cA=false) Is Refused Even Though The Chain Reaches The Trust Bundle",
+        "crIds": [
+          "MARGO-WFM-IDENT-014",
+          "MARGO-WFM-IDENT-030",
+          "MARGO-WFM-IDENT-112"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "forged-chain"
+      },
+      {
+        "id": "wfm-identity-ca-other-wfm",
+        "name": "Valid SVID Of Another wfm-id Is Not Authorized",
+        "crIds": [
+          "MARGO-WFM-IDENT-108"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "other-wfm"
+      },
+      {
+        "id": "wfm-identity-ca-header-no-cert",
+        "name": "Forged Client-Cert Header Without A Client Certificate Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-040",
+          "MARGO-WFM-IDENT-041",
+          "MARGO-WFM-IDENT-042",
+          "MARGO-WFM-IDENT-115",
+          "MARGO-WFM-IDENT-116"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "client_cert_header": "own",
+        "svid_source": "none"
+      },
+      {
+        "id": "wfm-identity-ca-header-with-cert",
+        "name": "Forged Client-Cert Header Is Ignored — The Request Is Served For The mTLS Identity",
+        "crIds": [
+          "MARGO-WFM-IDENT-040",
+          "MARGO-WFM-IDENT-041",
+          "MARGO-WFM-IDENT-115"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "client_cert_header": "untrusted"
       }
     ]
   },

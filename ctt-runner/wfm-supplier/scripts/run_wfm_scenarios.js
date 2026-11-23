@@ -133,6 +133,19 @@ const previousIdentity = (miafIdentity && fs.existsSync(svidPreviousCertPath) &&
     }
   : null;
 
+// Optional second WFM Client SVID, validly issued by the same MIS but for
+// another WFM (a different wfm-id). Only the IDENT-108 step uses it: a WFM must
+// not accept a client outside its own wfm-id namespace. NOT RUN when absent.
+const otherWfmCertPath = path.join(certDir, 'other-wfm-client-svid-cert.pem');
+const otherWfmKeyPath  = path.join(certDir, 'other-wfm-client-svid-key.pem');
+const otherWfmIdentity = (miafIdentity && fs.existsSync(otherWfmCertPath) && fs.existsSync(otherWfmKeyPath))
+  ? {
+      cert: fs.readFileSync(otherWfmCertPath, 'utf8'),
+      key: fs.readFileSync(otherWfmKeyPath, 'utf8'),
+      ca: miafIdentity.ca,
+    }
+  : null;
+
 // "Recognition by the WFM Client" (MIAF WFM Identity Profile): the WFM this
 // client may talk to is fixed by its own SVID — a client named
 // spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<wfm-client-id> belongs to
@@ -184,13 +197,47 @@ function untrustedIdentity() {
   return untrustedIdentityCache;
 }
 
+// step.svid_source "forged-chain": a leaf for another client of the same WFM,
+// signed with the CTT's own SVID key and presented with the CTT's SVID as its
+// "intermediate". The chain reaches the Trust Bundle, but an X.509-SVID has
+// cA=false and cannot sign certificates (rc.3 X.509-SVID validation), so a WFM
+// must refuse it.
+let forgedChainIdentityCache = null;
+function forgedChainIdentity() {
+  if (forgedChainIdentityCache) return forgedChainIdentityCache;
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'ctt-forged-'));
+  const file = (name) => path.join(dir, name);
+  try {
+    fs.writeFileSync(file('ext'), [
+      `subjectAltName=URI:${ownSpiffeId.replace(/\/client\/[^/]+$/, '/client/ctt-forged-client')}`,
+      'basicConstraints=critical,CA:FALSE',
+      'extendedKeyUsage=clientAuth',
+    ].join('\n') + '\n');
+    execFileSync('openssl', ['ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', file('key.pem')], { stdio: 'ignore' });
+    execFileSync('openssl', ['req', '-new', '-key', file('key.pem'), '-subj', '/CN=ctt-forged-client', '-out', file('req.csr')], { stdio: 'ignore' });
+    execFileSync('openssl', ['x509', '-req', '-in', file('req.csr'), '-CA', svidCertPath, '-CAkey', svidKeyPath,
+      '-set_serial', String(Date.now()), '-days', '1', '-extfile', file('ext'), '-out', file('cert.pem')], { stdio: 'ignore' });
+    forgedChainIdentityCache = {
+      cert: fs.readFileSync(file('cert.pem'), 'utf8') + miafIdentity.cert,
+      key: fs.readFileSync(file('key.pem'), 'utf8'),
+      ca: miafIdentity.ca,
+    };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  return forgedChainIdentityCache;
+}
+
 // step.svid_source drives the SVID Rotation scenario: "previous" presents the
 // SVID in use before the rotation, "refreshed" the current one. Without a kept
 // previous SVID no rotation has happened, so there is nothing to test — the
 // step is reported as NOT RUN instead of passing on the unrotated SVID.
 // Returns the reason a step cannot run, or ''.
 function svidSourceBlocker(step) {
-  if (!step.svid_source || step.svid_source === 'untrusted') return '';
+  if (['untrusted', 'forged-chain', 'none', undefined].includes(step.svid_source)) return '';
+  if (step.svid_source === 'other-wfm') {
+    return otherWfmIdentity ? '' : 'no second WFM Client SVID for another wfm-id — issue one with the MIS and place it in the CTT cert folder as other-wfm-client-svid-cert.pem and other-wfm-client-svid-key.pem';
+  }
   if (!previousIdentity) {
     return 'no SVID rotation to test — re-issue the client SVID for the same SPIFFE ID and run Setup MIAF Identity again (it keeps the SVID it replaces)';
   }
@@ -742,6 +789,22 @@ function tlsDetails(res, port, mtls) {
 }
 
 // Key type and signature algorithm of an SVID. Only the entry for its own key
+// HTTP Content-Encoding (gzip, br, deflate) is removed before any check: Margo
+// digests and ETags refer to the decoded body (MGMT-056). The WFM only
+// compresses when a step sends Accept-Encoding. A body that does not decode is
+// replaced by an error text (a client could not read it either), so its digest
+// check fails and the report shows why.
+function decodeContent(body, encoding) {
+  const zlib = require('zlib');
+  const decode = { gzip: zlib.gunzipSync, 'x-gzip': zlib.gunzipSync, br: zlib.brotliDecompressSync, deflate: zlib.inflateSync };
+  try {
+    return String(encoding || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean).reverse()
+      .reduce((buf, e) => (decode[e] ? decode[e](buf) : buf), body);
+  } catch (err) {
+    return Buffer.from(`<response body could not be decoded as Content-Encoding "${encoding}": ${err.message}>`);
+  }
+}
+
 // type is set (ec, eddsa or rsa), so a step about RSA keys can use
 // applies_if "_tls.rsa"; rsaSignature is set when the CA signed it with RSA.
 const svidKeyCache = new Map();
@@ -805,7 +868,7 @@ function request(method, url, headers, bodyText, mtls) {
       const tls = mtls ? tlsDetails(res, options.port, mtls) : undefined;
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
-        const rawBody = Buffer.concat(chunks);
+        const rawBody = decodeContent(Buffer.concat(chunks), res.headers['content-encoding']);
         resolve({ status: res.statusCode, headers: res.headers, body: rawBody.toString('utf8'), rawBody, tls });
       });
     });
@@ -1458,6 +1521,16 @@ async function performHTTPStep(step) {
 
   if (bodyText) headers['Content-Type'] = headers['Content-Type'] || 'application/json';
 
+  // step.client_cert_header "own" | "untrusted": add RFC 9440 Client-Cert and
+  // Client-Cert-Chain headers carrying that certificate, as an attacker would to
+  // impersonate a caller behind an mTLS-terminating proxy. The WFM must ignore them.
+  if (step.client_cert_header) {
+    const pem = step.client_cert_header === 'untrusted' ? untrustedIdentity().cert : miafIdentity.cert;
+    const value = `:${new crypto.X509Certificate(pem).raw.toString('base64')}:`;
+    headers['Client-Cert'] = value;
+    headers['Client-Cert-Chain'] = value;
+  }
+
   // step.mtls: true → MIAF transport (mutual TLS with an X.509-SVID) instead of
   // RFC 9421 request signing. The old flow's signature/digest headers don't exist
   // in MIAF at all, so this branch skips them entirely rather than layering on top.
@@ -1473,6 +1546,9 @@ async function performHTTPStep(step) {
     // The WFM's SVID cannot chain to the device CA → TLS handshake fails → transport error.
     const ownIdentity = step.svid_source === 'previous' ? previousIdentity
       : step.svid_source === 'untrusted' ? untrustedIdentity()
+      : step.svid_source === 'forged-chain' ? forgedChainIdentity()
+      : step.svid_source === 'other-wfm' ? otherWfmIdentity
+      : step.svid_source === 'none' ? { ca: miafIdentity.ca } // no client certificate
       : miafIdentity;
     const identity = step.mtls_wrong_server_ca
       ? { cert: ownIdentity.cert, key: ownIdentity.key, ca: caCertificate }
