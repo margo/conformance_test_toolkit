@@ -505,6 +505,365 @@
     ]
   },
   {
+    "id": "wfm-core-problem-details",
+    "name": "Problem Details — RFC 9457 Error Bodies",
+    "crIds": [
+      "MARGO-WFM-MGMT-010",
+      "MARGO-WFM-MGMT-020",
+      "MARGO-WFM-MGMT-094",
+      "MARGO-WFM-MGMT-097",
+      "MARGO-WFM-MGMT-099",
+      "MARGO-WFM-MGMT-101",
+      "MARGO-WFM-MGMT-102"
+    ],
+    "description": "Error responses carry RFC 9457 problem details as the specification defines them: the catalogue type URI for a standard Margo error, about:blank when no Margo type applies, retryable false with backoffStrategy none for a non-transient error, and a status field equal to the HTTP status. Needs no deployment: it asks for a deployment and a bundle the WFM does not have, and for a resource that does not exist under /api/v1.",
+    "steps": [
+      {
+        "id": "wfm-core-pd-1",
+        "name": "Unknown Deployment 404 — type Is The Catalogue URI #deployment-not-found",
+        "crIds": [
+          "MARGO-WFM-MGMT-094"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#deployment-not-found"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-2",
+        "name": "Unknown Deployment 404 — type Does Not Misuse The Reserved Margo Namespace",
+        "crIds": [
+          "MARGO-WFM-MGMT-099"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "matches_regex",
+            "value": "^(?!https://docs\\.margo\\.org/specification/problem-types)|^https://docs\\.margo\\.org/specification/problem-types#(invalid-request|semantic-error|not-authorized|gateway-not-found|device-not-found|invalid-bundle|deployment-not-found|discovery-document-not-found|spiffe-bundle-not-found|server-cannot-generate-response)$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-3",
+        "name": "Unknown Deployment 404 — retryable Is false And backoffStrategy Is none",
+        "crIds": [
+          "MARGO-WFM-MGMT-010"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "retryable",
+            "operation": "equals",
+            "value": false
+          },
+          {
+            "field": "backoffStrategy",
+            "operation": "equals",
+            "value": "none"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-4",
+        "name": "Unknown Deployment 404 — status Field Matches The HTTP Status",
+        "crIds": [
+          "MARGO-WFM-MGMT-020"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "status",
+            "operation": "equals",
+            "value": 404
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-5",
+        "name": "Unknown Bundle 404 — type Is The Catalogue URI #invalid-bundle",
+        "crIds": [
+          "MARGO-WFM-MGMT-094"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#invalid-bundle"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-6",
+        "name": "Unknown Bundle 404 — type Does Not Misuse The Reserved Margo Namespace",
+        "crIds": [
+          "MARGO-WFM-MGMT-099"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "matches_regex",
+            "value": "^(?!https://docs\\.margo\\.org/specification/problem-types)|^https://docs\\.margo\\.org/specification/problem-types#(invalid-request|semantic-error|not-authorized|gateway-not-found|device-not-found|invalid-bundle|deployment-not-found|discovery-document-not-found|spiffe-bundle-not-found|server-cannot-generate-response)$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-7",
+        "name": "Unknown Bundle 404 — retryable Is false And backoffStrategy Is none",
+        "crIds": [
+          "MARGO-WFM-MGMT-010"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "retryable",
+            "operation": "equals",
+            "value": false
+          },
+          {
+            "field": "backoffStrategy",
+            "operation": "equals",
+            "value": "none"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-8",
+        "name": "Unknown Bundle 404 — status Field Matches The HTTP Status",
+        "crIds": [
+          "MARGO-WFM-MGMT-020"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "status",
+            "operation": "equals",
+            "value": 404
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-9",
+        "name": "Unknown Resource 404 — type Is about:blank",
+        "crIds": [
+          "MARGO-WFM-MGMT-097"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "about:blank"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-10",
+        "name": "Unknown Resource 404 — about:blank title Is The HTTP Status Phrase",
+        "crIds": [
+          "MARGO-WFM-MGMT-101"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "title",
+            "operation": "equals",
+            "value": "Not Found"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-11",
+        "name": "Unknown Resource 404 — about:blank detail Describes The Occurrence",
+        "crIds": [
+          "MARGO-WFM-MGMT-102"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "detail",
+            "operation": "is_string"
+          },
+          {
+            "field": "detail",
+            "operation": "not_empty"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-12",
+        "name": "Unknown Resource 404 — retryable Is false And backoffStrategy Is none",
+        "crIds": [
+          "MARGO-WFM-MGMT-010"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "retryable",
+            "operation": "equals",
+            "value": false
+          },
+          {
+            "field": "backoffStrategy",
+            "operation": "equals",
+            "value": "none"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-13",
+        "name": "Unknown Resource 404 — status Field Matches The HTTP Status",
+        "crIds": [
+          "MARGO-WFM-MGMT-020"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "status",
+            "operation": "equals",
+            "value": 404
+          }
+        ],
+        "extract_context": {}
+      }
+    ]
+  },
+  {
     "id": "wfm-core-status",
     "name": "Deployment Status Reporting",
     "crIds": [
@@ -679,8 +1038,10 @@
       "MARGO-WFM-MGMT-043",
       "MARGO-WFM-MGMT-044",
       "MARGO-WFM-MGMT-046",
+      "MARGO-WFM-MGMT-047",
       "MARGO-WFM-MGMT-048",
       "MARGO-WFM-MGMT-049",
+      "MARGO-WFM-MGMT-050",
       "MARGO-WFM-MGMT-051",
       "MARGO-WFM-MGMT-052",
       "MARGO-WFM-MGMT-053",
@@ -689,8 +1050,24 @@
       "MARGO-WFM-MGMT-056",
       "MARGO-WFM-MGMT-061",
       "MARGO-WFM-MGMT-062",
+      "MARGO-WFM-MGMT-063",
+      "MARGO-WFM-MGMT-065",
+      "MARGO-WFM-MGMT-067",
+      "MARGO-WFM-MGMT-069",
+      "MARGO-WFM-MGMT-070",
+      "MARGO-WFM-MGMT-071",
+      "MARGO-WFM-MGMT-072",
+      "MARGO-WFM-MGMT-074",
+      "MARGO-WFM-MGMT-075",
+      "MARGO-WFM-MGMT-076",
+      "MARGO-WFM-MGMT-077",
+      "MARGO-WFM-MGMT-078",
+      "MARGO-WFM-MGMT-079",
+      "MARGO-WFM-MGMT-080",
       "MARGO-WFM-MGMT-085",
-      "MARGO-WFM-MGMT-086"
+      "MARGO-WFM-MGMT-086",
+      "MARGO-WFM-MGMT-094",
+      "MARGO-WFM-MGMT-103"
     ],
     "description": "A WFM serves a multi-component compose ApplicationDeployment faithfully, without anything being deployed: content-addressed URLs, the deployment YAML and its digest, the bundle archive with exactly the listed YAML files, its cache headers, wrong digests answered 404, and status reports for every state, with invalid reports rejected. PRECONDITION: a deployment with two components (wait: true and wait: false) is assigned to the CTT's device while the second step is polling.",
     "steps": [
@@ -992,6 +1369,415 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-id",
+        "name": "ApplicationDeployment YAML — Top-Level id Equals The deploymentId Of The Manifest And The URL",
+        "crIds": [
+          "MARGO-WFM-MGMT-047",
+          "MARGO-WFM-MGMT-050"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.id",
+            "operation": "equals",
+            "value": "{deploymentId}"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-top-level",
+        "name": "ApplicationDeployment YAML — Has id, metadata And spec",
+        "crIds": [
+          "MARGO-WFM-MGMT-063"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.id",
+            "operation": "not_empty"
+          },
+          {
+            "field": "_yaml.metadata",
+            "operation": "is_object"
+          },
+          {
+            "field": "_yaml.spec",
+            "operation": "is_object"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-spec",
+        "name": "ApplicationDeployment YAML — spec Has applicationId, deploymentProfile And parameters",
+        "crIds": [
+          "MARGO-WFM-MGMT-065"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.applicationId",
+            "operation": "not_empty"
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile",
+            "operation": "is_object"
+          },
+          {
+            "field": "_yaml.spec.parameters",
+            "operation": "exists"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-profile",
+        "name": "ApplicationDeployment YAML — deploymentProfile Has type And components",
+        "crIds": [
+          "MARGO-WFM-MGMT-067"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.type",
+            "operation": "not_empty"
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.components",
+            "operation": "array_length_gte",
+            "value": 1
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-cpu",
+        "name": "ApplicationDeployment YAML — capacityRequirements.cpu Has cores",
+        "crIds": [
+          "MARGO-WFM-MGMT-069"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.capacityRequirements.cpu",
+            "operation": "each_has_keys",
+            "value": [
+              "cores"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.capacityRequirements.cpu",
+          "reason": "the deployment has no deviceConstraints.capacityRequirements.cpu, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-selectors",
+        "name": "ApplicationDeployment YAML — Every Selector Has matchExpressions",
+        "crIds": [
+          "MARGO-WFM-MGMT-070"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector",
+            "operation": "each_has_keys",
+            "value": [
+              "matchExpressions"
+            ]
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.labelSelector",
+            "operation": "each_has_keys",
+            "value": [
+              "matchExpressions"
+            ]
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*.itemSelector",
+            "operation": "each_has_keys",
+            "value": [
+              "matchExpressions"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*",
+          "reason": "the deployment has no deviceConstraints.eligibilityRules, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-match-expressions",
+        "name": "ApplicationDeployment YAML — Every Match Expression Has key And operator",
+        "crIds": [
+          "MARGO-WFM-MGMT-071"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*",
+            "operation": "each_has_keys",
+            "value": [
+              "key",
+              "operator"
+            ]
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*.itemSelector.matchExpressions.*",
+            "operation": "each_has_keys",
+            "value": [
+              "key",
+              "operator"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*",
+          "reason": "the deployment has no match expressions in deviceConstraints.eligibilityRules, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-property-keys",
+        "name": "ApplicationDeployment YAML — Every propertySelector key Is An RFC 6901 JSON Pointer",
+        "crIds": [
+          "MARGO-WFM-MGMT-072"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector.matchExpressions.*.key",
+            "operation": "each_matches_regex",
+            "value": "^(/([^/~]|~[01])*)*$"
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector.matchExpressions.*.itemSelector.matchExpressions.*.key",
+            "operation": "each_matches_regex",
+            "value": "^(/([^/~]|~[01])*)*$"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector.matchExpressions.*",
+          "reason": "the deployment has no propertySelector match expressions, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-components",
+        "name": "ApplicationDeployment YAML — Every Component Has name And properties",
+        "crIds": [
+          "MARGO-WFM-MGMT-074"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*",
+            "operation": "each_has_keys",
+            "value": [
+              "name",
+              "properties"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*",
+          "reason": "the deployment has no components, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-parameters",
+        "name": "ApplicationDeployment YAML — Every Parameter Has value And targets",
+        "crIds": [
+          "MARGO-WFM-MGMT-075"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.parameters.*",
+            "operation": "each_has_keys",
+            "value": [
+              "value",
+              "targets"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.parameters.*",
+          "reason": "the deployment has no parameters, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-targets",
+        "name": "ApplicationDeployment YAML — Every Parameter Target Has pointer And components",
+        "crIds": [
+          "MARGO-WFM-MGMT-076"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.parameters.*.targets.*",
+            "operation": "each_has_keys",
+            "value": [
+              "pointer",
+              "components"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.parameters.*.targets.*",
+          "reason": "the deployment has no parameter targets, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-component-properties",
+        "name": "ApplicationDeployment YAML — Every Component properties Has repository And revision",
+        "crIds": [
+          "MARGO-WFM-MGMT-077"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties",
+            "operation": "each_has_keys",
+            "value": [
+              "repository",
+              "revision"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties",
+          "reason": "the deployment has no component properties, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-repository",
+        "name": "ApplicationDeployment YAML — Every Component repository Is An oci:// Reference",
+        "crIds": [
+          "MARGO-WFM-MGMT-078"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties.repository",
+            "operation": "each_matches_regex",
+            "value": "^oci://.+"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties.repository",
+          "reason": "the deployment has no component repository, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-revision-semver",
+        "name": "ApplicationDeployment YAML — Every Component revision Is SemVer 2.0 Without A Leading v",
+        "crIds": [
+          "MARGO-WFM-MGMT-079"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+            "operation": "each_matches_regex",
+            "value": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:_([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+          "reason": "the deployment has no component revision, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-revision-no-plus",
+        "name": "ApplicationDeployment YAML — No Component revision Contains + (Build Metadata Stored As _)",
+        "crIds": [
+          "MARGO-WFM-MGMT-080"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+            "operation": "each_matches_regex",
+            "value": "^[^+]*$"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+          "reason": "the deployment has no component revision, so there is nothing to check"
+        }
       },
       {
         "id": "wfm-mc-deployment-wrong-digest",
@@ -1319,6 +2105,100 @@
         ]
       },
       {
+        "id": "wfm-mc-status-invalid-state-type",
+        "name": "Rejected Status (422) — type Is The Catalogue URI #semantic-error",
+        "method": "POST",
+        "endpoint": "/api/v1/deployments/{deploymentId}/status",
+        "mtls": true,
+        "request_body": {
+          "deploymentId": "{deploymentId}",
+          "adoptedManifestVersion": "{manifestVersion}",
+          "status": {
+            "state": "not-a-state"
+          },
+          "components": [
+            {
+              "name": "wait-true-component",
+              "state": "not-a-state"
+            },
+            {
+              "name": "wait-false-component",
+              "state": "not-a-state"
+            }
+          ]
+        },
+        "headers": {},
+        "expected_status": 422,
+        "accepted_statuses": [
+          400
+        ],
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
+          }
+        ],
+        "extract_context": {},
+        "crIds": [
+          "MARGO-WFM-MGMT-094"
+        ]
+      },
+      {
+        "id": "wfm-mc-status-invalid-state-errors",
+        "name": "Rejected Status (422) — errors Array Gives Field-Level Details",
+        "method": "POST",
+        "endpoint": "/api/v1/deployments/{deploymentId}/status",
+        "mtls": true,
+        "request_body": {
+          "deploymentId": "{deploymentId}",
+          "adoptedManifestVersion": "{manifestVersion}",
+          "status": {
+            "state": "not-a-state"
+          },
+          "components": [
+            {
+              "name": "wait-true-component",
+              "state": "not-a-state"
+            },
+            {
+              "name": "wait-false-component",
+              "state": "not-a-state"
+            }
+          ]
+        },
+        "headers": {},
+        "expected_status": 422,
+        "accepted_statuses": [
+          400
+        ],
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "errors",
+            "operation": "array_length_gte",
+            "value": 1
+          },
+          {
+            "field": "errors.0.field",
+            "operation": "not_empty"
+          }
+        ],
+        "extract_context": {},
+        "crIds": [
+          "MARGO-WFM-MGMT-103"
+        ]
+      },
+      {
         "id": "wfm-mc-status-missing-status",
         "name": "Reject Deployment Status — Required Field status Is Missing",
         "method": "POST",
@@ -1438,6 +2318,375 @@
         "accepted_statuses": [
           403
         ]
+      }
+    ]
+  },
+  {
+    "id": "wfm-identity-tls",
+    "name": "MIAF Identity — WFM SVID, TLS Version And Transport",
+    "crIds": [
+      "MARGO-WFM-IDENT-001",
+      "MARGO-WFM-IDENT-003",
+      "MARGO-WFM-IDENT-004",
+      "MARGO-WFM-IDENT-005",
+      "MARGO-WFM-IDENT-006",
+      "MARGO-WFM-IDENT-007",
+      "MARGO-WFM-IDENT-029",
+      "MARGO-WFM-IDENT-031",
+      "MARGO-WFM-IDENT-043",
+      "MARGO-WFM-IDENT-080",
+      "MARGO-WFM-IDENT-081",
+      "MARGO-WFM-IDENT-085",
+      "MARGO-WFM-IDENT-098",
+      "MARGO-WFM-MGMT-002",
+      "MARGO-WFM-MGMT-003"
+    ],
+    "description": "What the mTLS connection to the WFM shows: the SPIFFE ID, chain and key of the SVID the WFM presents, the TLS version it negotiates (TLS 1.3 by default, nothing older than TLS 1.2), and HTTP/1.1 on port 443. Key-type checks that do not apply to the WFM's key are NOT RUN.",
+    "steps": [
+      {
+        "id": "wfm-identity-tls-spiffe-margo",
+        "name": "WFM SPIFFE ID Path Begins With /margo/",
+        "crIds": [
+          "MARGO-WFM-IDENT-001"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-chain",
+        "name": "WFM Chain Verifies Against The Trust Bundle Alone (leaf + intermediates presented)",
+        "crIds": [
+          "MARGO-WFM-IDENT-003"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.authorized",
+            "operation": "equals",
+            "value": true
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-ec-curve",
+        "name": "WFM ECDSA Key Uses P-256 Or P-384",
+        "crIds": [
+          "MARGO-WFM-IDENT-004"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.ec.curve",
+            "operation": "one_of",
+            "value": [
+              "prime256v1",
+              "secp384r1"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.ec",
+          "reason": "the WFM's SVID key is not ECDSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-eddsa-curve",
+        "name": "WFM EdDSA Key Uses Ed25519",
+        "crIds": [
+          "MARGO-WFM-IDENT-005"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.eddsa.type",
+            "operation": "equals",
+            "value": "ed25519"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.eddsa",
+          "reason": "the WFM's SVID key is not EdDSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-rsa-bits",
+        "name": "WFM RSA Key Modulus Is At Least 3072 Bits",
+        "crIds": [
+          "MARGO-WFM-IDENT-006"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.rsa.bits",
+            "operation": "gte",
+            "value": 3072
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.rsa",
+          "reason": "the WFM's SVID key is not RSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-rsa-sha256",
+        "name": "RSA Signature On The WFM SVID Uses SHA-256",
+        "crIds": [
+          "MARGO-WFM-IDENT-007"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.rsaSignature",
+            "operation": "matches_regex",
+            "value": "[Ss][Hh][Aa]256"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.rsaSignature",
+          "reason": "the WFM's SVID is not signed with RSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-over-tls",
+        "name": "Management Interface Traffic Runs Over TLS",
+        "crIds": [
+          "MARGO-WFM-IDENT-029"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.protocol",
+            "operation": "matches_regex",
+            "value": "^TLSv1\\.[23]$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-tls13-default",
+        "name": "WFM Negotiates TLS 1.3 When The Client Offers TLS 1.2 And 1.3",
+        "crIds": [
+          "MARGO-WFM-IDENT-031"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.protocol",
+            "operation": "equals",
+            "value": "TLSv1.3"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-no-legacy",
+        "name": "WFM Refuses A Client That Offers Only TLS 1.1 Or Older",
+        "crIds": [
+          "MARGO-WFM-IDENT-043"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "tls_max_version": "TLSv1.1",
+        "expect_transport_error": true
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-not-empty",
+        "name": "WFM wfm-id Segment Is Not Empty",
+        "crIds": [
+          "MARGO-WFM-IDENT-080"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/wfm/[^/]+"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-chars",
+        "name": "WFM wfm-id Has Only Letters, Digits, Dots, Dashes And Underscores",
+        "crIds": [
+          "MARGO-WFM-IDENT-081"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/wfm/[A-Za-z0-9._-]+$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-not-dots",
+        "name": "WFM wfm-id Is Not . Or ..",
+        "crIds": [
+          "MARGO-WFM-IDENT-098"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/wfm/(?!\\.{1,2}$)[^/]+$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-same",
+        "name": "WFM Uses The Same wfm-id As The Client SVIDs It Accepts",
+        "crIds": [
+          "MARGO-WFM-IDENT-085"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.sameWfmId",
+            "operation": "equals",
+            "value": true
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-http11",
+        "name": "Management Interface Is Served Over HTTP/1.1",
+        "crIds": [
+          "MARGO-WFM-MGMT-002"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.httpVersion",
+            "operation": "equals",
+            "value": "1.1"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-port-443",
+        "name": "Management Interface Uses Port 443",
+        "crIds": [
+          "MARGO-WFM-MGMT-003"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.port",
+            "operation": "equals",
+            "value": 443
+          }
+        ],
+        "extract_context": {}
       }
     ]
   },

@@ -80,6 +80,375 @@
     ]
   },
   {
+    "id": "wfm-identity-tls",
+    "name": "MIAF Identity — WFM SVID, TLS Version And Transport",
+    "crIds": [
+      "MARGO-WFM-IDENT-001",
+      "MARGO-WFM-IDENT-003",
+      "MARGO-WFM-IDENT-004",
+      "MARGO-WFM-IDENT-005",
+      "MARGO-WFM-IDENT-006",
+      "MARGO-WFM-IDENT-007",
+      "MARGO-WFM-IDENT-029",
+      "MARGO-WFM-IDENT-031",
+      "MARGO-WFM-IDENT-043",
+      "MARGO-WFM-IDENT-080",
+      "MARGO-WFM-IDENT-081",
+      "MARGO-WFM-IDENT-085",
+      "MARGO-WFM-IDENT-098",
+      "MARGO-WFM-MGMT-002",
+      "MARGO-WFM-MGMT-003"
+    ],
+    "description": "What the mTLS connection to the WFM shows: the SPIFFE ID, chain and key of the SVID the WFM presents, the TLS version it negotiates (TLS 1.3 by default, nothing older than TLS 1.2), and HTTP/1.1 on port 443. Key-type checks that do not apply to the WFM's key are NOT RUN.",
+    "steps": [
+      {
+        "id": "wfm-identity-tls-spiffe-margo",
+        "name": "WFM SPIFFE ID Path Begins With /margo/",
+        "crIds": [
+          "MARGO-WFM-IDENT-001"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-chain",
+        "name": "WFM Chain Verifies Against The Trust Bundle Alone (leaf + intermediates presented)",
+        "crIds": [
+          "MARGO-WFM-IDENT-003"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.authorized",
+            "operation": "equals",
+            "value": true
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-ec-curve",
+        "name": "WFM ECDSA Key Uses P-256 Or P-384",
+        "crIds": [
+          "MARGO-WFM-IDENT-004"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.ec.curve",
+            "operation": "one_of",
+            "value": [
+              "prime256v1",
+              "secp384r1"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.ec",
+          "reason": "the WFM's SVID key is not ECDSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-eddsa-curve",
+        "name": "WFM EdDSA Key Uses Ed25519",
+        "crIds": [
+          "MARGO-WFM-IDENT-005"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.eddsa.type",
+            "operation": "equals",
+            "value": "ed25519"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.eddsa",
+          "reason": "the WFM's SVID key is not EdDSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-rsa-bits",
+        "name": "WFM RSA Key Modulus Is At Least 3072 Bits",
+        "crIds": [
+          "MARGO-WFM-IDENT-006"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.rsa.bits",
+            "operation": "gte",
+            "value": 3072
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.rsa",
+          "reason": "the WFM's SVID key is not RSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-rsa-sha256",
+        "name": "RSA Signature On The WFM SVID Uses SHA-256",
+        "crIds": [
+          "MARGO-WFM-IDENT-007"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.rsaSignature",
+            "operation": "matches_regex",
+            "value": "[Ss][Hh][Aa]256"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.rsaSignature",
+          "reason": "the WFM's SVID is not signed with RSA"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-over-tls",
+        "name": "Management Interface Traffic Runs Over TLS",
+        "crIds": [
+          "MARGO-WFM-IDENT-029"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.protocol",
+            "operation": "matches_regex",
+            "value": "^TLSv1\\.[23]$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-tls13-default",
+        "name": "WFM Negotiates TLS 1.3 When The Client Offers TLS 1.2 And 1.3",
+        "crIds": [
+          "MARGO-WFM-IDENT-031"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.protocol",
+            "operation": "equals",
+            "value": "TLSv1.3"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-no-legacy",
+        "name": "WFM Refuses A Client That Offers Only TLS 1.1 Or Older",
+        "crIds": [
+          "MARGO-WFM-IDENT-043"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "tls_max_version": "TLSv1.1",
+        "expect_transport_error": true
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-not-empty",
+        "name": "WFM wfm-id Segment Is Not Empty",
+        "crIds": [
+          "MARGO-WFM-IDENT-080"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/wfm/[^/]+"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-chars",
+        "name": "WFM wfm-id Has Only Letters, Digits, Dots, Dashes And Underscores",
+        "crIds": [
+          "MARGO-WFM-IDENT-081"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/wfm/[A-Za-z0-9._-]+$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-not-dots",
+        "name": "WFM wfm-id Is Not . Or ..",
+        "crIds": [
+          "MARGO-WFM-IDENT-098"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.peerSpiffeId",
+            "operation": "matches_regex",
+            "value": "^spiffe://[^/]+/margo/wfm/(?!\\.{1,2}$)[^/]+$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-wfm-id-same",
+        "name": "WFM Uses The Same wfm-id As The Client SVIDs It Accepts",
+        "crIds": [
+          "MARGO-WFM-IDENT-085"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.sameWfmId",
+            "operation": "equals",
+            "value": true
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-http11",
+        "name": "Management Interface Is Served Over HTTP/1.1",
+        "crIds": [
+          "MARGO-WFM-MGMT-002"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.httpVersion",
+            "operation": "equals",
+            "value": "1.1"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-port-443",
+        "name": "Management Interface Uses Port 443",
+        "crIds": [
+          "MARGO-WFM-MGMT-003"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_tls.port",
+            "operation": "equals",
+            "value": 443
+          }
+        ],
+        "extract_context": {}
+      }
+    ]
+  },
+  {
     "id": "wfm-identity-svid-refresh",
     "name": "MIAF Identity — SVID Rotation Continuity",
     "crIds": [

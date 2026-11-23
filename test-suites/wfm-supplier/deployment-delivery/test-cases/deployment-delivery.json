@@ -11,8 +11,10 @@
       "MARGO-WFM-MGMT-043",
       "MARGO-WFM-MGMT-044",
       "MARGO-WFM-MGMT-046",
+      "MARGO-WFM-MGMT-047",
       "MARGO-WFM-MGMT-048",
       "MARGO-WFM-MGMT-049",
+      "MARGO-WFM-MGMT-050",
       "MARGO-WFM-MGMT-051",
       "MARGO-WFM-MGMT-052",
       "MARGO-WFM-MGMT-053",
@@ -21,8 +23,24 @@
       "MARGO-WFM-MGMT-056",
       "MARGO-WFM-MGMT-061",
       "MARGO-WFM-MGMT-062",
+      "MARGO-WFM-MGMT-063",
+      "MARGO-WFM-MGMT-065",
+      "MARGO-WFM-MGMT-067",
+      "MARGO-WFM-MGMT-069",
+      "MARGO-WFM-MGMT-070",
+      "MARGO-WFM-MGMT-071",
+      "MARGO-WFM-MGMT-072",
+      "MARGO-WFM-MGMT-074",
+      "MARGO-WFM-MGMT-075",
+      "MARGO-WFM-MGMT-076",
+      "MARGO-WFM-MGMT-077",
+      "MARGO-WFM-MGMT-078",
+      "MARGO-WFM-MGMT-079",
+      "MARGO-WFM-MGMT-080",
       "MARGO-WFM-MGMT-085",
-      "MARGO-WFM-MGMT-086"
+      "MARGO-WFM-MGMT-086",
+      "MARGO-WFM-MGMT-094",
+      "MARGO-WFM-MGMT-103"
     ],
     "description": "A WFM serves a multi-component compose ApplicationDeployment faithfully, without anything being deployed: content-addressed URLs, the deployment YAML and its digest, the bundle archive with exactly the listed YAML files, its cache headers, wrong digests answered 404, and status reports for every state, with invalid reports rejected. PRECONDITION: a deployment with two components (wait: true and wait: false) is assigned to the CTT's device while the second step is polling.",
     "steps": [
@@ -324,6 +342,415 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-id",
+        "name": "ApplicationDeployment YAML — Top-Level id Equals The deploymentId Of The Manifest And The URL",
+        "crIds": [
+          "MARGO-WFM-MGMT-047",
+          "MARGO-WFM-MGMT-050"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.id",
+            "operation": "equals",
+            "value": "{deploymentId}"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-top-level",
+        "name": "ApplicationDeployment YAML — Has id, metadata And spec",
+        "crIds": [
+          "MARGO-WFM-MGMT-063"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.id",
+            "operation": "not_empty"
+          },
+          {
+            "field": "_yaml.metadata",
+            "operation": "is_object"
+          },
+          {
+            "field": "_yaml.spec",
+            "operation": "is_object"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-spec",
+        "name": "ApplicationDeployment YAML — spec Has applicationId, deploymentProfile And parameters",
+        "crIds": [
+          "MARGO-WFM-MGMT-065"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.applicationId",
+            "operation": "not_empty"
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile",
+            "operation": "is_object"
+          },
+          {
+            "field": "_yaml.spec.parameters",
+            "operation": "exists"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-profile",
+        "name": "ApplicationDeployment YAML — deploymentProfile Has type And components",
+        "crIds": [
+          "MARGO-WFM-MGMT-067"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.type",
+            "operation": "not_empty"
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.components",
+            "operation": "array_length_gte",
+            "value": 1
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-cpu",
+        "name": "ApplicationDeployment YAML — capacityRequirements.cpu Has cores",
+        "crIds": [
+          "MARGO-WFM-MGMT-069"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.capacityRequirements.cpu",
+            "operation": "each_has_keys",
+            "value": [
+              "cores"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.capacityRequirements.cpu",
+          "reason": "the deployment has no deviceConstraints.capacityRequirements.cpu, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-selectors",
+        "name": "ApplicationDeployment YAML — Every Selector Has matchExpressions",
+        "crIds": [
+          "MARGO-WFM-MGMT-070"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector",
+            "operation": "each_has_keys",
+            "value": [
+              "matchExpressions"
+            ]
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.labelSelector",
+            "operation": "each_has_keys",
+            "value": [
+              "matchExpressions"
+            ]
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*.itemSelector",
+            "operation": "each_has_keys",
+            "value": [
+              "matchExpressions"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*",
+          "reason": "the deployment has no deviceConstraints.eligibilityRules, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-match-expressions",
+        "name": "ApplicationDeployment YAML — Every Match Expression Has key And operator",
+        "crIds": [
+          "MARGO-WFM-MGMT-071"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*",
+            "operation": "each_has_keys",
+            "value": [
+              "key",
+              "operator"
+            ]
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*.itemSelector.matchExpressions.*",
+            "operation": "each_has_keys",
+            "value": [
+              "key",
+              "operator"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.*.matchExpressions.*",
+          "reason": "the deployment has no match expressions in deviceConstraints.eligibilityRules, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-property-keys",
+        "name": "ApplicationDeployment YAML — Every propertySelector key Is An RFC 6901 JSON Pointer",
+        "crIds": [
+          "MARGO-WFM-MGMT-072"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector.matchExpressions.*.key",
+            "operation": "each_matches_regex",
+            "value": "^(/([^/~]|~[01])*)*$"
+          },
+          {
+            "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector.matchExpressions.*.itemSelector.matchExpressions.*.key",
+            "operation": "each_matches_regex",
+            "value": "^(/([^/~]|~[01])*)*$"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.deviceConstraints.eligibilityRules.*.propertySelector.matchExpressions.*",
+          "reason": "the deployment has no propertySelector match expressions, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-components",
+        "name": "ApplicationDeployment YAML — Every Component Has name And properties",
+        "crIds": [
+          "MARGO-WFM-MGMT-074"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*",
+            "operation": "each_has_keys",
+            "value": [
+              "name",
+              "properties"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*",
+          "reason": "the deployment has no components, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-parameters",
+        "name": "ApplicationDeployment YAML — Every Parameter Has value And targets",
+        "crIds": [
+          "MARGO-WFM-MGMT-075"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.parameters.*",
+            "operation": "each_has_keys",
+            "value": [
+              "value",
+              "targets"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.parameters.*",
+          "reason": "the deployment has no parameters, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-targets",
+        "name": "ApplicationDeployment YAML — Every Parameter Target Has pointer And components",
+        "crIds": [
+          "MARGO-WFM-MGMT-076"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.parameters.*.targets.*",
+            "operation": "each_has_keys",
+            "value": [
+              "pointer",
+              "components"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.parameters.*.targets.*",
+          "reason": "the deployment has no parameter targets, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-component-properties",
+        "name": "ApplicationDeployment YAML — Every Component properties Has repository And revision",
+        "crIds": [
+          "MARGO-WFM-MGMT-077"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties",
+            "operation": "each_has_keys",
+            "value": [
+              "repository",
+              "revision"
+            ]
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties",
+          "reason": "the deployment has no component properties, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-repository",
+        "name": "ApplicationDeployment YAML — Every Component repository Is An oci:// Reference",
+        "crIds": [
+          "MARGO-WFM-MGMT-078"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties.repository",
+            "operation": "each_matches_regex",
+            "value": "^oci://.+"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties.repository",
+          "reason": "the deployment has no component repository, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-revision-semver",
+        "name": "ApplicationDeployment YAML — Every Component revision Is SemVer 2.0 Without A Leading v",
+        "crIds": [
+          "MARGO-WFM-MGMT-079"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+            "operation": "each_matches_regex",
+            "value": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:_([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+          "reason": "the deployment has no component revision, so there is nothing to check"
+        }
+      },
+      {
+        "id": "wfm-mc-appdep-revision-no-plus",
+        "name": "ApplicationDeployment YAML — No Component revision Contains + (Build Metadata Stored As _)",
+        "crIds": [
+          "MARGO-WFM-MGMT-080"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+            "operation": "each_matches_regex",
+            "value": "^[^+]*$"
+          }
+        ],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
+          "reason": "the deployment has no component revision, so there is nothing to check"
+        }
       },
       {
         "id": "wfm-mc-deployment-wrong-digest",
@@ -648,6 +1075,100 @@
         "extract_context": {},
         "crIds": [
           "MARGO-WFM-MGMT-001"
+        ]
+      },
+      {
+        "id": "wfm-mc-status-invalid-state-type",
+        "name": "Rejected Status (422) — type Is The Catalogue URI #semantic-error",
+        "method": "POST",
+        "endpoint": "/api/v1/deployments/{deploymentId}/status",
+        "mtls": true,
+        "request_body": {
+          "deploymentId": "{deploymentId}",
+          "adoptedManifestVersion": "{manifestVersion}",
+          "status": {
+            "state": "not-a-state"
+          },
+          "components": [
+            {
+              "name": "wait-true-component",
+              "state": "not-a-state"
+            },
+            {
+              "name": "wait-false-component",
+              "state": "not-a-state"
+            }
+          ]
+        },
+        "headers": {},
+        "expected_status": 422,
+        "accepted_statuses": [
+          400
+        ],
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#semantic-error"
+          }
+        ],
+        "extract_context": {},
+        "crIds": [
+          "MARGO-WFM-MGMT-094"
+        ]
+      },
+      {
+        "id": "wfm-mc-status-invalid-state-errors",
+        "name": "Rejected Status (422) — errors Array Gives Field-Level Details",
+        "method": "POST",
+        "endpoint": "/api/v1/deployments/{deploymentId}/status",
+        "mtls": true,
+        "request_body": {
+          "deploymentId": "{deploymentId}",
+          "adoptedManifestVersion": "{manifestVersion}",
+          "status": {
+            "state": "not-a-state"
+          },
+          "components": [
+            {
+              "name": "wait-true-component",
+              "state": "not-a-state"
+            },
+            {
+              "name": "wait-false-component",
+              "state": "not-a-state"
+            }
+          ]
+        },
+        "headers": {},
+        "expected_status": 422,
+        "accepted_statuses": [
+          400
+        ],
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "errors",
+            "operation": "array_length_gte",
+            "value": 1
+          },
+          {
+            "field": "errors.0.field",
+            "operation": "not_empty"
+          }
+        ],
+        "extract_context": {},
+        "crIds": [
+          "MARGO-WFM-MGMT-103"
         ]
       },
       {

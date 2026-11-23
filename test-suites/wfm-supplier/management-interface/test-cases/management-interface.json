@@ -505,6 +505,365 @@
     ]
   },
   {
+    "id": "wfm-core-problem-details",
+    "name": "Problem Details — RFC 9457 Error Bodies",
+    "crIds": [
+      "MARGO-WFM-MGMT-010",
+      "MARGO-WFM-MGMT-020",
+      "MARGO-WFM-MGMT-094",
+      "MARGO-WFM-MGMT-097",
+      "MARGO-WFM-MGMT-099",
+      "MARGO-WFM-MGMT-101",
+      "MARGO-WFM-MGMT-102"
+    ],
+    "description": "Error responses carry RFC 9457 problem details as the specification defines them: the catalogue type URI for a standard Margo error, about:blank when no Margo type applies, retryable false with backoffStrategy none for a non-transient error, and a status field equal to the HTTP status. Needs no deployment: it asks for a deployment and a bundle the WFM does not have, and for a resource that does not exist under /api/v1.",
+    "steps": [
+      {
+        "id": "wfm-core-pd-1",
+        "name": "Unknown Deployment 404 — type Is The Catalogue URI #deployment-not-found",
+        "crIds": [
+          "MARGO-WFM-MGMT-094"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#deployment-not-found"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-2",
+        "name": "Unknown Deployment 404 — type Does Not Misuse The Reserved Margo Namespace",
+        "crIds": [
+          "MARGO-WFM-MGMT-099"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "matches_regex",
+            "value": "^(?!https://docs\\.margo\\.org/specification/problem-types)|^https://docs\\.margo\\.org/specification/problem-types#(invalid-request|semantic-error|not-authorized|gateway-not-found|device-not-found|invalid-bundle|deployment-not-found|discovery-document-not-found|spiffe-bundle-not-found|server-cannot-generate-response)$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-3",
+        "name": "Unknown Deployment 404 — retryable Is false And backoffStrategy Is none",
+        "crIds": [
+          "MARGO-WFM-MGMT-010"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "retryable",
+            "operation": "equals",
+            "value": false
+          },
+          {
+            "field": "backoffStrategy",
+            "operation": "equals",
+            "value": "none"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-4",
+        "name": "Unknown Deployment 404 — status Field Matches The HTTP Status",
+        "crIds": [
+          "MARGO-WFM-MGMT-020"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/ctt-unknown-deployment/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "status",
+            "operation": "equals",
+            "value": 404
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-5",
+        "name": "Unknown Bundle 404 — type Is The Catalogue URI #invalid-bundle",
+        "crIds": [
+          "MARGO-WFM-MGMT-094"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#invalid-bundle"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-6",
+        "name": "Unknown Bundle 404 — type Does Not Misuse The Reserved Margo Namespace",
+        "crIds": [
+          "MARGO-WFM-MGMT-099"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "matches_regex",
+            "value": "^(?!https://docs\\.margo\\.org/specification/problem-types)|^https://docs\\.margo\\.org/specification/problem-types#(invalid-request|semantic-error|not-authorized|gateway-not-found|device-not-found|invalid-bundle|deployment-not-found|discovery-document-not-found|spiffe-bundle-not-found|server-cannot-generate-response)$"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-7",
+        "name": "Unknown Bundle 404 — retryable Is false And backoffStrategy Is none",
+        "crIds": [
+          "MARGO-WFM-MGMT-010"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "retryable",
+            "operation": "equals",
+            "value": false
+          },
+          {
+            "field": "backoffStrategy",
+            "operation": "equals",
+            "value": "none"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-8",
+        "name": "Unknown Bundle 404 — status Field Matches The HTTP Status",
+        "crIds": [
+          "MARGO-WFM-MGMT-020"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "status",
+            "operation": "equals",
+            "value": 404
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-9",
+        "name": "Unknown Resource 404 — type Is about:blank",
+        "crIds": [
+          "MARGO-WFM-MGMT-097"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "about:blank"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-10",
+        "name": "Unknown Resource 404 — about:blank title Is The HTTP Status Phrase",
+        "crIds": [
+          "MARGO-WFM-MGMT-101"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "title",
+            "operation": "equals",
+            "value": "Not Found"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-11",
+        "name": "Unknown Resource 404 — about:blank detail Describes The Occurrence",
+        "crIds": [
+          "MARGO-WFM-MGMT-102"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "detail",
+            "operation": "is_string"
+          },
+          {
+            "field": "detail",
+            "operation": "not_empty"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-12",
+        "name": "Unknown Resource 404 — retryable Is false And backoffStrategy Is none",
+        "crIds": [
+          "MARGO-WFM-MGMT-010"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "retryable",
+            "operation": "equals",
+            "value": false
+          },
+          {
+            "field": "backoffStrategy",
+            "operation": "equals",
+            "value": "none"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-core-pd-13",
+        "name": "Unknown Resource 404 — status Field Matches The HTTP Status",
+        "crIds": [
+          "MARGO-WFM-MGMT-020"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/ctt-unknown-resource",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "status",
+            "operation": "equals",
+            "value": 404
+          }
+        ],
+        "extract_context": {}
+      }
+    ]
+  },
+  {
     "id": "wfm-core-status",
     "name": "Deployment Status Reporting",
     "crIds": [
