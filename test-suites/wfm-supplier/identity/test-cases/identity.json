@@ -479,15 +479,23 @@
     "name": "MIAF Identity — Client SVID Validation, Authorization And Forwarded Identity Headers",
     "crIds": [
       "MARGO-WFM-IDENT-014",
+      "MARGO-WFM-IDENT-015",
       "MARGO-WFM-IDENT-030",
+      "MARGO-WFM-IDENT-035",
+      "MARGO-WFM-IDENT-036",
+      "MARGO-WFM-IDENT-037",
       "MARGO-WFM-IDENT-040",
       "MARGO-WFM-IDENT-041",
       "MARGO-WFM-IDENT-042",
+      "MARGO-WFM-IDENT-092",
+      "MARGO-WFM-IDENT-093",
+      "MARGO-WFM-IDENT-101",
       "MARGO-WFM-IDENT-108",
       "MARGO-WFM-IDENT-112",
       "MARGO-WFM-IDENT-114",
       "MARGO-WFM-IDENT-115",
       "MARGO-WFM-IDENT-116",
+      "MARGO-WFM-IDENT-118",
       "MARGO-WFM-IDENT-120"
     ],
     "description": "How the WFM authenticates the caller: every Management Interface endpoint refuses a request without a client certificate; the client SVID must chain to the Trust Bundle through CA certificates (a self-signed substitute and a leaf signed by an SVID are refused); a validly issued SVID of another wfm-id is refused (NOT RUN unless that SVID is placed in the cert folder); and forged RFC 9440 Client-Cert / Client-Cert-Chain headers never authenticate a request.",
@@ -682,6 +690,7 @@
         "crIds": [
           "MARGO-WFM-IDENT-014",
           "MARGO-WFM-IDENT-030",
+          "MARGO-WFM-IDENT-035",
           "MARGO-WFM-IDENT-112"
         ],
         "method": "GET",
@@ -704,7 +713,9 @@
         "id": "wfm-identity-ca-other-wfm",
         "name": "Valid SVID Of Another wfm-id Is Not Authorized",
         "crIds": [
-          "MARGO-WFM-IDENT-108"
+          "MARGO-WFM-IDENT-093",
+          "MARGO-WFM-IDENT-108",
+          "MARGO-WFM-IDENT-118"
         ],
         "method": "GET",
         "endpoint": "/api/v1/deployments",
@@ -721,6 +732,54 @@
           403
         ],
         "svid_source": "other-wfm"
+      },
+      {
+        "id": "wfm-identity-ca-non-client",
+        "name": "SVID Without The Client Path (WFM-Shaped SPIFFE ID) Is Not Treated As A Client",
+        "crIds": [
+          "MARGO-WFM-IDENT-092",
+          "MARGO-WFM-IDENT-093",
+          "MARGO-WFM-IDENT-101"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "non-client"
+      },
+      {
+        "id": "wfm-identity-ca-expired",
+        "name": "Expired Client SVID (the CTT's own SPIFFE ID) Is Refused",
+        "crIds": [
+          "MARGO-WFM-IDENT-015",
+          "MARGO-WFM-IDENT-036",
+          "MARGO-WFM-IDENT-037"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "svid_source": "expired"
       },
       {
         "id": "wfm-identity-ca-header-no-cert",

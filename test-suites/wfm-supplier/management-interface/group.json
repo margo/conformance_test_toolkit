@@ -12,6 +12,7 @@
     "step-wfm-hi-1.2",
     "step-wfm-hi-1.3",
     "step-wfm-hi-1.4",
+    "wfm-caller-scope",
     "wfm-core-cap-1",
     "wfm-core-cap-2",
     "wfm-core-cap-3",
@@ -48,6 +49,10 @@
     "wfm-core-problem-details",
     "wfm-core-status",
     "wfm-core-status-1",
-    "wfm-header-integrity-manifest"
+    "wfm-header-integrity-manifest",
+    "wfm-scope-bundle",
+    "wfm-scope-deployment",
+    "wfm-scope-manifest",
+    "wfm-scope-own-manifest"
   ]
 }

@@ -3,6 +3,8 @@
     "id": "wfm-multi-component-deployment",
     "name": "Multi-Component ApplicationDeployment — wait=true/false, digest & caching contract",
     "crIds": [
+      "MARGO-WFM-EXT-002",
+      "MARGO-WFM-EXT-003",
       "MARGO-WFM-MGMT-001",
       "MARGO-WFM-MGMT-039",
       "MARGO-WFM-MGMT-040",
@@ -757,6 +759,53 @@
           "field": "_yaml.spec.deploymentProfile.components.*.properties.revision",
           "reason": "the deployment has no component revision, so there is nothing to check"
         }
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.x-*",
+          "reason": "the deployment has no specification extension in spec, so there is nothing to check"
+        },
+        "id": "wfm-mc-appdep-extension-names",
+        "name": "ApplicationDeployment YAML — spec Extensions Are Named x-<unique-name>-extensions",
+        "crIds": [
+          "MARGO-WFM-EXT-002"
+        ],
+        "validations": [
+          {
+            "field": "_yaml.spec.~",
+            "operation": "each_matches_regex",
+            "value": "^(?!x-)|^x-[a-z][a-z0-9-]*-extensions$"
+          }
+        ]
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "extract_context": {},
+        "applies_if": {
+          "field": "_yaml.spec.x-*",
+          "reason": "the deployment has no specification extension in spec, so there is nothing to check"
+        },
+        "id": "wfm-mc-appdep-extension-values",
+        "name": "ApplicationDeployment YAML — spec Extension Values Are Objects",
+        "crIds": [
+          "MARGO-WFM-EXT-003"
+        ],
+        "validations": [
+          {
+            "field": "_yaml.spec.x-*",
+            "operation": "each_is_object"
+          }
+        ]
       },
       {
         "id": "wfm-mc-deployment-encoding",

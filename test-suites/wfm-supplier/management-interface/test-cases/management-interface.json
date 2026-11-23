@@ -1200,5 +1200,120 @@
         "extract_context": {}
       }
     ]
+  },
+  {
+    "id": "wfm-caller-scope",
+    "name": "Management Interface — Caller Scope (another client sees none of the CTT client's resources)",
+    "crIds": [
+      "MARGO-WFM-MGMT-001",
+      "MARGO-WFM-MGMT-016"
+    ],
+    "description": "A second accepted client of the same WFM must not see the deployment assigned to the CTT's client: it is not in its State Manifest, and its deployment YAML and bundle URLs answer 404. NOT RUN without second-client-svid-cert.pem / -key.pem in the cert folder, or when the WFM does not accept that client.",
+    "steps": [
+      {
+        "id": "wfm-scope-own-manifest",
+        "name": "The CTT's Client Has A Deployment Assigned (setup for the scope checks)",
+        "crIds": [
+          "MARGO-WFM-MGMT-001"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "poll": {
+          "interval_seconds": 10,
+          "timeout_seconds": 60,
+          "until": [
+            {
+              "field": "deployments",
+              "operation": "array_length_gte",
+              "value": 1
+            }
+          ],
+          "on_timeout": "skip_scenario",
+          "skip_reason": "no application deployment is assigned to the CTT's client ({cttClientSpiffeId}), so caller scope was not judged. Assign one (sandbox Symphony: provision-multi-component.sh) and run the group again."
+        },
+        "validations": [
+          {
+            "field": "deployments",
+            "operation": "array_length_gte",
+            "value": 1
+          }
+        ],
+        "extract_context": {
+          "deploymentId": "deployments.0.deploymentId",
+          "deploymentDigest": "deployments.0.digest",
+          "bundleDigest": "bundle.digest"
+        }
+      },
+      {
+        "id": "wfm-scope-manifest",
+        "name": "Second Client's State Manifest Does Not List The CTT Client's Deployment",
+        "crIds": [
+          "MARGO-WFM-MGMT-016"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_body",
+            "operation": "not_contains",
+            "value": "{deploymentId}"
+          }
+        ],
+        "extract_context": {},
+        "svid_source": "second-client",
+        "not_run_if": {
+          "error": ".",
+          "reason": "the WFM refused the second-client SVID at the TLS handshake (it is not an accepted client), so caller scope could not be observed"
+        }
+      },
+      {
+        "id": "wfm-scope-deployment",
+        "name": "Second Client Cannot Read The CTT Client's Deployment YAML (404)",
+        "crIds": [
+          "MARGO-WFM-MGMT-016"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [],
+        "extract_context": {},
+        "svid_source": "second-client",
+        "not_run_if": {
+          "error": ".",
+          "reason": "the WFM refused the second-client SVID at the TLS handshake (it is not an accepted client), so caller scope could not be observed"
+        }
+      },
+      {
+        "id": "wfm-scope-bundle",
+        "name": "Second Client Cannot Read The CTT Client's Bundle (404)",
+        "crIds": [
+          "MARGO-WFM-MGMT-016"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/bundles/{bundleDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 404,
+        "validations": [],
+        "extract_context": {},
+        "svid_source": "second-client",
+        "not_run_if": {
+          "error": ".",
+          "reason": "the WFM refused the second-client SVID at the TLS handshake (it is not an accepted client), so caller scope could not be observed"
+        }
+      }
+    ]
   }
 ]

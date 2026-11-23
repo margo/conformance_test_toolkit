@@ -133,18 +133,23 @@ const previousIdentity = (miafIdentity && fs.existsSync(svidPreviousCertPath) &&
     }
   : null;
 
-// Optional second WFM Client SVID, validly issued by the same MIS but for
-// another WFM (a different wfm-id). Only the IDENT-108 step uses it: a WFM must
-// not accept a client outside its own wfm-id namespace. NOT RUN when absent.
-const otherWfmCertPath = path.join(certDir, 'other-wfm-client-svid-cert.pem');
-const otherWfmKeyPath  = path.join(certDir, 'other-wfm-client-svid-key.pem');
-const otherWfmIdentity = (miafIdentity && fs.existsSync(otherWfmCertPath) && fs.existsSync(otherWfmKeyPath))
-  ? {
-      cert: fs.readFileSync(otherWfmCertPath, 'utf8'),
-      key: fs.readFileSync(otherWfmKeyPath, 'utf8'),
-      ca: miafIdentity.ca,
-    }
-  : null;
+// Optional extra SVIDs, issued by the same MIS and placed in the cert folder as
+// <name>-cert.pem / <name>-key.pem. A step that needs one is NOT RUN without it.
+//   other-wfm-client-svid  a client of another WFM (different wfm-id)      IDENT-093/108/118
+//   non-client-svid        a SPIFFE ID without /client/<id> (WFM shape)    IDENT-092/101
+//   expired-client-svid    the CTT's own client SPIFFE ID, already expired IDENT-015/036/037
+//   second-client-svid     another authorized client of the same WFM       MGMT-016
+const OPTIONAL_SVIDS = {
+  'other-wfm': 'other-wfm-client-svid',
+  'non-client': 'non-client-svid',
+  expired: 'expired-client-svid',
+  'second-client': 'second-client-svid',
+};
+function optionalIdentity(source) {
+  const base = path.join(certDir, OPTIONAL_SVIDS[source]);
+  if (!miafIdentity || !fs.existsSync(`${base}-cert.pem`) || !fs.existsSync(`${base}-key.pem`)) return null;
+  return { cert: fs.readFileSync(`${base}-cert.pem`, 'utf8'), key: fs.readFileSync(`${base}-key.pem`, 'utf8'), ca: miafIdentity.ca };
+}
 
 // "Recognition by the WFM Client" (MIAF WFM Identity Profile): the WFM this
 // client may talk to is fixed by its own SVID — a client named
@@ -235,8 +240,18 @@ function forgedChainIdentity() {
 // Returns the reason a step cannot run, or ''.
 function svidSourceBlocker(step) {
   if (['untrusted', 'forged-chain', 'none', undefined].includes(step.svid_source)) return '';
-  if (step.svid_source === 'other-wfm') {
-    return otherWfmIdentity ? '' : 'no second WFM Client SVID for another wfm-id — issue one with the MIS and place it in the CTT cert folder as other-wfm-client-svid-cert.pem and other-wfm-client-svid-key.pem';
+  if (OPTIONAL_SVIDS[step.svid_source]) {
+    const name = OPTIONAL_SVIDS[step.svid_source];
+    const identity = optionalIdentity(step.svid_source);
+    if (!identity) return `no ${name} — issue it with the MIS and place it in the CTT cert folder as ${name}-cert.pem and ${name}-key.pem`;
+    const cert = new crypto.X509Certificate(identity.cert);
+    const id = spiffeIdOf(cert.subjectAltName);
+    if (step.svid_source === 'expired' && id !== ownSpiffeId) return `${name} must carry the CTT's own client SPIFFE ID (${ownSpiffeId}), not ${id}`;
+    if (step.svid_source === 'expired' && new Date(cert.validTo) > new Date()) return `${name} has not expired yet (valid until ${cert.validTo})`;
+    if (step.svid_source === 'second-client' && (id === ownSpiffeId || !id || !id.startsWith(ownSpiffeId.replace(/[^/]+$/, '')))) {
+      return `${name} must be another client of the same WFM (${ownSpiffeId.replace(/[^/]+$/, '')}<other-id>), not ${id}`;
+    }
+    return '';
   }
   if (!previousIdentity) {
     return 'no SVID rotation to test — re-issue the client SVID for the same SPIFFE ID and run Setup MIAF Identity again (it keeps the SVID it replaces)';
@@ -714,6 +729,8 @@ function getAll(source, field) {
       if (v == null || typeof v !== 'object') continue;
       if (part === '_yaml') { const doc = parseYaml(v._body); if (doc) next.push(doc); }
       else if (part === '*') next.push(...Object.values(v));
+      else if (part === '~') next.push(...Object.keys(v));
+      else if (part.endsWith('*')) next.push(...Object.keys(v).filter((k) => k.startsWith(part.slice(0, -1))).map((k) => v[k]));
       else if (v[part] !== undefined) next.push(v[part]);
     }
     values = next;
@@ -1169,6 +1186,10 @@ function validate(responseSource, validation) {
         .map(([n, keys]) => `#${n} has no ${keys.join(', ')}`);
       return missing.length ? `${validation.field}: ${missing.join('; ')}` : '';
     }
+    case 'each_is_object': {
+      const bad = getAll(responseSource, validation.field).filter((v) => v === null || typeof v !== 'object' || Array.isArray(v));
+      return bad.length ? `${validation.field}: ${bad.map((v) => JSON.stringify(v)).join(', ')} is not an object` : '';
+    }
     case 'each_matches_regex': {
       // Every value the path reaches ("*" = each item) matches the pattern.
       const bad = getAll(responseSource, validation.field).filter((v) => !new RegExp(validation.value).test(String(v)));
@@ -1547,7 +1568,7 @@ async function performHTTPStep(step) {
     const ownIdentity = step.svid_source === 'previous' ? previousIdentity
       : step.svid_source === 'untrusted' ? untrustedIdentity()
       : step.svid_source === 'forged-chain' ? forgedChainIdentity()
-      : step.svid_source === 'other-wfm' ? otherWfmIdentity
+      : OPTIONAL_SVIDS[step.svid_source] ? optionalIdentity(step.svid_source)
       : step.svid_source === 'none' ? { ca: miafIdentity.ca } // no client certificate
       : miafIdentity;
     const identity = step.mtls_wrong_server_ca

@@ -41,6 +41,12 @@ ctt-runner/wfm-supplier/utils/certs/svid-previous-cert.pem
 ctt-runner/wfm-supplier/utils/certs/svid-previous-key.pem
 ctt-runner/wfm-supplier/utils/certs/other-wfm-client-svid-cert.pem
 ctt-runner/wfm-supplier/utils/certs/other-wfm-client-svid-key.pem
+ctt-runner/wfm-supplier/utils/certs/non-client-svid-cert.pem
+ctt-runner/wfm-supplier/utils/certs/non-client-svid-key.pem
+ctt-runner/wfm-supplier/utils/certs/expired-client-svid-cert.pem
+ctt-runner/wfm-supplier/utils/certs/expired-client-svid-key.pem
+ctt-runner/wfm-supplier/utils/certs/second-client-svid-cert.pem
+ctt-runner/wfm-supplier/utils/certs/second-client-svid-key.pem
 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/previous-client-svid-cert.pem
 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/previous-client-svid-key.pem
 

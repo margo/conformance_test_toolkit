@@ -16,6 +16,7 @@
     "step-wfm-hi-1.2",
     "step-wfm-hi-1.3",
     "step-wfm-hi-1.4",
+    "wfm-caller-scope",
     "wfm-core-cap-1",
     "wfm-core-cap-2",
     "wfm-core-cap-3",
@@ -54,6 +55,7 @@
     "wfm-core-status-1",
     "wfm-header-integrity-manifest",
     "wfm-identity-ca-chain-accepted",
+    "wfm-identity-ca-expired",
     "wfm-identity-ca-forged-chain",
     "wfm-identity-ca-header-no-cert",
     "wfm-identity-ca-header-with-cert",
@@ -62,6 +64,7 @@
     "wfm-identity-ca-nocert-deployment",
     "wfm-identity-ca-nocert-deployments",
     "wfm-identity-ca-nocert-status",
+    "wfm-identity-ca-non-client",
     "wfm-identity-ca-other-wfm",
     "wfm-identity-ca-substituted-cert",
     "wfm-identity-client-auth",
@@ -92,6 +95,8 @@
     "wfm-mc-appdep-component-properties",
     "wfm-mc-appdep-components",
     "wfm-mc-appdep-cpu",
+    "wfm-mc-appdep-extension-names",
+    "wfm-mc-appdep-extension-values",
     "wfm-mc-appdep-id",
     "wfm-mc-appdep-match-expressions",
     "wfm-mc-appdep-parameters",
@@ -132,6 +137,10 @@
     "wfm-otel-cap-1",
     "wfm-otel-cap-2",
     "wfm-otel-cap-3",
-    "wfm-otel-observability"
+    "wfm-otel-observability",
+    "wfm-scope-bundle",
+    "wfm-scope-deployment",
+    "wfm-scope-manifest",
+    "wfm-scope-own-manifest"
   ]
 }

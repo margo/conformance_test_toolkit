@@ -9,6 +9,7 @@
   "flexibleOrder": false,
   "testCases": [
     "wfm-identity-ca-chain-accepted",
+    "wfm-identity-ca-expired",
     "wfm-identity-ca-forged-chain",
     "wfm-identity-ca-header-no-cert",
     "wfm-identity-ca-header-with-cert",
@@ -17,6 +18,7 @@
     "wfm-identity-ca-nocert-deployment",
     "wfm-identity-ca-nocert-deployments",
     "wfm-identity-ca-nocert-status",
+    "wfm-identity-ca-non-client",
     "wfm-identity-ca-other-wfm",
     "wfm-identity-ca-substituted-cert",
     "wfm-identity-client-auth",
