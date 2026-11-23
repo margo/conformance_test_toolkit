@@ -170,6 +170,90 @@ Why groups exist and how they are created is described in
 
 ---
 
+## WFM Supplier: checks for the PR3 requirements
+
+The WFM Supplier `core` group now also judges the PR3 WFM requirements
+(problem details, ApplicationDeployment content, WFM SVID and TLS, Device
+Capabilities). In this version it has 11 scenarios and 96 steps. The themed
+groups `management-interface`, `identity` and `deployment-delivery` contain the
+same checks. This section lists what to prepare before the run and how to read
+the new results. For the setup itself, follow the
+[WFM Supplier setup guide](docs/wfm-supplier-setup-guide.md).
+
+### Before the run
+
+| Prepare | Why |
+|---|---|
+| Nothing to install beyond the [Prerequisites](#prerequisites) | The runner reads the ApplicationDeployment YAML with js-yaml 4.1.0 (MIT licence), vendored in `ctt-runner/wfm-supplier/scripts/vendor/`. No `npm install` is needed. |
+| Run against the port the WFM uses in production | MGMT-003 requires the Management Interface on port 443. The report shows the port the CTT connected to. |
+| Assign a deployment whose Application Description has `deviceConstraints` and `parameters` (setup guide, Step 7) | MGMT-069 to MGMT-072, MGMT-075 and MGMT-076 judge those fields. When the deployment has none, these steps are NOT RUN. |
+| Let the CTT's WFM Client report the deviceId `ctt-unreported-gateway/ctt-child-device` | MGMT-026 checks that a child device reported before its gateway is rejected with `404 Not Found`. If the WFM refuses that deviceId by local policy (`403 Forbidden`), the step is NOT RUN. |
+| Accept a Device Capabilities document that has an `x-ctt-conformance-extensions` property at its root | MGMT-027, MGMT-029, EXT-001 and EXT-004: the WFM must accept the document and ignore the unknown specification extension. |
+
+Every mTLS step opens a new TLS connection with a full handshake, so the WFM
+validates the client SVID on every request. Expect one handshake per step in
+the WFM logs.
+
+### NOT RUN results
+
+A NOT RUN step means the requirement could not be observed on this WFM. It is
+not a failure.
+
+| Requirement | NOT RUN when | To cover it |
+|---|---|---|
+| IDENT-004, IDENT-005, IDENT-006, IDENT-007 | The WFM SVID key is of another type. Only the check for the key type the WFM presents runs. | Nothing to do. |
+| IDENT-032, IDENT-117 | The WFM does not accept TLS 1.2 at all (TLS 1.3 only is conformant). | Nothing to do. If TLS 1.2 is enabled, the WFM must refuse the NULL-encryption cipher suites (RFC 9325). |
+| MGMT-026, MGMT-094 (child device) | The WFM answers `403 Forbidden` for the child deviceId. | Allow the CTT's WFM Client to report `ctt-unreported-gateway/ctt-child-device`. |
+| MGMT-069 to MGMT-072, MGMT-075, MGMT-076 | The assigned deployment has no `deviceConstraints` or `parameters`. | Assign a deployment that has them. |
+
+IDENT-043 and IDENT-032/IDENT-117 make the CTT offer TLS 1.1 and TLS 1.2 NULL
+cipher suites. If the OpenSSL on the CTT host cannot offer them, the step fails
+with "could not reach the WFM ... the TLS behaviour was not tested". The
+supported Ubuntu 24.04 host can offer them.
+
+### Repeating the TLS and problem checks by hand
+
+Run these commands from the CTT host to see the same behaviour the report
+shows. Replace `<wfm-host>:<port>` and `<base-path>` with the values entered at
+Step 9 of the setup guide. `svid-cert.pem` and `svid-key.pem` are in
+`ctt-runner/wfm-supplier/utils/certs/` after *Setup MIAF Identity*.
+
+```bash
+cd ctt-runner/wfm-supplier/utils/certs
+
+# IDENT-031: the WFM negotiates TLS 1.3 by default (expect "New, TLSv1.3")
+openssl s_client -connect <wfm-host>:<port> -cert svid-cert.pem -key svid-key.pem </dev/null 2>&1 | grep "^New,"
+
+# IDENT-043: TLS 1.1 and older are refused (expect an alert and "Cipher is (NONE)")
+openssl s_client -connect <wfm-host>:<port> -tls1_1 -cipher 'DEFAULT@SECLEVEL=0' \
+  -cert svid-cert.pem -key svid-key.pem </dev/null 2>&1 | grep -E "alert|Cipher is"
+
+# IDENT-032 / IDENT-117: with TLS 1.2, NULL-encryption cipher suites are refused
+# (expect an alert; "alert protocol version" means TLS 1.2 is disabled, which the report shows as NOT RUN)
+openssl s_client -connect <wfm-host>:<port> -tls1_2 -cipher 'eNULL:!aNULL@SECLEVEL=0' \
+  -cert svid-cert.pem -key svid-key.pem </dev/null 2>&1 | grep -E "alert|Cipher is"
+
+# MGMT-097, MGMT-101, MGMT-102: an unknown path returns an about:blank problem
+# (expect 404, Content-Type application/problem+json, "title": "Not Found" and a detail)
+curl -sk -i --cert svid-cert.pem --key svid-key.pem https://<wfm-host>:<port><base-path>/api/v1/ctt-unknown-resource
+```
+
+### Device Supplier mock WFM
+
+The mock WFM problem responses follow the rc.3 retry semantics and problem
+types:
+
+- `retryable` and `backoffStrategy` are on every problem response: `true` and
+  `exponential` for 429, 500 and 503, and `false` and `none` for every other
+  error.
+- `errors[].field` names the request body field of each validation error.
+- An unknown path returns an `about:blank` 404 problem.
+
+The mock is rebuilt from source each time the runner starts it, so there is
+nothing to do.
+
+---
+
 ## Status
 
 This suite is under active development alongside the Margo spec itself.
