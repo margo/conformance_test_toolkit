@@ -189,6 +189,7 @@ the new results. For the setup itself, follow the
 | Assign a deployment whose Application Description has `deviceConstraints` and `parameters` (setup guide, Step 7) | MGMT-069 to MGMT-072, MGMT-075 and MGMT-076 judge those fields. When the deployment has none, these steps are NOT RUN. |
 | Let the CTT's WFM Client report the deviceId `ctt-unreported-gateway/ctt-child-device` | MGMT-026 checks that a child device reported before its gateway is rejected with `404 Not Found`. If the WFM refuses that deviceId by local policy (`403 Forbidden`), the step is NOT RUN. |
 | Accept a Device Capabilities document that has an `x-ctt-conformance-extensions` property at its root | MGMT-027, MGMT-029, EXT-001 and EXT-004: the WFM must accept the document and ignore the unknown specification extension. |
+| Optional: a second WFM Client SVID from the same MIS for another `wfm-id`, placed in `ctt-runner/wfm-supplier/utils/certs/` as `other-wfm-client-svid-cert.pem` and `other-wfm-client-svid-key.pem` | IDENT-108: the WFM must refuse a validly issued client of another WFM. For the sandbox MIS: `cd ~/mis-deployment && sudo -E bash ~/sandbox/scripts/lib/mis/svid-gen.sh --automated --principal wfm-client --spiffe-id spiffe://<trust-domain>/margo/wfm/<another-wfm-id>/client/ctt-client`. Without this SVID the step is NOT RUN. |
 
 Every mTLS step opens a new TLS connection with a full handshake, so the WFM
 validates the client SVID on every request. Expect one handshake per step in
@@ -205,6 +206,17 @@ not a failure.
 | IDENT-032, IDENT-117 | The WFM does not accept TLS 1.2 at all (TLS 1.3 only is conformant). | Nothing to do. If TLS 1.2 is enabled, the WFM must refuse the NULL-encryption cipher suites (RFC 9325). |
 | MGMT-026, MGMT-094 (child device) | The WFM answers `403 Forbidden` for the child deviceId. | Allow the CTT's WFM Client to report `ctt-unreported-gateway/ctt-child-device`. |
 | MGMT-069 to MGMT-072, MGMT-075, MGMT-076 | The assigned deployment has no `deviceConstraints` or `parameters`. | Assign a deployment that has them. |
+| IDENT-108 | No SVID for another `wfm-id` is in the cert folder. | Issue one and place it as described in [Before the run](#before-the-run). |
+| MGMT-087, MGMT-088, MGMT-090, MGMT-091, MGMT-092 | The WFM does not compress the deployment YAML or the bundle when the CTT sends `Accept-Encoding: gzip, br` (compression is optional). | Nothing to do. If the WFM compresses, it must use an advertised coding, send `Vary: Accept-Encoding`, and keep the digest valid for the decoded body. |
+| MGMT-093 | The WFM answers `200` to `If-None-Match` with the current digest (a `304` is optional). | Nothing to do. If the WFM answers `304`, the response must have no body. |
+
+The client authentication steps (IDENT-014, IDENT-030, IDENT-040 to IDENT-042,
+IDENT-112, IDENT-114 to IDENT-116, IDENT-120) need no preparation. The CTT
+creates the certificates it presents: a self-signed substitute with its own
+SPIFFE ID, and a leaf signed with its own SVID key, which a WFM must refuse
+because an X.509-SVID has `cA=false`. A refusal at the TLS handshake and a
+`401` or `403` response both pass. The WFM logs show the reason for each
+refusal.
 
 IDENT-043 and IDENT-032/IDENT-117 make the CTT offer TLS 1.1 and TLS 1.2 NULL
 cipher suites. If the OpenSSL on the CTT host cannot offer them, the step fails
@@ -236,6 +248,14 @@ openssl s_client -connect <wfm-host>:<port> -tls1_2 -cipher 'eNULL:!aNULL@SECLEV
 # MGMT-097, MGMT-101, MGMT-102: an unknown path returns an about:blank problem
 # (expect 404, Content-Type application/problem+json, "title": "Not Found" and a detail)
 curl -sk -i --cert svid-cert.pem --key svid-key.pem https://<wfm-host>:<port><base-path>/api/v1/ctt-unknown-resource
+
+# IDENT-120: a request without a client certificate is refused (expect a TLS error, or 401/403)
+curl -sSk -i -H 'Accept: application/vnd.margo.manifest.v1+json' https://<wfm-host>:<port><base-path>/api/v1/deployments
+
+# IDENT-040 to IDENT-042: a forged Client-Cert header never replaces the mTLS identity
+# (without a client certificate: expect a refusal; with one: expect 200 and the CTT client's own manifest)
+CC=":$(openssl x509 -in svid-cert.pem -outform DER | base64 -w0):"
+curl -sSk -i -H "Client-Cert: $CC" -H 'Accept: application/vnd.margo.manifest.v1+json' https://<wfm-host>:<port><base-path>/api/v1/deployments
 ```
 
 ### Device Supplier mock WFM
