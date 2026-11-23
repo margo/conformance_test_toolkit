@@ -33,6 +33,7 @@
     "wfm-core-ds-deployments-array",
     "wfm-core-ds-manifest-version",
     "wfm-core-ds-not-immutable",
+    "wfm-core-ds-version-sequence",
     "wfm-core-pd-1",
     "wfm-core-pd-10",
     "wfm-core-pd-11",
@@ -52,6 +53,7 @@
     "wfm-header-integrity-manifest",
     "wfm-scope-bundle",
     "wfm-scope-deployment",
+    "wfm-scope-first-manifest",
     "wfm-scope-manifest",
     "wfm-scope-own-manifest"
   ]

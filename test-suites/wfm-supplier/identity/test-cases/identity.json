@@ -89,6 +89,8 @@
       "MARGO-WFM-IDENT-005",
       "MARGO-WFM-IDENT-006",
       "MARGO-WFM-IDENT-007",
+      "MARGO-WFM-IDENT-008",
+      "MARGO-WFM-IDENT-009",
       "MARGO-WFM-IDENT-029",
       "MARGO-WFM-IDENT-031",
       "MARGO-WFM-IDENT-032",
@@ -97,6 +99,7 @@
       "MARGO-WFM-IDENT-081",
       "MARGO-WFM-IDENT-085",
       "MARGO-WFM-IDENT-098",
+      "MARGO-WFM-IDENT-111",
       "MARGO-WFM-IDENT-117",
       "MARGO-WFM-MGMT-002",
       "MARGO-WFM-MGMT-003"
@@ -275,6 +278,72 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-no-plain-http",
+        "name": "Management Interface Port Does Not Serve Plain HTTP",
+        "crIds": [
+          "MARGO-WFM-IDENT-029",
+          "MARGO-WFM-IDENT-111"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "plain_http": true,
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          400
+        ]
+      },
+      {
+        "id": "wfm-identity-tls-p256-validated",
+        "name": "WFM Validates An ECDSA P-256 / SHA-256 Client SVID",
+        "crIds": [
+          "MARGO-WFM-IDENT-009"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.client.p256sha256",
+          "reason": "the CTT's client SVID is not ECDSA P-256 with SHA-256"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-rsa-pss",
+        "name": "RSA-Keyed WFM Signs The TLS 1.2 Handshake With RSASSA-PSS Only",
+        "crIds": [
+          "MARGO-WFM-IDENT-008"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "applies_if_wfm_key": "rsa",
+        "tls_max_version": "TLSv1.2",
+        "tls_sigalgs": "rsa_pkcs1_sha256:rsa_pkcs1_sha384:rsa_pkcs1_sha512:ecdsa_secp256r1_sha256:ecdsa_secp384r1_sha384",
+        "expect_transport_error": true,
+        "not_run_if": {
+          "error": "protocol version|unsupported protocol|wrong version number",
+          "reason": "the WFM does not accept TLS 1.2; TLS 1.3 always signs the handshake with RSASSA-PSS"
+        }
       },
       {
         "id": "wfm-identity-tls-tls13-default",

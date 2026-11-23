@@ -37,6 +37,7 @@
     "wfm-core-ds-deployments-array",
     "wfm-core-ds-manifest-version",
     "wfm-core-ds-not-immutable",
+    "wfm-core-ds-version-sequence",
     "wfm-core-pd-1",
     "wfm-core-pd-10",
     "wfm-core-pd-11",
@@ -80,9 +81,12 @@
     "wfm-identity-tls-eddsa-curve",
     "wfm-identity-tls-http11",
     "wfm-identity-tls-no-legacy",
+    "wfm-identity-tls-no-plain-http",
     "wfm-identity-tls-over-tls",
+    "wfm-identity-tls-p256-validated",
     "wfm-identity-tls-port-443",
     "wfm-identity-tls-rsa-bits",
+    "wfm-identity-tls-rsa-pss",
     "wfm-identity-tls-rsa-sha256",
     "wfm-identity-tls-spiffe-margo",
     "wfm-identity-tls-tls12-rfc9325",
@@ -140,6 +144,7 @@
     "wfm-otel-observability",
     "wfm-scope-bundle",
     "wfm-scope-deployment",
+    "wfm-scope-first-manifest",
     "wfm-scope-manifest",
     "wfm-scope-own-manifest"
   ]

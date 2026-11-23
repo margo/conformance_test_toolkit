@@ -239,6 +239,9 @@ function forgedChainIdentity() {
 // step is reported as NOT RUN instead of passing on the unrotated SVID.
 // Returns the reason a step cannot run, or ''.
 function svidSourceBlocker(step) {
+  if (step.applies_if_wfm_key && !(lastWfmKey && lastWfmKey[step.applies_if_wfm_key])) {
+    return `the WFM's SVID key is not ${step.applies_if_wfm_key.toUpperCase()}`;
+  }
   if (['untrusted', 'forged-chain', 'none', undefined].includes(step.svid_source)) return '';
   if (OPTIONAL_SVIDS[step.svid_source]) {
     const name = OPTIONAL_SVIDS[step.svid_source];
@@ -789,6 +792,9 @@ function prepareContentDigest(headers, bodyText) {
 // What the mTLS connection itself shows, read as "_tls.<name>" in validations:
 // negotiated protocol, HTTP version, port, and the WFM's SVID (SPIFFE ID, key,
 // signature algorithm). sameWfmId: the WFM's wfm-id is the one in the CTT's SVID.
+// client: the same details for the SVID the CTT presented. lastWfmKey keeps the
+// WFM's key details for step.applies_if_wfm_key.
+let lastWfmKey = null;
 function tlsDetails(res, port, mtls) {
   const socket = res.socket;
   const peer = socket.getPeerX509Certificate();
@@ -801,11 +807,11 @@ function tlsDetails(res, port, mtls) {
     authorized: socket.authorized === true,
     peerSpiffeId,
     sameWfmId: !!peerSpiffeId && wfmIdOf(peerSpiffeId) === wfmIdOf(ownSpiffeId),
-    ...(peer ? svidKey(peer.toString()) : {}),
+    ...(peer ? (lastWfmKey = svidKey(peer.toString())) : {}),
+    client: mtls.cert ? svidKey(mtls.cert) : undefined,
   };
 }
 
-// Key type and signature algorithm of an SVID. Only the entry for its own key
 // HTTP Content-Encoding (gzip, br, deflate) is removed before any check: Margo
 // digests and ETags refer to the decoded body (MGMT-056). The WFM only
 // compresses when a step sends Accept-Encoding. A body that does not decode is
@@ -822,6 +828,28 @@ function decodeContent(body, encoding) {
   }
 }
 
+// step.manifest_history (MGMT-035, across runs): like a real WFM client, the CTT
+// keeps the last manifestVersion and ETag it saw per WFM URL and client SPIFFE
+// ID, in .manifest-history.json in the cert folder. When the manifest has
+// changed (another ETag), its manifestVersion must be strictly greater.
+const manifestHistoryPath = path.join(certDir, '.manifest-history.json');
+function manifestHistory(response, source) {
+  if (response.status !== 200 || typeof source.manifestVersion !== 'number') return {};
+  let all = {};
+  try { all = JSON.parse(fs.readFileSync(manifestHistoryPath, 'utf8')); } catch {}
+  const key = `${miafUrl} ${ownSpiffeId}`;
+  const prev = all[key];
+  const cur = { manifestVersion: source.manifestVersion, etag: response.headers.etag || '', seen: new Date().toISOString() };
+  all[key] = cur;
+  try { fs.writeFileSync(manifestHistoryPath, JSON.stringify(all, null, 2) + '\n'); } catch {}
+  const again = 'change the deployment assigned to the CTT\'s client and run the group again';
+  if (!prev) return { notRun: `first manifest seen from this WFM for this client; its manifestVersion is stored now — ${again}` };
+  if (prev.etag === cur.etag) return { notRun: `the manifest has not changed since ${prev.seen} (same ETag) — ${again}` };
+  if (cur.manifestVersion > prev.manifestVersion) return {};
+  return { failure: `manifestVersion ${cur.manifestVersion} is not greater than ${prev.manifestVersion} of the previous manifest (ETag ${prev.etag}, seen ${prev.seen})` };
+}
+
+// Key type and signature algorithm of an SVID. Only the entry for its own key
 // type is set (ec, eddsa or rsa), so a step about RSA keys can use
 // applies_if "_tls.rsa"; rsaSignature is set when the CA signed it with RSA.
 const svidKeyCache = new Map();
@@ -840,6 +868,8 @@ function svidKey(pem) {
   if (/^ed/.test(key.asymmetricKeyType)) out.eddsa = { type: key.asymmetricKeyType };
   if (/^rsa/.test(key.asymmetricKeyType)) out.rsa = { bits: details.modulusLength };
   if (/rsa/i.test(sigAlg)) out.rsaSignature = sigAlg;
+  // ECDSA P-256 with SHA-256, the algorithm every MIAF component must implement
+  if (out.ec && out.ec.curve === 'prime256v1' && /ecdsa-with-SHA256/i.test(sigAlg)) out.p256sha256 = true;
   svidKeyCache.set(pem, out);
   return out;
 }
@@ -879,10 +909,15 @@ function request(method, url, headers, bodyText, mtls) {
       // anonymous suites RFC 9325 forbids for TLS 1.2).
       Object.assign(options, { minVersion: 'TLSv1', maxVersion: mtls.maxVersion, ciphers: mtls.ciphers || 'DEFAULT@SECLEVEL=0' });
     }
+    // step.tls_sigalgs: offer only these signature algorithms (e.g. RSA PKCS#1
+    // v1.5 only, to check that an RSA-keyed WFM signs the handshake with PSS).
+    if (mtls && mtls.sigalgs) options.sigalgs = mtls.sigalgs;
+    // step.plain_http: the same host and port without TLS (must not be served).
+    const plain = !!(mtls && mtls.plainHttp);
 
-    const req = https.request(options, (res) => {
+    const req = (plain ? require('http') : https).request(options, (res) => {
       const chunks = [];
-      const tls = mtls ? tlsDetails(res, options.port, mtls) : undefined;
+      const tls = mtls && !plain ? tlsDetails(res, options.port, mtls) : undefined;
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const rawBody = decodeContent(Buffer.concat(chunks), res.headers['content-encoding']);
@@ -1574,8 +1609,13 @@ async function performHTTPStep(step) {
     const identity = step.mtls_wrong_server_ca
       ? { cert: ownIdentity.cert, key: ownIdentity.key, ca: caCertificate }
       : ownIdentity;
-    const response = await request(method, url, headers, bodyText,
-      step.tls_max_version ? { ...identity, maxVersion: step.tls_max_version, ciphers: step.tls_ciphers } : identity);
+    const tlsOptions = {
+      ...(step.tls_max_version ? { maxVersion: step.tls_max_version, ciphers: step.tls_ciphers } : {}),
+      ...(step.tls_sigalgs ? { sigalgs: step.tls_sigalgs } : {}),
+      ...(step.plain_http ? { plainHttp: true } : {}),
+    };
+    const response = await request(method, step.plain_http ? url.replace(/^https:/, 'http:') : url, headers, bodyText,
+      { ...identity, ...tlsOptions });
     const parsed = parseBody(response.body);
     const responseSource = { ...parsed, _headers: response.headers, _body: response.body, _rawBody: response.rawBody, _tls: response.tls };
     return { method, endpoint, bodyText, response, responseSource };
@@ -1896,12 +1936,13 @@ async function runStep(scenario, step) {
     // policy) or a transport error matching that regex (e.g. TLS 1.2 refused
     // outright) means the requirement could not be observed.
     const notRun = step.not_run_if || {};
-    const notRunReason =
+    const history = step.manifest_history ? manifestHistory(response, responseSource) : {};
+    const notRunReason = history.notRun || (
       step.not_run_if && (response.status === notRun.status ||
         (notRun.error && new RegExp(notRun.error, 'i').test(response.transportError || ''))) ? notRun.reason
       : step.applies_if && response.status === step.expected_status &&
         getAll(responseSource, step.applies_if.field).length === 0 ? step.applies_if.reason
-      : '';
+      : '');
     if (notRunReason) {
       const reason = notRunReason;
       results.push({
@@ -1953,6 +1994,7 @@ async function runStep(scenario, step) {
       // success schema would produce false negatives, so we skip it.
       if (primaryMatch) {
         assertionFailures.push(...runValidations(responseSource, step.validations));
+        if (history.failure) assertionFailures.push(history.failure);
       }
 
       if (pollTimedOut) {

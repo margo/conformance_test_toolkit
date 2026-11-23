@@ -439,6 +439,7 @@
       "MARGO-WFM-MGMT-032",
       "MARGO-WFM-MGMT-033",
       "MARGO-WFM-MGMT-034",
+      "MARGO-WFM-MGMT-035",
       "MARGO-WFM-MGMT-037",
       "MARGO-WFM-MGMT-038",
       "MARGO-WFM-MGMT-045",
@@ -515,6 +516,23 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "wfm-core-ds-version-sequence",
+        "name": "A Changed State Manifest Has A Strictly Greater manifestVersion (compared with the previous run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-035"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "manifest_history": true
       },
       {
         "id": "wfm-core-ds-deployments-array",
@@ -2737,6 +2755,8 @@
       "MARGO-WFM-IDENT-005",
       "MARGO-WFM-IDENT-006",
       "MARGO-WFM-IDENT-007",
+      "MARGO-WFM-IDENT-008",
+      "MARGO-WFM-IDENT-009",
       "MARGO-WFM-IDENT-029",
       "MARGO-WFM-IDENT-031",
       "MARGO-WFM-IDENT-032",
@@ -2745,6 +2765,7 @@
       "MARGO-WFM-IDENT-081",
       "MARGO-WFM-IDENT-085",
       "MARGO-WFM-IDENT-098",
+      "MARGO-WFM-IDENT-111",
       "MARGO-WFM-IDENT-117",
       "MARGO-WFM-MGMT-002",
       "MARGO-WFM-MGMT-003"
@@ -2923,6 +2944,72 @@
           }
         ],
         "extract_context": {}
+      },
+      {
+        "id": "wfm-identity-tls-no-plain-http",
+        "name": "Management Interface Port Does Not Serve Plain HTTP",
+        "crIds": [
+          "MARGO-WFM-IDENT-029",
+          "MARGO-WFM-IDENT-111"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "plain_http": true,
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          400
+        ]
+      },
+      {
+        "id": "wfm-identity-tls-p256-validated",
+        "name": "WFM Validates An ECDSA P-256 / SHA-256 Client SVID",
+        "crIds": [
+          "MARGO-WFM-IDENT-009"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "applies_if": {
+          "field": "_tls.client.p256sha256",
+          "reason": "the CTT's client SVID is not ECDSA P-256 with SHA-256"
+        }
+      },
+      {
+        "id": "wfm-identity-tls-rsa-pss",
+        "name": "RSA-Keyed WFM Signs The TLS 1.2 Handshake With RSASSA-PSS Only",
+        "crIds": [
+          "MARGO-WFM-IDENT-008"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 0,
+        "validations": [],
+        "extract_context": {},
+        "applies_if_wfm_key": "rsa",
+        "tls_max_version": "TLSv1.2",
+        "tls_sigalgs": "rsa_pkcs1_sha256:rsa_pkcs1_sha384:rsa_pkcs1_sha512:ecdsa_secp256r1_sha256:ecdsa_secp384r1_sha384",
+        "expect_transport_error": true,
+        "not_run_if": {
+          "error": "protocol version|unsupported protocol|wrong version number",
+          "reason": "the WFM does not accept TLS 1.2; TLS 1.3 always signs the handshake with RSASSA-PSS"
+        }
       },
       {
         "id": "wfm-identity-tls-tls13-default",
@@ -3482,7 +3569,8 @@
     "name": "Management Interface — Caller Scope (another client sees none of the CTT client's resources)",
     "crIds": [
       "MARGO-WFM-MGMT-001",
-      "MARGO-WFM-MGMT-016"
+      "MARGO-WFM-MGMT-016",
+      "MARGO-WFM-MGMT-036"
     ],
     "description": "A second accepted client of the same WFM must not see the deployment assigned to the CTT's client: it is not in its State Manifest, and its deployment YAML and bundle URLs answer 404. NOT RUN without second-client-svid-cert.pem / -key.pem in the cert folder, or when the WFM does not accept that client.",
     "steps": [
@@ -3550,6 +3638,33 @@
         "not_run_if": {
           "error": ".",
           "reason": "the WFM refused the second-client SVID at the TLS handshake (it is not an accepted client), so caller scope could not be observed"
+        }
+      },
+      {
+        "id": "wfm-scope-first-manifest",
+        "name": "First State Manifest Of A Client With No Deployment Has manifestVersion 1",
+        "crIds": [
+          "MARGO-WFM-MGMT-036"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "equals",
+            "value": 1
+          }
+        ],
+        "extract_context": {},
+        "svid_source": "second-client",
+        "not_run_if": {
+          "error": ".",
+          "reason": "the WFM refused the second-client SVID at the TLS handshake (it is not an accepted client), so its first manifest could not be read"
         }
       },
       {
