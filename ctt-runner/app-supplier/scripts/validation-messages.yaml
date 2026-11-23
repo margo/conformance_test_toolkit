@@ -149,7 +149,7 @@ deploymentProfiles.components.properties:
     missing: Component configuration properties are not defined.
 
 deploymentProfiles.components.properties.repository:
-  crId: MARGO-APP-APPDESC-032
+  crId: MARGO-APP-APPDESC-032, MARGO-APP-EXT-002
   check:
     datatype: string
     expected: Repository URL required
@@ -479,3 +479,28 @@ matchExpressions.contains.matchExpressions:
 
   fail:
     missing: itemSelector.matchExpressions must contain one or more expressions.
+
+extensions.name:
+  crId: MARGO-APP-EXT-003, MARGO-APP-EXT-004, MARGO-APP-EXT-005
+  check:
+    datatype: string
+    expected: x-[a-z][a-z0-9-]*
+
+  pass:
+    description: Extension property name conforms to the extensibility specification.
+
+  fail:
+    missing: Extension property name is required.
+    invalid: Extension property name must match x-[a-z][a-z0-9-]* and contain only lowercase letters, digits and dashes.
+
+extensions.value:
+  crId: MARGO-APP-EXT-006
+  check:
+    datatype: object
+    expected: YAML/JSON object
+
+  pass:
+    description: Extension property value is a valid object.
+
+  fail:
+    invalid: Extension property value must be an object (YAML/JSON mapping).

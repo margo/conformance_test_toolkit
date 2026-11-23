@@ -74,6 +74,12 @@ ValidateRevisionPlus(
     report,
     messages,
 )
+
+ValidateExtensions(
+    raw,
+    report,
+    messages,
+)
     return nil
 }
 func typeClass(v any) string {
@@ -1168,4 +1174,96 @@ func validateExpressionList(
             )
         }
     }
+}
+
+func ValidateExtensions(
+    raw map[string]any,
+    report *ValidationReport,
+    messages map[string]ValidationMessage,
+) {
+
+    extensionRegex := regexp.MustCompile(
+        `^x-[a-z][a-z0-9-]*$`,
+    )
+
+    var walkExtensions func(any)
+
+    walkExtensions = func(node any) {
+
+        m, ok := node.(map[string]any)
+        if !ok {
+            return
+        }
+
+        for key, value := range m {
+
+            if strings.HasPrefix(
+                key,
+                "x-",
+            ) {
+                msgName := messages["extensions.name"]
+
+check(
+    report,
+    msgName.CRID,
+    key,
+    msgName.Check.Datatype,
+    msgName.Check.Expected,
+)
+
+                if !extensionRegex.MatchString(
+                    key,
+                ) {
+
+                   fail(
+    report,
+    key,
+    msgName.Fail.Invalid,
+)
+
+                } else {
+                    pass(
+    report,
+    key,
+    msgName.Pass.Description,
+)
+
+                   
+                }
+                msgValue := messages["extensions.value"]
+
+                    check(
+                        report,
+                        msgValue.CRID,
+                        key,
+                        msgValue.Check.Datatype,
+                        msgValue.Check.Expected,
+                    )
+
+                if _, ok := value.(map[string]any); !ok {
+                    fail(
+    report,
+    fmt.Sprintf("%T", value),
+    msgValue.Fail.Invalid,
+)
+
+                } else {
+
+                    pass(
+    report,
+    "object",
+    msgValue.Pass.Description,
+)
+                }
+            }
+
+            walkExtensions(
+                value,
+            )
+        }
+    }
+
+    walkExtensions(
+        raw,
+    )
 }

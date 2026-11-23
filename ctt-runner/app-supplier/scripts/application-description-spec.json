@@ -1,6 +1,6 @@
 {
   "apiVersion": {
-    "type": "string",
+    "type": "stringgg",
     "required": true,
     "enum": [
       "v1"
