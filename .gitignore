@@ -47,6 +47,8 @@ ctt-runner/wfm-supplier/utils/certs/expired-client-svid-cert.pem
 ctt-runner/wfm-supplier/utils/certs/expired-client-svid-key.pem
 ctt-runner/wfm-supplier/utils/certs/second-client-svid-cert.pem
 ctt-runner/wfm-supplier/utils/certs/second-client-svid-key.pem
+ctt-runner/wfm-supplier/utils/certs/retired-client-svid-cert.pem
+ctt-runner/wfm-supplier/utils/certs/retired-client-svid-key.pem
 ctt-runner/wfm-supplier/utils/certs/.manifest-history.json
 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/previous-client-svid-cert.pem
 ctt-runner/wfm-supplier/utils/fixtures/miaf/real/previous-client-svid-key.pem
