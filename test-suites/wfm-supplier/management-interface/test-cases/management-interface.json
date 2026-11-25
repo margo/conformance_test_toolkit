@@ -1225,9 +1225,10 @@
     "crIds": [
       "MARGO-WFM-MGMT-001",
       "MARGO-WFM-MGMT-016",
-      "MARGO-WFM-MGMT-036"
+      "MARGO-WFM-MGMT-036",
+      "MARGO-WFM-MGMT-038"
     ],
-    "description": "A second accepted client of the same WFM must not see the deployment assigned to the CTT's client: it is not in its State Manifest, and its deployment YAML and bundle URLs answer 404. NOT RUN without second-client-svid-cert.pem / -key.pem in the cert folder, or when the WFM does not accept that client.",
+    "description": "A second accepted client of the same WFM must not see the deployment assigned to the CTT's client: it is not in its State Manifest, and its deployment YAML and bundle URLs answer 404. Its own State Manifest, with no deployment, starts at manifestVersion 1 and has bundle present with the value null. NOT RUN without second-client-svid-cert.pem / -key.pem in the cert folder, or when the WFM does not accept that client.",
     "steps": [
       {
         "id": "wfm-scope-own-manifest",
@@ -1323,6 +1324,36 @@
         }
       },
       {
+        "id": "wfm-scope-empty-manifest-bundle-null",
+        "name": "State Manifest Of A Client With No Deployment Has bundle Present And null",
+        "crIds": [
+          "MARGO-WFM-MGMT-038"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "validations": [
+          {
+            "operation": "bundle_null_when_no_deployments"
+          }
+        ],
+        "extract_context": {},
+        "svid_source": "second-client",
+        "applies_if": {
+          "field": "deployments",
+          "when": "empty",
+          "reason": "the second client's State Manifest has deployments assigned (or no deployments array), so the empty-manifest rule could not be observed"
+        },
+        "not_run_if": {
+          "error": ".",
+          "reason": "the WFM refused the second-client SVID at the TLS handshake (it is not an accepted client), so its State Manifest could not be read"
+        }
+      },
+      {
         "id": "wfm-scope-deployment",
         "name": "Second Client Cannot Read The CTT Client's Deployment YAML (404)",
         "crIds": [
@@ -1384,6 +1415,147 @@
         },
         "expected_status": 200,
         "problem_types_seen": true,
+        "validations": [],
+        "extract_context": {}
+      }
+    ]
+  },
+  {
+    "id": "wfm-transient-retry",
+    "name": "Retry Information On Transient Errors",
+    "crIds": [
+      "MARGO-WFM-MGMT-006",
+      "MARGO-WFM-MGMT-007",
+      "MARGO-WFM-MGMT-008",
+      "MARGO-WFM-MGMT-009",
+      "MARGO-WFM-MGMT-017",
+      "MARGO-WFM-MGMT-018",
+      "MARGO-WFM-MGMT-021"
+    ],
+    "description": "Runs last. The CTT cannot cause a 429, 500 or 503 on purpose, so every such response the WFM returned during this run is judged against the retry semantics table: 429 and 503 need retryable true, backoffStrategy exponential and a Retry-After header; 500 needs retryable true and backoffStrategy exponential, and a Retry-After header is recommended. Each step is NOT RUN when the WFM returned no response with that status.",
+    "steps": [
+      {
+        "id": "wfm-transient-429-retry",
+        "name": "429 Too Many Requests Has retryable true And backoffStrategy exponential (all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-006",
+          "MARGO-WFM-MGMT-007"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "transient_seen": {
+          "status": 429,
+          "check": "retry"
+        },
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-transient-429-retry-after",
+        "name": "429 Too Many Requests Has A Retry-After Header (all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-006",
+          "MARGO-WFM-MGMT-017"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "transient_seen": {
+          "status": 429,
+          "check": "retry_after"
+        },
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-transient-503-retry",
+        "name": "503 Service Unavailable Has retryable true And backoffStrategy exponential (all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-006",
+          "MARGO-WFM-MGMT-008"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "transient_seen": {
+          "status": 503,
+          "check": "retry"
+        },
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-transient-503-retry-after",
+        "name": "503 Service Unavailable Has A Retry-After Header (all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-006",
+          "MARGO-WFM-MGMT-018"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "transient_seen": {
+          "status": 503,
+          "check": "retry_after"
+        },
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-transient-500-retry",
+        "name": "500 Internal Server Error Has retryable true And backoffStrategy exponential (all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-006",
+          "MARGO-WFM-MGMT-009"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "transient_seen": {
+          "status": 500,
+          "check": "retry"
+        },
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-transient-500-retry-after",
+        "name": "500 Internal Server Error Has A Retry-After Header (RECOMMENDED; all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-021"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "transient_seen": {
+          "status": 500,
+          "check": "retry_after"
+        },
         "validations": [],
         "extract_context": {}
       }

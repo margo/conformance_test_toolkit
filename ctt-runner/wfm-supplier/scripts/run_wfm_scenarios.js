@@ -951,6 +951,53 @@ function vendorProblemTypes() {
   return bad.length ? { failure: bad.join('; ') } : {};
 }
 
+// step.transient_seen = { status, check } (MGMT-006/007/008/009/017/018/021):
+// the CTT cannot cause a 429, 500 or 503 on purpose, so every one the WFM
+// returns during the run is recorded here. Retry semantics table (Management
+// Interface API requirements): 429 and 503 need retryable true, backoffStrategy
+// exponential and a Retry-After header (REQUIRED); 500 needs the same two fields
+// and Retry-After is RECOMMENDED. check "retry" judges the two body fields,
+// check "retry_after" the header (delay-seconds or HTTP-date, RFC 9110).
+const transientSeen = new Map(); // status -> [{ where, retryable, backoffStrategy, retryAfter }]
+function recordTransient(method, urlPath, res, body) {
+  if (![429, 500, 503].includes(res.statusCode)) return;
+  let problem = {};
+  try { problem = JSON.parse(body.toString('utf8')) || {}; } catch {}
+  const list = transientSeen.get(res.statusCode) || [];
+  list.push({
+    where: `${method} ${urlPath} -> ${res.statusCode}`,
+    retryable: problem.retryable,
+    backoffStrategy: problem.backoffStrategy,
+    retryAfter: res.headers['retry-after'],
+  });
+  transientSeen.set(res.statusCode, list);
+}
+function transientResponses({ status, check }) {
+  const seen = transientSeen.get(status) || [];
+  if (!seen.length) {
+    return { notRun: `the WFM returned no ${status} response during this run (the CTT cannot cause one on purpose)` };
+  }
+  const bad = [];
+  for (const r of seen) {
+    if (check === 'retry_after') {
+      const v = r.retryAfter === undefined ? undefined : String(r.retryAfter).trim();
+      if (v === undefined) bad.push(`${r.where} has no Retry-After header`);
+      else if (!/^\d+$/.test(v) && Number.isNaN(Date.parse(v))) {
+        bad.push(`${r.where} has Retry-After "${v}", which is neither delay-seconds nor an HTTP-date`);
+      }
+    } else {
+      const wrong = [];
+      const shown = (v) => (v === undefined ? 'missing' : JSON.stringify(v));
+      if (r.retryable !== true) wrong.push(`retryable ${shown(r.retryable)} (expected true)`);
+      if (r.backoffStrategy !== 'exponential') wrong.push(`backoffStrategy ${shown(r.backoffStrategy)} (expected "exponential")`);
+      if (wrong.length) bad.push(`${r.where} has ${wrong.join(' and ')}`);
+    }
+  }
+  if (!bad.length) return {};
+  const more = bad.length > 3 ? `; and ${bad.length - 3} more ${status} response(s) like these` : '';
+  return { failure: bad.slice(0, 3).join('; ') + more };
+}
+
 // Key type and signature algorithm of an SVID. Only the entry for its own key
 // type is set (ec, eddsa or rsa), so a step about RSA keys can use
 // applies_if "_tls.rsa"; rsaSignature is set when the CA signed it with RSA.
@@ -1030,6 +1077,7 @@ function request(method, url, headers, bodyText, mtls) {
       res.on('end', () => {
         const rawBody = decodeContent(Buffer.concat(chunks), res.headers['content-encoding']);
         recordProblemType(method, parsedUrl.pathname, res, rawBody);
+        recordTransient(method, parsedUrl.pathname, res, rawBody);
         resolve({ status: res.statusCode, headers: res.headers, body: rawBody.toString('utf8'), rawBody, tls });
       });
     });
@@ -2049,17 +2097,26 @@ async function runStep(scenario, step) {
     // step.applies_if = { field, reason }: the requirement only applies when the
     // response has that field (e.g. a deployment with deviceConstraints). When
     // it has none, the step is NOT RUN instead of passing with nothing checked.
+    // With applies_if.when "empty" it is the other way round: the requirement
+    // only applies when the field is an empty array (e.g. MGMT-038, a manifest
+    // with no deployments), and the step is NOT RUN otherwise.
     // step.not_run_if = { status | error, reason }: that status (e.g. 403 local
     // policy) or a transport error matching that regex (e.g. TLS 1.2 refused
     // outright) means the requirement could not be observed.
     const notRun = step.not_run_if || {};
+    const appliesTo = (source, { field, when }) => {
+      if (when !== 'empty') return getAll(source, field).length > 0;
+      const value = getField(source, field);
+      return Array.isArray(value) && value.length === 0;
+    };
     const history = step.manifest_history ? manifestHistory(response, responseSource)
-      : step.problem_types_seen ? vendorProblemTypes() : {};
+      : step.problem_types_seen ? vendorProblemTypes()
+      : step.transient_seen ? transientResponses(step.transient_seen) : {};
     const notRunReason = history.notRun || (
       step.not_run_if && (response.status === notRun.status ||
         (notRun.error && new RegExp(notRun.error, 'i').test(response.transportError || ''))) ? notRun.reason
-      : step.applies_if && response.status === step.expected_status &&
-        getAll(responseSource, step.applies_if.field).length === 0 ? step.applies_if.reason
+      : step.applies_if && response.status === step.expected_status && !appliesTo(responseSource, step.applies_if)
+        ? step.applies_if.reason
       : '');
     if (notRunReason) {
       const reason = notRunReason;

@@ -576,6 +576,7 @@
       "MARGO-WFM-IDENT-042",
       "MARGO-WFM-IDENT-092",
       "MARGO-WFM-IDENT-093",
+      "MARGO-WFM-IDENT-097",
       "MARGO-WFM-IDENT-101",
       "MARGO-WFM-IDENT-106",
       "MARGO-WFM-IDENT-108",
@@ -584,6 +585,7 @@
       "MARGO-WFM-IDENT-115",
       "MARGO-WFM-IDENT-116",
       "MARGO-WFM-IDENT-118",
+      "MARGO-WFM-IDENT-119",
       "MARGO-WFM-IDENT-120",
       "MARGO-WFM-IDENT-125",
       "MARGO-WFM-MGMT-019",
@@ -886,7 +888,9 @@
         "crIds": [
           "MARGO-WFM-MGMT-023",
           "MARGO-WFM-IDENT-106",
-          "MARGO-WFM-IDENT-125"
+          "MARGO-WFM-IDENT-125",
+          "MARGO-WFM-IDENT-097",
+          "MARGO-WFM-IDENT-119"
         ],
         "expected_status": 0,
         "expect_transport_error": true,

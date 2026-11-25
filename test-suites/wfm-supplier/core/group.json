@@ -147,9 +147,17 @@
     "wfm-otel-observability",
     "wfm-scope-bundle",
     "wfm-scope-deployment",
+    "wfm-scope-empty-manifest-bundle-null",
     "wfm-scope-first-manifest",
     "wfm-scope-manifest",
     "wfm-scope-own-manifest",
+    "wfm-transient-429-retry",
+    "wfm-transient-429-retry-after",
+    "wfm-transient-500-retry",
+    "wfm-transient-500-retry-after",
+    "wfm-transient-503-retry",
+    "wfm-transient-503-retry-after",
+    "wfm-transient-retry",
     "wfm-vendor-problem-types",
     "wfm-vendor-problem-types-domain"
   ]
