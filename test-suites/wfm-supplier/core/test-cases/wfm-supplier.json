@@ -2757,6 +2757,7 @@
       "MARGO-WFM-IDENT-007",
       "MARGO-WFM-IDENT-008",
       "MARGO-WFM-IDENT-009",
+      "MARGO-WFM-IDENT-024",
       "MARGO-WFM-IDENT-029",
       "MARGO-WFM-IDENT-031",
       "MARGO-WFM-IDENT-032",
@@ -2986,6 +2987,23 @@
           "field": "_tls.client.p256sha256",
           "reason": "the CTT's client SVID is not ECDSA P-256 with SHA-256"
         }
+      },
+      {
+        "id": "wfm-identity-tls-anchor-form",
+        "name": "WFM Accepts The Client SVID Chain With The Trust Anchor Included Or Omitted",
+        "crIds": [
+          "MARGO-WFM-IDENT-024"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "svid_source": "anchor-toggled",
+        "validations": [],
+        "extract_context": {}
       },
       {
         "id": "wfm-identity-tls-rsa-pss",
@@ -3225,13 +3243,17 @@
       "MARGO-WFM-IDENT-092",
       "MARGO-WFM-IDENT-093",
       "MARGO-WFM-IDENT-101",
+      "MARGO-WFM-IDENT-106",
       "MARGO-WFM-IDENT-108",
       "MARGO-WFM-IDENT-112",
       "MARGO-WFM-IDENT-114",
       "MARGO-WFM-IDENT-115",
       "MARGO-WFM-IDENT-116",
       "MARGO-WFM-IDENT-118",
-      "MARGO-WFM-IDENT-120"
+      "MARGO-WFM-IDENT-120",
+      "MARGO-WFM-IDENT-125",
+      "MARGO-WFM-MGMT-019",
+      "MARGO-WFM-MGMT-023"
     ],
     "description": "How the WFM authenticates the caller: every Management Interface endpoint refuses a request without a client certificate; the client SVID must chain to the Trust Bundle through CA certificates (a self-signed substitute and a leaf signed by an SVID are refused); a validly issued SVID of another wfm-id is refused (NOT RUN unless that SVID is placed in the cert folder); and forged RFC 9440 Client-Cert / Client-Cert-Chain headers never authenticate a request.",
     "steps": [
@@ -3515,6 +3537,58 @@
           403
         ],
         "svid_source": "expired"
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "svid_source": "retired-client",
+        "extract_context": {},
+        "id": "wfm-identity-ca-retired",
+        "name": "Request From A Retired Client With A Still-Valid SVID Is Denied By Local Policy",
+        "crIds": [
+          "MARGO-WFM-MGMT-023",
+          "MARGO-WFM-IDENT-106",
+          "MARGO-WFM-IDENT-125"
+        ],
+        "expected_status": 0,
+        "expect_transport_error": true,
+        "accepted_statuses": [
+          401,
+          403
+        ],
+        "validations": []
+      },
+      {
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "svid_source": "retired-client",
+        "extract_context": {},
+        "id": "wfm-identity-ca-retired-403",
+        "name": "Local Policy Denial Is 403 Forbidden With The not-authorized Problem Type",
+        "crIds": [
+          "MARGO-WFM-MGMT-019"
+        ],
+        "expected_status": 403,
+        "validations": [
+          {
+            "field": "_headers.content-type",
+            "operation": "contains",
+            "value": "application/problem+json"
+          },
+          {
+            "field": "type",
+            "operation": "equals",
+            "value": "https://docs.margo.org/specification/problem-types#not-authorized"
+          }
+        ]
       },
       {
         "id": "wfm-identity-ca-header-no-cert",
@@ -3921,6 +3995,33 @@
             "operation": "not_empty"
           }
         ],
+        "extract_context": {}
+      }
+    ]
+  },
+  {
+    "id": "wfm-vendor-problem-types",
+    "name": "Vendor-Defined Problem Types",
+    "crIds": [
+      "MARGO-WFM-MGMT-106"
+    ],
+    "description": "Runs last. Every problem details type the WFM returned during this run, other than about:blank and the Margo catalogue types, is a vendor-defined problem type. Each one must be an absolute URI on the supplier's own domain and must not use the https://docs.margo.org/specification/problem-types namespace reserved for the specification. Not run when the WFM returned no vendor-defined problem type.",
+    "steps": [
+      {
+        "id": "wfm-vendor-problem-types-domain",
+        "name": "Vendor-Defined Problem Types Use The Supplier's Own Domain (all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-106"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "problem_types_seen": true,
+        "validations": [],
         "extract_context": {}
       }
     ]

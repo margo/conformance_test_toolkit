@@ -55,6 +55,8 @@
     "wfm-scope-deployment",
     "wfm-scope-first-manifest",
     "wfm-scope-manifest",
-    "wfm-scope-own-manifest"
+    "wfm-scope-own-manifest",
+    "wfm-vendor-problem-types",
+    "wfm-vendor-problem-types-domain"
   ]
 }

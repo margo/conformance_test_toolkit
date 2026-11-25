@@ -139,11 +139,14 @@ const previousIdentity = (miafIdentity && fs.existsSync(svidPreviousCertPath) &&
 //   non-client-svid        a SPIFFE ID without /client/<id> (WFM shape)    IDENT-092/101
 //   expired-client-svid    the CTT's own client SPIFFE ID, already expired IDENT-015/036/037
 //   second-client-svid     another authorized client of the same WFM       MGMT-016
+//   retired-client-svid    a still-valid client of the same WFM whose      MGMT-019/023,
+//                          relationship the operator has retired           IDENT-106/125
 const OPTIONAL_SVIDS = {
   'other-wfm': 'other-wfm-client-svid',
   'non-client': 'non-client-svid',
   expired: 'expired-client-svid',
   'second-client': 'second-client-svid',
+  'retired-client': 'retired-client-svid',
 };
 function optionalIdentity(source) {
   const base = path.join(certDir, OPTIONAL_SVIDS[source]);
@@ -233,6 +236,55 @@ function forgedChainIdentity() {
   return forgedChainIdentityCache;
 }
 
+// step.svid_source "anchor-toggled" (IDENT-024): the CTT's own SVID chain in the
+// other form the spec allows, compared with what every other step sends. With
+// the CA in the TLS store, OpenSSL completes a leaf-only svid-cert.pem up to
+// and including the trust anchor, so the usual form is "anchor included",
+// except when svid-cert.pem carries intermediates without the anchor.
+//   - usual form includes the anchor: present svid-cert.pem without it. A
+//     leaf-only chain is sent with omitAnchor (see request()).
+//   - usual form omits it: append the svid-ca.pem anchor that issued the chain.
+// A WFM must accept both. null when no anchor in svid-ca.pem issued the chain.
+const pemCerts = (text) => text.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) || [];
+function anchorToggledIdentity() {
+  const file = pemCerts(miafIdentity.cert);
+  const tail = new crypto.X509Certificate(file[file.length - 1]);
+  const hasAnchor = file.length > 1 && tail.checkIssued(tail);
+  const chain = hasAnchor ? file.slice(0, -1) : file;
+  const top = new crypto.X509Certificate(chain[chain.length - 1]);
+  const anchor = pemCerts(miafIdentity.ca).find((p) => {
+    const a = new crypto.X509Certificate(p);
+    return top.checkIssued(a) && top.verify(a.publicKey);
+  });
+  if (!anchor) return null;
+  const pem = (certs) => certs.join('\n') + '\n';
+  if (hasAnchor || chain.length === 1) return { ...miafIdentity, cert: pem(chain), omitAnchor: chain.length === 1 };
+  return { ...miafIdentity, cert: pem([...chain, anchor]) };
+}
+
+// For mtls.omitAnchor: the CTT's own check of the WFM's SVID chain, done right
+// after the handshake because the TLS store is left empty. Each certificate must
+// be valid now and signed by the next one sent, ending at a svid-ca.pem anchor;
+// then the same SPIFFE ID rule as recognizeWfm(). Returns an error text or ''.
+function wfmChainError(socket, caPem) {
+  const anchors = pemCerts(caPem).map((p) => new crypto.X509Certificate(p));
+  const sent = [];
+  for (let c = socket.getPeerCertificate(true); c && c.raw && !sent.some((x) => x.raw.equals(c.raw)); c = c.issuerCertificate) sent.push(c);
+  if (!sent.length) return 'the WFM presented no certificate';
+  const certs = sent.map((c) => new crypto.X509Certificate(c.raw));
+  const now = new Date();
+  for (let cur = certs[0], depth = 0; cur && depth < 8; depth++) {
+    if (new Date(cur.validFrom) > now || new Date(cur.validTo) < now) return `WFM certificate "${cur.subject}" is not valid now`;
+    if (anchors.some((a) => cur.checkIssued(a) && cur.verify(a.publicKey))) {
+      const err = recognizeWfm(sent[0]);
+      return err ? err.message : '';
+    }
+    const issuer = cur;
+    cur = certs.find((c) => c !== issuer && c.ca && issuer.checkIssued(c) && issuer.verify(c.publicKey));
+  }
+  return 'the WFM SVID does not chain to a trust anchor in svid-ca.pem';
+}
+
 // step.svid_source drives the SVID Rotation scenario: "previous" presents the
 // SVID in use before the rotation, "refreshed" the current one. Without a kept
 // previous SVID no rotation has happened, so there is nothing to test — the
@@ -241,6 +293,9 @@ function forgedChainIdentity() {
 function svidSourceBlocker(step) {
   if (step.applies_if_wfm_key && !(lastWfmKey && lastWfmKey[step.applies_if_wfm_key])) {
     return `the WFM's SVID key is not ${step.applies_if_wfm_key.toUpperCase()}`;
+  }
+  if (step.svid_source === 'anchor-toggled') {
+    return anchorToggledIdentity() ? '' : 'no trust anchor in svid-ca.pem issued the CTT\'s client SVID chain';
   }
   if (['untrusted', 'forged-chain', 'none', undefined].includes(step.svid_source)) return '';
   if (OPTIONAL_SVIDS[step.svid_source]) {
@@ -253,6 +308,17 @@ function svidSourceBlocker(step) {
     if (step.svid_source === 'expired' && new Date(cert.validTo) > new Date()) return `${name} has not expired yet (valid until ${cert.validTo})`;
     if (step.svid_source === 'second-client' && (id === ownSpiffeId || !id || !id.startsWith(ownSpiffeId.replace(/[^/]+$/, '')))) {
       return `${name} must be another client of the same WFM (${ownSpiffeId.replace(/[^/]+$/, '')}<other-id>), not ${id}`;
+    }
+    if (step.svid_source === 'retired-client') {
+      const clients = ownSpiffeId.replace(/[^/]+$/, '');
+      const second = optionalIdentity('second-client');
+      const secondId = second && spiffeIdOf(new crypto.X509Certificate(second.cert).subjectAltName);
+      if (!id || id === ownSpiffeId || id === secondId || !id.startsWith(clients)) {
+        return `${name} must be a retired client of the same WFM (${clients}<retired-id>), not the CTT's own or second client: ${id}`;
+      }
+      if (new Date(cert.validFrom) > new Date() || new Date(cert.validTo) < new Date()) {
+        return `${name} is not valid now (valid ${cert.validFrom} to ${cert.validTo}); a refusal would then come from its validity, not from local policy`;
+      }
     }
     return '';
   }
@@ -849,6 +915,42 @@ function manifestHistory(response, source) {
   return { failure: `manifestVersion ${cur.manifestVersion} is not greater than ${prev.manifestVersion} of the previous manifest (ETag ${prev.etag}, seen ${prev.seen})` };
 }
 
+// step.problem_types_seen (MGMT-106): every problem details `type` the WFM
+// returns during the run is recorded here, except about:blank and the Margo
+// catalogue types (docs.margo.org/specification/problem-types). What is left
+// is vendor-defined, and must be an absolute URI on the supplier's own domain,
+// outside the namespace the Margo specification reserves for itself.
+const MARGO_PROBLEM_TYPES = new Set([
+  'deployment-not-found', 'device-not-found', 'discovery-document-not-found', 'gateway-not-found',
+  'invalid-bundle', 'invalid-request', 'not-authorized', 'semantic-error',
+  'server-cannot-generate-response', 'spiffe-bundle-not-found',
+].map((name) => `https://docs.margo.org/specification/problem-types#${name}`));
+const vendorProblemTypesSeen = new Map(); // type -> first response that carried it
+function recordProblemType(method, urlPath, res, body) {
+  if (!/application\/problem\+json/i.test(res.headers['content-type'] || '')) return;
+  let type;
+  try { type = JSON.parse(body.toString('utf8')).type; } catch { return; }
+  if (typeof type !== 'string' || type === 'about:blank' || MARGO_PROBLEM_TYPES.has(type)) return;
+  if (!vendorProblemTypesSeen.has(type)) vendorProblemTypesSeen.set(type, `${method} ${urlPath} -> ${res.statusCode}`);
+}
+function vendorProblemTypes() {
+  if (!vendorProblemTypesSeen.size) {
+    return { notRun: 'the WFM returned no vendor-defined problem type during this run (only about:blank or Margo catalogue types)' };
+  }
+  const bad = [];
+  for (const [type, where] of vendorProblemTypesSeen) {
+    let url = null;
+    try { url = new URL(type); } catch {}
+    const reason = /^https?:\/\/docs\.margo\.org\/specification\/problem-types/i.test(type)
+      ? 'is in the Margo problem-types namespace, which is reserved for the specification, but is not a catalogue type'
+      : !url || !/^https?:$/.test(url.protocol) || !url.hostname ? 'is not an absolute http(s) URI on the supplier\'s own domain'
+      : /(^|\.)margo\.org$/i.test(url.hostname) ? 'is on margo.org, not on the supplier\'s own domain'
+      : '';
+    if (reason) bad.push(`problem type "${type}" (first seen on ${where}) ${reason}`);
+  }
+  return bad.length ? { failure: bad.join('; ') } : {};
+}
+
 // Key type and signature algorithm of an SVID. Only the entry for its own key
 // type is set (ec, eddsa or rsa), so a step about RSA keys can use
 // applies_if "_tls.rsa"; rsaSignature is set when the CA signed it with RSA.
@@ -912,19 +1014,33 @@ function request(method, url, headers, bodyText, mtls) {
     // step.tls_sigalgs: offer only these signature algorithms (e.g. RSA PKCS#1
     // v1.5 only, to check that an RSA-keyed WFM signs the handshake with PSS).
     if (mtls && mtls.sigalgs) options.sigalgs = mtls.sigalgs;
+    if (mtls && mtls.omitAnchor) {
+      delete options.ca;
+      delete options.checkServerIdentity;
+      options.rejectUnauthorized = false;
+    }
     // step.plain_http: the same host and port without TLS (must not be served).
     const plain = !!(mtls && mtls.plainHttp);
 
     const req = (plain ? require('http') : https).request(options, (res) => {
       const chunks = [];
       const tls = mtls && !plain ? tlsDetails(res, options.port, mtls) : undefined;
+      if (tls && mtls.omitAnchor) tls.authorized = true; // checked by wfmChainError
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const rawBody = decodeContent(Buffer.concat(chunks), res.headers['content-encoding']);
+        recordProblemType(method, parsedUrl.pathname, res, rawBody);
         resolve({ status: res.statusCode, headers: res.headers, body: rawBody.toString('utf8'), rawBody, tls });
       });
     });
 
+    // Destroys the socket before the request is written when the WFM's chain fails.
+    if (mtls && mtls.omitAnchor) {
+      req.on('socket', (socket) => socket.prependOnceListener('secureConnect', () => {
+        const err = wfmChainError(socket, mtls.ca);
+        if (err) socket.destroy(new Error(err));
+      }));
+    }
     req.on('timeout', () => {
       req.destroy(new Error('request timed out after 30s'));
     });
@@ -1603,6 +1719,7 @@ async function performHTTPStep(step) {
     const ownIdentity = step.svid_source === 'previous' ? previousIdentity
       : step.svid_source === 'untrusted' ? untrustedIdentity()
       : step.svid_source === 'forged-chain' ? forgedChainIdentity()
+      : step.svid_source === 'anchor-toggled' ? anchorToggledIdentity()
       : OPTIONAL_SVIDS[step.svid_source] ? optionalIdentity(step.svid_source)
       : step.svid_source === 'none' ? { ca: miafIdentity.ca } // no client certificate
       : miafIdentity;
@@ -1936,7 +2053,8 @@ async function runStep(scenario, step) {
     // policy) or a transport error matching that regex (e.g. TLS 1.2 refused
     // outright) means the requirement could not be observed.
     const notRun = step.not_run_if || {};
-    const history = step.manifest_history ? manifestHistory(response, responseSource) : {};
+    const history = step.manifest_history ? manifestHistory(response, responseSource)
+      : step.problem_types_seen ? vendorProblemTypes() : {};
     const notRunReason = history.notRun || (
       step.not_run_if && (response.status === notRun.status ||
         (notRun.error && new RegExp(notRun.error, 'i').test(response.transportError || ''))) ? notRun.reason

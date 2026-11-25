@@ -1361,5 +1361,32 @@
         }
       }
     ]
+  },
+  {
+    "id": "wfm-vendor-problem-types",
+    "name": "Vendor-Defined Problem Types",
+    "crIds": [
+      "MARGO-WFM-MGMT-106"
+    ],
+    "description": "Runs last. Every problem details type the WFM returned during this run, other than about:blank and the Margo catalogue types, is a vendor-defined problem type. Each one must be an absolute URI on the supplier's own domain and must not use the https://docs.margo.org/specification/problem-types namespace reserved for the specification. Not run when the WFM returned no vendor-defined problem type.",
+    "steps": [
+      {
+        "id": "wfm-vendor-problem-types-domain",
+        "name": "Vendor-Defined Problem Types Use The Supplier's Own Domain (all responses of this run)",
+        "crIds": [
+          "MARGO-WFM-MGMT-106"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments",
+        "mtls": true,
+        "headers": {
+          "Accept": "application/vnd.margo.manifest.v1+json"
+        },
+        "expected_status": 200,
+        "problem_types_seen": true,
+        "validations": [],
+        "extract_context": {}
+      }
+    ]
   }
 ]

@@ -67,6 +67,8 @@
     "wfm-identity-ca-nocert-status",
     "wfm-identity-ca-non-client",
     "wfm-identity-ca-other-wfm",
+    "wfm-identity-ca-retired",
+    "wfm-identity-ca-retired-403",
     "wfm-identity-ca-substituted-cert",
     "wfm-identity-client-auth",
     "wfm-identity-svid-1",
@@ -76,6 +78,7 @@
     "wfm-identity-tb-2",
     "wfm-identity-tb-3",
     "wfm-identity-tls",
+    "wfm-identity-tls-anchor-form",
     "wfm-identity-tls-chain",
     "wfm-identity-tls-ec-curve",
     "wfm-identity-tls-eddsa-curve",
@@ -146,6 +149,8 @@
     "wfm-scope-deployment",
     "wfm-scope-first-manifest",
     "wfm-scope-manifest",
-    "wfm-scope-own-manifest"
+    "wfm-scope-own-manifest",
+    "wfm-vendor-problem-types",
+    "wfm-vendor-problem-types-domain"
   ]
 }
