@@ -197,6 +197,7 @@ the new results. For the setup itself, follow the
 | `non-client-svid` | `spiffe://<trust-domain>/margo/wfm/<wfm-id>`, without `/client/<id>` | IDENT-092, IDENT-093, IDENT-101: the WFM must not treat it as a client |
 | `expired-client-svid` | The CTT's own client SPIFFE ID with a short TTL (for example 60 seconds), used after it has expired | IDENT-015, IDENT-036, IDENT-037: the WFM must refuse an expired SVID |
 | `second-client-svid` | `spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<another-client-id>`, also added to the WFM's accepted clients | MGMT-016: the second client must not see the CTT client's deployment, deployment YAML or bundle |
+| `retired-client-svid` | `spiffe://<trust-domain>/margo/wfm/<wfm-id>/client/<retired-client-id>`, still valid during the run. Add it to the WFM's accepted clients, then retire the client relationship before the run (on the sandbox Symphony, remove it from `~/symphony/api/mis/authorized-clients.json`) | MGMT-023, IDENT-106, IDENT-125: the WFM denies the request by local policy; MGMT-019: the denial is `403 Forbidden` with the `not-authorized` problem type |
 
 On the sandbox MIS, issue each one with
 `sudo docker exec margo-identity-service sh -c 'mkdir -p /tmp/ctt-svid && ./mis-cli mint x509 --spiffeID <spiffe-id> --ttl <seconds> --outputDir /tmp/ctt-svid'`,
@@ -227,6 +228,9 @@ not a failure.
 | MGMT-036 | The `second-client-svid` is not in the cert folder, or the WFM does not accept that client. | Issue the second client SVID as described in [Before the run](#before-the-run). It must never have had a deployment assigned. |
 | IDENT-008 | The WFM SVID key is not RSA, or the WFM does not accept TLS 1.2 (TLS 1.3 always signs the handshake with RSASSA-PSS). | Nothing to do. |
 | IDENT-009 | The CTT's client SVID is not ECDSA P-256 with SHA-256. | Issue the client SVID with ECDSA P-256 (the MIS default). |
+| IDENT-024 | No trust anchor in `svid-ca.pem` issued the CTT's client SVID chain. | Copy the MIS trust bundle into `svid-ca.pem`. |
+| MGMT-106 | The WFM returned no vendor-defined problem type during the run, only `about:blank` or types from the Margo problem types catalogue. | Nothing to do. The check applies only to a WFM that defines its own problem types. |
+| MGMT-019, MGMT-023, IDENT-106, IDENT-125 | The `retired-client-svid` is not in the cert folder, has expired, or is not another client of the same WFM. | Issue it as described in [Before the run](#before-the-run). It must still be valid, so that a denial comes from local policy and not from its validity. |
 | MGMT-087, MGMT-088, MGMT-090, MGMT-091, MGMT-092 | The WFM does not compress the deployment YAML or the bundle when the CTT sends `Accept-Encoding: gzip, br` (compression is optional). | Nothing to do. If the WFM compresses, it must use an advertised coding, send `Vary: Accept-Encoding`, and keep the digest valid for the decoded body. |
 | MGMT-093 | The WFM answers `200` to `If-None-Match` with the current digest (a `304` is optional). | Nothing to do. If the WFM answers `304`, the response must have no body. |
 
