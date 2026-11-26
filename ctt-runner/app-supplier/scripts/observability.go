@@ -95,7 +95,7 @@ func ValidateObservability(
     }
 
     report.Check(
-        "MARGO-APP-OBSERVABILITY-001, MARGO-APP-OBSERVABILITY-002, MARGO-APP-OBSERVABILITY-007",
+        "MARGO-APP-OBS-006, MARGO-APP-OBS-007",
         "Workload exposes OpenTelemetry data",
         "observability",
         "MAY / OPTIONAL (highly recommended): workload-specific data is sent to the OpenTelemetry collector",
@@ -119,7 +119,7 @@ func ValidateObservability(
     }
 
     report.Check(
-        "MARGO-APP-OBSERVABILITY-003, MARGO-APP-OBSERVABILITY-005, MARGO-APP-OBSERVABILITY-006",
+        "MARGO-APP-OBS-002, MARGO-APP-OBS-003, MARGO-APP-OBS-005",
         "Alternative observability framework, export without the collector",
         "observability",
         "Self-contained alternative framework; no export outside the device without the end user's approval",
@@ -143,7 +143,7 @@ func validateOTLP(
 ) {
 
     report.Check(
-        "MARGO-APP-OBSERVABILITY-004",
+        "MARGO-APP-OBS-001",
         fmt.Sprintf("OpenTelemetry export of component '%s'", name),
         "observability",
         "Metrics, traces and logs for OpenTelemetry are sent to the collector using OTLP",
@@ -217,7 +217,7 @@ func validateAutoInstrumentation(
 ) {
 
     report.Check(
-        "MARGO-APP-OBSERVABILITY-008",
+        "MARGO-APP-OBS-004",
         fmt.Sprintf("Auto-instrumentation of component '%s'", name),
         "observability",
         "SHOULD NOT: no "+autoInstrumentationPrefix+"* annotation, no Instrumentation resource",
