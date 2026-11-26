@@ -248,6 +248,19 @@ func handleMIAFPutCapabilities(w http.ResponseWriter, r *http.Request) {
 	deviceID := mux.Vars(r)["deviceId"]
 	spiffeID := callerSPIFFEID(r)
 
+	// A see-thru gateway reports itself before any child: a child whose parent
+	// was not reported yet is rejected with 404, as the WFM must.
+	if i := strings.LastIndex(deviceID, "/"); i > 0 {
+		miafKnownDeviceIDsMu.Lock()
+		parentKnown := miafKnownDeviceIDs[miafDeviceKey(spiffeID, deviceID[:i])]
+		miafKnownDeviceIDsMu.Unlock()
+		if !parentKnown {
+			respondProblem(w, r, 404, "gateway-not-found", "Gateway Not Found",
+				"The parent device "+deviceID[:i]+" has not reported its capabilities yet.")
+			return
+		}
+	}
+
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		respondMalformedBody(w, r, "Invalid request body")
@@ -578,8 +591,9 @@ func startMIAFServer(router *mux.Router) {
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondProblem(w, r, 404, "", "Not Found", fmt.Sprintf("No resource exists at %s.", r.URL.Path))
 	})
-	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId}", requireSVID(handleMIAFPutCapabilities)).Methods("PUT")
-	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId}", requireSVID(handleMIAFDeleteCapabilities)).Methods("DELETE")
+	// {deviceId} is {id}[/{id}...]: a see-thru gateway reports each child as gateway/child.
+	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId:.+}", requireSVID(handleMIAFPutCapabilities)).Methods("PUT")
+	router.HandleFunc("/v1alpha2/margo/api/v1/capabilities/{deviceId:.+}", requireSVID(handleMIAFDeleteCapabilities)).Methods("DELETE")
 	router.HandleFunc("/v1alpha2/margo/api/v1/deployments", requireSVID(handleMIAFGetDeployments)).Methods("GET")
 	router.HandleFunc("/v1alpha2/margo/api/v1/bundles/{digest}", requireSVID(handleMIAFGetBundle)).Methods("GET")
 	router.HandleFunc("/v1alpha2/margo/api/v1/deployments/{deploymentId}/{digest}", requireSVID(handleMIAFGetDeploymentManifest)).Methods("GET")
@@ -609,6 +623,15 @@ func startMIAFServer(router *mux.Router) {
 		log.Fatalf("[MIAF] no valid certificates in trust CA %s", caFile)
 	}
 	wfmSPIFFEID = id
+	wfmPair, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		log.Fatalf("[MIAF] cannot load the WFM SVID: %v", err)
+	}
+	if leaf, err := x509.ParseCertificate(wfmPair.Certificate[0]); err == nil {
+		wfmCertKey, _, _ = describeKey(leaf)
+		wfmCertSigAlg = leaf.SignatureAlgorithm.String()
+	}
+
 
 	port := os.Getenv("MIAF_PORT")
 	if port == "" {
@@ -616,8 +639,10 @@ func startMIAFServer(router *mux.Router) {
 	}
 
 	tlsConfig := &tls.Config{
-		ClientAuth: tls.RequireAndVerifyClientCert,
-		ClientCAs:  caPool,
+		// The test windows clone this config, so it carries the SVID itself.
+		Certificates: []tls.Certificate{wfmPair},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caPool,
 		MinVersion: tls.VersionTLS12, // TLS 1.3 default per spec; negotiated automatically, 1.2 allowed as fallback
 		// Recognition by the WFM: reject the connection itself when the chain-valid
 		// SVID is not one of this WFM's clients.
@@ -634,18 +659,32 @@ func startMIAFServer(router *mux.Router) {
 	}
 	// For the "untrusted WFM" test the listener can present, for a limited time,
 	// a certificate with this WFM's SPIFFE ID that the MIS did not issue.
+	// The TLS-version tests offer, for a limited time, only TLS 1.0/1.1, or only
+	// TLS 1.2 with RC4 cipher suites (RFC 9325 forbids both).
 	tlsConfig.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
-		if !untrustedIdentityActive() {
-			return nil, nil
-		}
-		cert, err := untrustedServerCertificate(wfmSPIFFEID)
-		if err != nil {
-			return nil, err
-		}
-		untrustedConns.Store(hello.Conn.RemoteAddr().String(), true)
+		addr := hello.Conn.RemoteAddr().String()
+		recordOffer(addr, hello.SupportedVersions)
 		cfg := tlsConfig.Clone()
 		cfg.GetConfigForClient = nil
-		cfg.Certificates = []tls.Certificate{cert}
+		switch {
+		case untrustedIdentityActive():
+			cert, err := untrustedServerCertificate(wfmSPIFFEID)
+			if err != nil {
+				return nil, err
+			}
+			cfg.Certificates = []tls.Certificate{cert}
+			connIdentity.Store(addr, "untrusted")
+		case legacyTLSActive():
+			cfg.MinVersion, cfg.MaxVersion = tls.VersionTLS10, tls.VersionTLS11
+			connIdentity.Store(addr, "legacy-tls")
+		case rc4Active():
+			cfg.MinVersion, cfg.MaxVersion = tls.VersionTLS12, tls.VersionTLS12
+			cfg.CipherSuites = []uint16{tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA, tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA, tls.TLS_RSA_WITH_RC4_128_SHA}
+			connIdentity.Store(addr, "rc4")
+		default:
+			connIdentity.Delete(addr)
+			return nil, nil
+		}
 		return cfg, nil
 	}
 	server := &http.Server{Addr: port, Handler: router, TLSConfig: tlsConfig,

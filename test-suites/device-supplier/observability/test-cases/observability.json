@@ -4,9 +4,8 @@
     "name": "Real device \u2014 observability",
     "description": "The device's OpenTelemetry collector pushes telemetry to the CTT (OTLP on port 4318, Prometheus remote write on port 9090). Reported as SKIP when no telemetry arrives: point the device's collector at the CTT host to run it.",
     "crIds": [
-      "MARGO-DEV-OBSERVABILITY-006",
-      "MARGO-DEV-OBSERVABILITY-010",
-      "MARGO-DEV-OBSERVABILITY-023"
+      "MARGO-DEV-OBS-001",
+      "MARGO-DEV-OBS-024"
     ],
     "optional": true,
     "steps": [
@@ -14,9 +13,8 @@
         "id": "rd-13-observability-otlp",
         "name": "Wait for Device OTEL Collector to Push Telemetry (traces or metrics)",
         "crIds": [
-          "MARGO-DEV-OBSERVABILITY-006",
-          "MARGO-DEV-OBSERVABILITY-010",
-          "MARGO-DEV-OBSERVABILITY-023"
+          "MARGO-DEV-OBS-001",
+          "MARGO-DEV-OBS-024"
         ],
         "method": "GET",
         "endpoint": "/health/telemetry",
@@ -51,7 +49,7 @@
         "id": "rd-13-observability-remote-write",
         "name": "Confirm Prometheus Remote Write Also Received",
         "crIds": [
-          "MARGO-DEV-OBSERVABILITY-006"
+          "MARGO-DEV-OBS-024"
         ],
         "method": "GET",
         "endpoint": "/health/telemetry",

@@ -4,20 +4,26 @@
     "name": "Real device \u2014 identity",
     "description": "The device under test connects to the mock WFM over mutual TLS with its own X.509-SVID. Nothing is sent to the device: every step checks what the device sent, as the mock WFM received and judged it.",
     "crIds": [
-      "MARGO-DEV-DEPLOYMENT-003",
-      "MARGO-DEV-MANAGEMENTINTERFACE-004",
-      "MARGO-DEV-MANAGEMENTINTERFACE-005",
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-001",
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-004"
+      "MARGO-DEV-DEVREQ-003",
+      "MARGO-DEV-IDENT-001",
+      "MARGO-DEV-IDENT-002",
+      "MARGO-DEV-IDENT-003",
+      "MARGO-DEV-IDENT-004",
+      "MARGO-DEV-IDENT-007",
+      "MARGO-DEV-IDENT-026",
+      "MARGO-DEV-IDENT-027",
+      "MARGO-DEV-IDENT-028",
+      "MARGO-DEV-MGMT-002"
     ],
     "steps": [
       {
         "id": "rd-01-identity-accepted",
-        "name": "The device connects over mTLS with its X.509-SVID and the mock WFM accepts it",
+        "name": "The device connects over mTLS with its X.509-SVID and the mock WFM accepts it (the chain it presents builds to the MIS trust anchor on its own)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-005",
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-001",
-          "MARGO-DEV-DEPLOYMENT-003"
+          "MARGO-DEV-IDENT-001",
+          "MARGO-DEV-IDENT-026",
+          "MARGO-DEV-IDENT-027",
+          "MARGO-DEV-DEVREQ-003"
         ],
         "observe": {
           "path_regex": "^/api/v1/",
@@ -46,8 +52,7 @@
         "id": "rd-01-identity-svid-profile",
         "name": "The device's certificate is an SVID leaf: one URI SAN, not a CA",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-004",
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-004"
+          "MARGO-DEV-IDENT-027"
         ],
         "observe": {
           "path_regex": "^/api/v1/",
@@ -76,6 +81,218 @@
             }
           ]
         }
+      },
+      {
+        "id": "rd-01-identity-key-ecdsa",
+        "name": "An ECDSA SVID key uses curve P-256 or P-384",
+        "crIds": [
+          "MARGO-DEV-IDENT-002"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [
+            {
+              "field": "cert.key",
+              "operation": "one_of",
+              "value": [
+                "ECDSA P-256",
+                "ECDSA P-384"
+              ]
+            }
+          ],
+          "where": [
+            {
+              "field": "cert.key_type",
+              "operation": "equals",
+              "value": "ECDSA"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device SVID key is not ECDSA"
+        }
+      },
+      {
+        "id": "rd-01-identity-key-eddsa",
+        "name": "An EdDSA SVID key uses Ed25519",
+        "crIds": [
+          "MARGO-DEV-IDENT-003"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [
+            {
+              "field": "cert.key",
+              "operation": "equals",
+              "value": "Ed25519"
+            }
+          ],
+          "where": [
+            {
+              "field": "cert.key_type",
+              "operation": "equals",
+              "value": "EdDSA"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device SVID key is not EdDSA"
+        }
+      },
+      {
+        "id": "rd-01-identity-key-rsa",
+        "name": "An RSA SVID key has a modulus of at least 3072 bits",
+        "crIds": [
+          "MARGO-DEV-IDENT-004"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [
+            {
+              "field": "cert.key_bits",
+              "operation": "gte",
+              "value": 3072
+            }
+          ],
+          "where": [
+            {
+              "field": "cert.key_type",
+              "operation": "equals",
+              "value": "RSA"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device SVID key is not RSA"
+        }
+      },
+      {
+        "id": "rd-01-identity-p256-validation",
+        "name": "The device validates a WFM SVID with an ECDSA P-256 key signed with ECDSA-SHA256",
+        "crIds": [
+          "MARGO-DEV-IDENT-007"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [],
+          "where": [
+            {
+              "field": "tls.server_key",
+              "operation": "equals",
+              "value": "ECDSA P-256"
+            },
+            {
+              "field": "tls.server_sig_alg",
+              "operation": "equals",
+              "value": "ECDSA-SHA256"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the mock WFM SVID is not ECDSA P-256 signed with ECDSA-SHA256"
+        }
+      },
+      {
+        "id": "rd-01-identity-tls13",
+        "name": "The device uses TLS 1.3 when the WFM offers TLS 1.2 and 1.3",
+        "crIds": [
+          "MARGO-DEV-IDENT-028"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "tls.version",
+              "operation": "equals",
+              "value": "TLS 1.3"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-01-identity-http11",
+        "name": "The device sends Management Interface requests over HTTP/1.1",
+        "crIds": [
+          "MARGO-DEV-MGMT-002"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "proto",
+              "operation": "equals",
+              "value": "HTTP/1.1"
+            }
+          ]
+        }
       }
     ]
   },
@@ -84,8 +301,10 @@
     "name": "Real device \u2014 a WFM the MIS did not certify is refused",
     "description": "For 50 seconds the mock WFM presents a certificate with its own SPIFFE ID that the MIS did not issue. The device must refuse the connection: it must not send any request over it. Afterwards the mock WFM presents its SVID again and the device continues.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-018",
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-002"
+      "MARGO-DEV-IDENT-012",
+      "MARGO-DEV-IDENT-067",
+      "MARGO-DEV-IDENT-070",
+      "MARGO-DEV-IDENT-080"
     ],
     "steps": [
       {
@@ -129,8 +348,9 @@
         "id": "rd-10-wfm-trust-refused",
         "name": "The device sends no request to a WFM whose certificate the MIS did not issue",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-018",
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-002"
+          "MARGO-DEV-IDENT-067",
+          "MARGO-DEV-IDENT-070",
+          "MARGO-DEV-IDENT-080"
         ],
         "observe": {
           "expect": "absent",
@@ -144,8 +364,6 @@
           ],
           "for_seconds": 58,
           "only_if": {
-            "method": "TLS",
-            "path_regex": "^/handshake-error$",
             "where": [
               {
                 "field": "server_identity",
@@ -161,7 +379,7 @@
         "id": "rd-10-wfm-trust-resumed",
         "name": "The device continues when the WFM presents its SVID again",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-018"
+          "MARGO-DEV-IDENT-012"
         ],
         "observe": {
           "path_regex": "^/api/v1/",
@@ -184,11 +402,180 @@
     ]
   },
   {
+    "id": "rd-14-tls-versions",
+    "name": "Real device \u2014 TLS versions and cipher suites RFC 9325 forbids are refused",
+    "description": "For 50 seconds the mock WFM offers only TLS 1.0/1.1, then for 50 seconds only TLS 1.2 with RC4 cipher suites. The device must not complete a connection in either window. Each window is judged only when the device tried to connect in it; the RC4 window only when the device offered TLS 1.2.",
+    "steps": [
+      {
+        "id": "rd-14-tls-versions-connected",
+        "name": "The device is connected to the mock WFM",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 120
+        },
+        "extract_context": {
+          "deviceClient": "client",
+          "deviceCert": "cert.sha256"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-arm-legacy",
+        "name": "Mock WFM: offer only TLS 1.0 and 1.1 for 50 seconds",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/server-identity",
+        "mtls": true,
+        "request_body": {
+          "legacyTLSSeconds": 50
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "rd-14-tls-versions-legacy-refused",
+        "name": "The device sends no request over TLS 1.0 or 1.1",
+        "crIds": [
+          "MARGO-DEV-IDENT-037"
+        ],
+        "observe": {
+          "expect": "absent",
+          "path_regex": "^/api/v1/",
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "legacy-tls"
+            }
+          ],
+          "for_seconds": 58,
+          "only_if": {
+            "where": [
+              {
+                "field": "server_identity",
+                "operation": "equals",
+                "value": "legacy-tls"
+              }
+            ]
+          },
+          "only_if_reason": "the device did not try to connect while the mock WFM offered only TLS 1.0/1.1"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-legacy-resumed",
+        "name": "The device continues when the WFM offers TLS 1.2 and 1.3 again",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            304
+          ],
+          "within_seconds": 180,
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "svid"
+            }
+          ],
+          "since": "now"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-arm-rc4",
+        "name": "Mock WFM: offer only TLS 1.2 with RC4 cipher suites for 50 seconds",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/server-identity",
+        "mtls": true,
+        "request_body": {
+          "rc4Seconds": 50
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "rd-14-tls-versions-rc4-refused",
+        "name": "Over TLS 1.2 the device refuses RC4 cipher suites (RFC 9325)",
+        "crIds": [
+          "MARGO-DEV-IDENT-029",
+          "MARGO-DEV-IDENT-081"
+        ],
+        "observe": {
+          "expect": "absent",
+          "path_regex": "^/api/v1/",
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "rc4"
+            }
+          ],
+          "for_seconds": 58,
+          "only_if": {
+            "where": [
+              {
+                "field": "server_identity",
+                "operation": "equals",
+                "value": "rc4"
+              },
+              {
+                "field": "tls.offered_versions",
+                "operation": "contains",
+                "value": "TLS 1.2"
+              }
+            ]
+          },
+          "only_if_reason": "the device did not offer TLS 1.2 while the mock WFM offered only TLS 1.2 with RC4 (no TLS 1.2 fallback to judge)"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-rc4-resumed",
+        "name": "The device continues when the WFM offers TLS 1.2 and 1.3 again",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            304
+          ],
+          "within_seconds": 180,
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "svid"
+            }
+          ],
+          "since": "now"
+        }
+      }
+    ],
+    "crIds": [
+      "MARGO-DEV-IDENT-029",
+      "MARGO-DEV-IDENT-037",
+      "MARGO-DEV-IDENT-081"
+    ]
+  },
+  {
     "id": "rd-12-svid-rotation",
     "name": "Real device \u2014 access continues after SVID rotation",
     "description": "When the device's SVID is replaced by a re-issued one for the same SPIFFE ID, the device keeps working without registering again. Reported as SKIP when the SVID was not replaced during the run.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-003"
+      "MARGO-DEV-IDENT-045"
     ],
     "steps": [
       {
@@ -218,7 +605,7 @@
         "id": "rd-12-svid-rotation-accepted",
         "name": "The device presents a re-issued SVID for the same SPIFFE ID and its requests are accepted",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-003"
+          "MARGO-DEV-IDENT-045"
         ],
         "observe": {
           "path_regex": "^/api/v1/",

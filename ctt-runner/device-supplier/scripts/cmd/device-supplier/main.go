@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -90,7 +91,20 @@ type ValidationRule struct {
 	ItemsEnum   []string    `json:"itemsEnum,omitempty"`
 	// ItemsInclude: for "array" — every listed value must be among the items.
 	ItemsInclude []string `json:"itemsInclude,omitempty"`
-	Description  string   `json:"description"`
+	// ValuesOneOf: for "object" — every value must be one of these kinds:
+	// "string", "number", "boolean", "string[]", "number[]".
+	ValuesOneOf []string `json:"valuesOneOf,omitempty"`
+	// KeyPrefix: the rule applies to each key of the object at Field that starts
+	// with this prefix: Pattern judges the key, Type judges its value.
+	KeyPrefix string `json:"keyPrefix,omitempty"`
+	// AppliesIf (device_expectations only): the rule is judged only when the
+	// body meets this condition; otherwise it records no verdict.
+	AppliesIf *ValidationRule `json:"appliesIf,omitempty"`
+	// MatchesServed (device_expectations only): the values at Field must be
+	// exactly what the mock WFM served for the reported deployment:
+	// "metadataName" or "componentNames" (see servedDeploymentFacts).
+	MatchesServed string `json:"matchesServed,omitempty"`
+	Description   string `json:"description"`
 }
 
 type ErrorResponseSpec struct {
@@ -207,7 +221,7 @@ func validateRequest(endpointKey string, body map[string]interface{}) []Validati
 //     getFieldValues and checked by its own, independent applyRule() call.
 // evaluateExpectations judges a request body against assertions.json's
 // device_expectations for the endpoint: rule ID → "pass", or what is wrong.
-func evaluateExpectations(endpointKey string, body map[string]interface{}) map[string]string {
+func evaluateExpectations(endpointKey string, body map[string]interface{}, served map[string][]string) map[string]string {
 	if assertionsConfig == nil {
 		return nil
 	}
@@ -217,6 +231,24 @@ func evaluateExpectations(endpointKey string, body map[string]interface{}) map[s
 	}
 	out := make(map[string]string, len(rules))
 	for _, rule := range rules {
+		if rule.AppliesIf != nil && applyRule(*rule.AppliesIf, body) != nil {
+			continue // the condition does not hold: nothing to judge
+		}
+		if rule.KeyPrefix != "" && len(prefixedKeys(body, rule)) == 0 {
+			continue
+		}
+		if rule.MatchesServed != "" {
+			want, known := served[rule.MatchesServed]
+			if !known {
+				continue // not a deployment this mock WFM served
+			}
+			if err := matchServed(rule, body, want); err != "" {
+				out[rule.RuleID] = firstNonEmptyString(rule.Description, err) + " (" + err + ")"
+			} else {
+				out[rule.RuleID] = "pass"
+			}
+			continue
+		}
 		if err := applyRule(rule, body); err != nil {
 			out[rule.RuleID] = firstNonEmptyString(rule.Description, err.Error) + " (" + err.Error + ")"
 		} else {
@@ -235,7 +267,105 @@ func firstNonEmptyString(vals ...string) string {
 	return ""
 }
 
+// matchServed compares the string values at rule.Field, as a multiset, with
+// the values the mock WFM served. It returns "" when they are the same.
+func matchServed(rule ValidationRule, body map[string]interface{}, want []string) string {
+	values, _ := getFieldValues(body, rule.Field)
+	got := make([]string, 0, len(values))
+	for _, v := range values {
+		got = append(got, fmt.Sprintf("%v", v))
+	}
+	sortedGot := append([]string(nil), got...)
+	sortedWant := append([]string(nil), want...)
+	sort.Strings(sortedGot)
+	sort.Strings(sortedWant)
+	if strings.Join(sortedGot, "\x00") != strings.Join(sortedWant, "\x00") || len(sortedGot) != len(sortedWant) {
+		return fmt.Sprintf("%s is %v; the deployment served by the WFM has %v", rule.Field, got, want)
+	}
+	return ""
+}
+
+var (
+	servedMetadataName  = regexp.MustCompile(`(?m)^metadata:\s*\n(?:[ \t]+.*\n)*?[ \t]+name:[ \t]*(\S+)`)
+	servedComponentName = regexp.MustCompile(`(?m)^[ \t]+- name:[ \t]*(\S+)`)
+)
+
+// servedDeploymentFacts reads metadata.name and the component names from the
+// ApplicationDeployment YAML this mock WFM serves for deploymentID (its own
+// templates, so a line scan is enough).
+func servedDeploymentFacts(deploymentID string) map[string][]string {
+	yaml := string(buildDeploymentYAML("", deploymentID, ""))
+	m := servedMetadataName.FindStringSubmatch(yaml)
+	if m == nil {
+		return nil
+	}
+	facts := map[string][]string{"metadataName": {m[1]}, "componentNames": {}}
+	if i := strings.Index(yaml, "components:"); i >= 0 {
+		for _, c := range servedComponentName.FindAllStringSubmatch(yaml[i:], -1) {
+			facts["componentNames"] = append(facts["componentNames"], c[1])
+		}
+	}
+	return facts
+}
+
+// prefixedKeys returns the keys of the object at rule.Field that start with rule.KeyPrefix.
+func prefixedKeys(body map[string]interface{}, rule ValidationRule) []string {
+	obj, _ := getFieldValue(body, rule.Field)
+	m, _ := obj.(map[string]interface{})
+	var keys []string
+	for k := range m {
+		if strings.HasPrefix(k, rule.KeyPrefix) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// valueKind names a label value's kind as valuesOneOf lists it.
+func valueKind(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return "string"
+	case float64:
+		return "number"
+	case bool:
+		return "boolean"
+	case []interface{}:
+		kind := ""
+		for _, item := range t {
+			k := valueKind(item)
+			if k != "string" && k != "number" || kind != "" && k != kind {
+				return "mixed array"
+			}
+			kind = k
+		}
+		if kind == "" {
+			return "string[]" // an empty array is an array of strings (and of numbers)
+		}
+		return kind + "[]"
+	}
+	return fmt.Sprintf("%T", v)
+}
+
 func applyRule(rule ValidationRule, body map[string]interface{}) *ValidationError {
+	if rule.KeyPrefix != "" {
+		obj, _ := getFieldValue(body, rule.Field)
+		m, _ := obj.(map[string]interface{})
+		for _, key := range prefixedKeys(body, rule) {
+			if rule.Pattern != "" {
+				if re, err := regexp.Compile(rule.Pattern); err == nil && !re.MatchString(key) {
+					return &ValidationError{RuleID: rule.RuleID, Error: fmt.Sprintf("property name '%s' does not match %s", key, rule.Pattern)}
+				}
+			}
+			if rule.Type == "object" {
+				if _, ok := m[key].(map[string]interface{}); !ok {
+					return &ValidationError{RuleID: rule.RuleID, Error: fmt.Sprintf("%s must be an object, got %T", key, m[key])}
+				}
+			}
+		}
+		return nil
+	}
 	if rule.RequiredIf != "" {
 		if _, parentExists := getFieldValues(body, rule.RequiredIf); !parentExists {
 			return nil // parent object not present at all — this rule doesn't apply
@@ -327,10 +457,26 @@ func applyRule(rule ValidationRule, body map[string]interface{}) *ValidationErro
 			}
 
 		case "object":
-			if _, ok := fieldValue.(map[string]interface{}); !ok {
+			obj, ok := fieldValue.(map[string]interface{})
+			if !ok {
 				return &ValidationError{
 					RuleID: rule.RuleID,
 					Error:  fmt.Sprintf("%s must be an object, got %T", rule.Field, fieldValue),
+				}
+			}
+			if rule.MinItems > 0 && len(obj) < rule.MinItems {
+				return &ValidationError{RuleID: rule.RuleID, Error: fmt.Sprintf("%s must have at least %d entries, got %d", rule.Field, rule.MinItems, len(obj))}
+			}
+			if len(rule.ValuesOneOf) > 0 {
+				keys := make([]string, 0, len(obj))
+				for k := range obj {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
+					if kind := valueKind(obj[k]); !containsString(rule.ValuesOneOf, kind) {
+						return &ValidationError{RuleID: rule.RuleID, Error: fmt.Sprintf("%s.%s is a %s; allowed: %v", rule.Field, k, kind, rule.ValuesOneOf)}
+					}
 				}
 			}
 
@@ -912,7 +1058,7 @@ func buildBundleArchive(clientID string, deploymentIDs []string, baseURL string)
 
 // buildStateManifest builds the desired-state manifest body this mock WFM
 // serves from GET /clients/{clientId}/deployments (the legacy, RFC-9421-flow
-// shape — see buildStateManifestMIAF in miaf_server.go for the MIAF-shaped
+// shape — see buildStateManifestMIAF in management_interface_server.go for the MIAF-shaped
 // sibling with clientId-free URLs). It returns three things: the manifest as
 // a map ready to JSON-encode, the manifest's own ETag (its sha256, per
 // MI-015 — computed by re-marshaling and hashing the exact bytes that will
@@ -1965,7 +2111,7 @@ func main() {
 	// connect here. Best-effort — skipped if the untrusted cert isn't present.
 	go serveUntrustedTLS(router)
 
-	// MIAF (mTLS/SPIFFE) listener — the new-spec transport, see miaf_server.go.
+	// MIAF (mTLS/SPIFFE) listener — the new-spec transport, see management_interface_server.go.
 	// Opt-in via MIAF_SERVER_CERT/KEY/TRUST_CA; a no-op otherwise.
 	startMIAFServer(router)
 

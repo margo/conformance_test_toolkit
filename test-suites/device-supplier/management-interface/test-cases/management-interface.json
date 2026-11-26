@@ -4,18 +4,31 @@
     "name": "Real device \u2014 capabilities",
     "description": "The device reports its capabilities. The mock WFM validates the report against the rules of assertions.json (endpoint rules and device_expectations); each step reads one of those verdicts.",
     "crIds": [
-      "MARGO-DEV-APPLICATIONDESCRIPTION-001",
-      "MARGO-DEV-APPLICATIONDESCRIPTION-002",
-      "MARGO-DEV-APPLICATIONDESCRIPTION-003",
-      "MARGO-DEV-DEPLOYMENT-002",
-      "MARGO-DEV-DEPLOYMENT-004",
-      "MARGO-DEV-DEPLOYMENT-005",
-      "MARGO-DEV-DEPLOYMENT-006",
-      "MARGO-DEV-DEPLOYMENT-007",
-      "MARGO-DEV-DEPLOYMENT-008",
-      "MARGO-DEV-DEPLOYMENT-009",
-      "MARGO-DEV-MANAGEMENTINTERFACE-016",
-      "MARGO-DEV-MANAGEMENTINTERFACE-RC3-001"
+      "MARGO-DEV-DEVREQ-004",
+      "MARGO-DEV-DEVREQ-005",
+      "MARGO-DEV-DEVREQ-006",
+      "MARGO-DEV-DEVREQ-007",
+      "MARGO-DEV-DEVREQ-008",
+      "MARGO-DEV-DEVREQ-010",
+      "MARGO-DEV-DEVREQ-011",
+      "MARGO-DEV-EXT-001",
+      "MARGO-DEV-EXT-003",
+      "MARGO-DEV-EXT-004",
+      "MARGO-DEV-MGMT-016",
+      "MARGO-DEV-MGMT-018",
+      "MARGO-DEV-MGMT-019",
+      "MARGO-DEV-MGMT-020",
+      "MARGO-DEV-MGMT-021",
+      "MARGO-DEV-MGMT-022",
+      "MARGO-DEV-MGMT-023",
+      "MARGO-DEV-MGMT-024",
+      "MARGO-DEV-MGMT-025",
+      "MARGO-DEV-MGMT-027",
+      "MARGO-DEV-MGMT-029",
+      "MARGO-DEV-MGMT-030",
+      "MARGO-DEV-MGMT-031",
+      "MARGO-DEV-MGMT-032",
+      "MARGO-DEV-MGMT-035"
     ],
     "steps": [
       {
@@ -45,7 +58,7 @@
         "id": "rd-02-capabilities-accepted",
         "name": "The device reports its capabilities and the report passes the mock WFM's validation",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016"
+          "MARGO-DEV-MGMT-016"
         ],
         "observe": {
           "method": "PUT",
@@ -65,7 +78,7 @@
         "id": "rd-02-capabilities-device-id",
         "name": "The device ID in the request path is the ID in the report",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-RC3-001"
+          "MARGO-DEV-MGMT-018"
         ],
         "observe": {
           "method": "PUT",
@@ -91,39 +104,51 @@
       },
       {
         "id": "rd-02-capabilities-runtime",
-        "name": "The device provides an OCI container runtime",
+        "name": "A device supporting Compose provides an OCI container runtime",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-004"
+          "MARGO-DEV-DEVREQ-011"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
-          "within_seconds": 60,
+          "within_seconds": 5,
           "check": [
             {
               "field": "expectations.device-runtime-oci",
               "operation": "equals",
               "value": "pass"
             }
-          ]
+          ],
+          "where": [
+            {
+              "field": "expectations.device-role-standalone-device",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device does not report the compose deployment type"
         }
       },
       {
         "id": "rd-02-capabilities-otel",
         "name": "The device provides an OpenTelemetry collector",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-005"
+          "MARGO-DEV-MGMT-023",
+          "MARGO-DEV-DEVREQ-006"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 60,
           "check": [
@@ -139,14 +164,16 @@
         "id": "rd-02-capabilities-deployment-type",
         "name": "The device declares a deployment type of a Margo device role",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-002"
+          "MARGO-DEV-MGMT-025",
+          "MARGO-DEV-DEVREQ-004"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 60,
           "check": [
@@ -162,15 +189,15 @@
         "id": "rd-02-capabilities-role-device",
         "name": "Standalone device role: the device deploys Compose applications",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-008",
-          "MARGO-DEV-DEPLOYMENT-009"
+          "MARGO-DEV-DEVREQ-010"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 5,
           "check": [],
@@ -189,15 +216,16 @@
         "id": "rd-02-capabilities-role-cluster",
         "name": "Standalone cluster role: the device deploys Helm charts",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-006",
-          "MARGO-DEV-DEPLOYMENT-007"
+          "MARGO-DEV-DEVREQ-007",
+          "MARGO-DEV-DEVREQ-008"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 5,
           "check": [],
@@ -214,21 +242,25 @@
       },
       {
         "id": "rd-02-capabilities-resources",
-        "name": "The device states the memory, storage and CPU cores it provides",
+        "name": "The device reports every workload-hosting field (cpus, memory, storage, peripherals, interfaces, otelCollector, supportedRuntimes, supportedDeploymentTypes)",
         "crIds": [
-          "MARGO-DEV-APPLICATIONDESCRIPTION-001",
-          "MARGO-DEV-APPLICATIONDESCRIPTION-002",
-          "MARGO-DEV-APPLICATIONDESCRIPTION-003"
+          "MARGO-DEV-MGMT-022"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 60,
           "check": [
+            {
+              "field": "expectations.device-cpus",
+              "operation": "equals",
+              "value": "pass"
+            },
             {
               "field": "expectations.device-memory",
               "operation": "equals",
@@ -240,11 +272,397 @@
               "value": "pass"
             },
             {
-              "field": "expectations.device-cpus",
+              "field": "expectations.device-peripherals",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-interfaces",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-otel-collector-reported",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-runtimes-reported",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-deployment-types-reported",
               "operation": "equals",
               "value": "pass"
             }
           ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-properties",
+        "name": "The capabilities include properties",
+        "crIds": [
+          "MARGO-DEV-MGMT-019"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 60,
+          "check": [
+            {
+              "field": "expectations.device-properties",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-identity-fields",
+        "name": "properties includes id, vendor, modelNumber and serialNumber",
+        "crIds": [
+          "MARGO-DEV-MGMT-021"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 60,
+          "check": [
+            {
+              "field": "expectations.device-id",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-vendor",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-model-number",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-serial-number",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-runtime-reported",
+        "name": "The device reports at least one supported runtime",
+        "crIds": [
+          "MARGO-DEV-MGMT-024",
+          "MARGO-DEV-DEVREQ-005"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 60,
+          "check": [
+            {
+              "field": "expectations.device-runtime-at-least-one",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-cpu-cores",
+        "name": "Each cpus entry includes cores",
+        "crIds": [
+          "MARGO-DEV-MGMT-027"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-cpu-cores",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-cpu-cores",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no cpus"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-peripheral-type",
+        "name": "Each peripherals entry includes type",
+        "crIds": [
+          "MARGO-DEV-MGMT-029"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-peripheral-type",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-peripheral-type",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no peripherals"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-interface-type",
+        "name": "Each interfaces entry includes type",
+        "crIds": [
+          "MARGO-DEV-MGMT-030"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-interface-type",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-interface-type",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no interfaces"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-label-values",
+        "name": "Each label value is a string, number, boolean, array of strings or array of numbers",
+        "crIds": [
+          "MARGO-DEV-MGMT-020"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-label-values",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-label-values",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no labels"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-custom-runtime-labels",
+        "name": "A device reporting the custom runtime reports labels for eligibility rules",
+        "crIds": [
+          "MARGO-DEV-MGMT-035",
+          "MARGO-DEV-EXT-001"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-custom-runtime-labels",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-custom-runtime-labels",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device does not report the custom runtime"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-custom-deployment-type-labels",
+        "name": "A device reporting the custom deployment type reports labels for eligibility rules",
+        "crIds": [
+          "MARGO-DEV-MGMT-035",
+          "MARGO-DEV-EXT-001"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-custom-deployment-type-labels",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-custom-deployment-type-labels",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device does not report the custom deployment type"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-extension-name",
+        "name": "A specification extension at the capabilities root is named x-<unique-name>-extensions",
+        "crIds": [
+          "MARGO-DEV-EXT-003"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-extension-name",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-extension-name",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no specification extension"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-extension-value",
+        "name": "A specification extension at the capabilities root has an object as its value",
+        "crIds": [
+          "MARGO-DEV-EXT-004"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-extension-value",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-extension-value",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no specification extension"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-gateway-order",
+        "name": "See-thru gateway: each child device is reported in its own call, after the gateway itself",
+        "crIds": [
+          "MARGO-DEV-MGMT-031",
+          "MARGO-DEV-MGMT-032"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+/.+$",
+          "status": [
+            200,
+            201
+          ],
+          "within_seconds": 5,
+          "check": [],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no child device (it is not a see-thru gateway)"
         }
       }
     ]
@@ -254,11 +672,22 @@
     "name": "Real device \u2014 desired state, fetch and status",
     "description": "The device reads its desired-state manifest, fetches the bundle or the deployment it lists by digest, reports the status of the deployment with the manifest version it adopted, and re-reads with the ETag of that manifest.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-007",
-      "MARGO-DEV-MANAGEMENTINTERFACE-015",
-      "MARGO-DEV-MANAGEMENTINTERFACE-016",
-      "MARGO-DEV-MANAGEMENTINTERFACE-019",
-      "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+      "MARGO-DEV-MGMT-001",
+      "MARGO-DEV-MGMT-049",
+      "MARGO-DEV-MGMT-066",
+      "MARGO-DEV-MGMT-067",
+      "MARGO-DEV-MGMT-068",
+      "MARGO-DEV-MGMT-070",
+      "MARGO-DEV-MGMT-071",
+      "MARGO-DEV-MGMT-072",
+      "MARGO-DEV-MGMT-073",
+      "MARGO-DEV-MGMT-074",
+      "MARGO-DEV-MGMT-076",
+      "MARGO-DEV-MGMT-077",
+      "MARGO-DEV-MGMT-078",
+      "MARGO-DEV-MGMT-079",
+      "MARGO-DEV-MGMT-080",
+      "MARGO-DEV-MGMT-082"
     ],
     "steps": [
       {
@@ -288,7 +717,7 @@
         "id": "rd-03-desired-state-read",
         "name": "The device reads the desired-state manifest",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016"
+          "MARGO-DEV-MGMT-001"
         ],
         "observe": {
           "method": "GET",
@@ -304,8 +733,7 @@
         "id": "rd-03-desired-state-fetch",
         "name": "The device fetches the bundle or a deployment by its digest",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016",
-          "MARGO-DEV-MANAGEMENTINTERFACE-019"
+          "MARGO-DEV-MGMT-001"
         ],
         "observe": {
           "method": "GET",
@@ -321,9 +749,7 @@
         "id": "rd-03-desired-state-status",
         "name": "The device reports the deployment status and the report passes the mock WFM's validation",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-007",
-          "MARGO-DEV-MANAGEMENTINTERFACE-016",
-          "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+          "MARGO-DEV-MGMT-066"
         ],
         "observe": {
           "method": "POST",
@@ -336,10 +762,388 @@
         }
       },
       {
+        "id": "rd-03-desired-state-status-route-uuid",
+        "name": "The status route carries the deployment UUID",
+        "crIds": [
+          "MARGO-DEV-MGMT-067"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "path",
+              "operation": "matches_regex",
+              "value": "^/api/v1/deployments/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/status$"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-deployment-id",
+        "name": "The status report includes deploymentId",
+        "crIds": [
+          "MARGO-DEV-MGMT-068"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-deployment-id",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-adopted-version",
+        "name": "The status report includes adoptedManifestVersion",
+        "crIds": [
+          "MARGO-DEV-MGMT-070"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-adopted-manifest-version",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-status",
+        "name": "The status report includes status",
+        "crIds": [
+          "MARGO-DEV-MGMT-071"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-status",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-components",
+        "name": "The status report includes components",
+        "crIds": [
+          "MARGO-DEV-MGMT-072"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-components",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-state",
+        "name": "status includes state",
+        "crIds": [
+          "MARGO-DEV-MGMT-073"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-state",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-state-value",
+        "name": "status.state is one of pending, installing, installed, removing, removed, failed",
+        "crIds": [
+          "MARGO-DEV-MGMT-074"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-state-value",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-state-value",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no status.state"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-component-name",
+        "name": "Each components entry includes name",
+        "crIds": [
+          "MARGO-DEV-MGMT-076"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-component-name",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-component-name",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no components array"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-component-state",
+        "name": "Each components entry includes state",
+        "crIds": [
+          "MARGO-DEV-MGMT-077"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-component-state",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-component-state",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no components array"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-component-state-value",
+        "name": "Each components[].state is one of pending, installing, installed, removing, removed, failed",
+        "crIds": [
+          "MARGO-DEV-MGMT-078"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-component-state-value",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-component-state-value",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no components array"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-components-match",
+        "name": "components has one entry for each component of the ApplicationDeployment",
+        "crIds": [
+          "MARGO-DEV-MGMT-079"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-components-match-deployment",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-components-match-deployment",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "no status report for a deployment the mock WFM served"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-error-fields",
+        "name": "status.error includes code, source and message",
+        "crIds": [
+          "MARGO-DEV-MGMT-080"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-error-code",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.status-error-source",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.status-error-message",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-error-code",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reported no status.error"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-error-source",
+        "name": "status.error.source is the metadata.name of the deployment",
+        "crIds": [
+          "MARGO-DEV-MGMT-082"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-error-source-deployment-name",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-error-source-deployment-name",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reported no status.error.source"
+        }
+      },
+      {
         "id": "rd-03-desired-state-etag",
         "name": "The device re-reads the manifest with the ETag of the manifest it adopted (304 Not Modified)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-015"
+          "MARGO-DEV-MGMT-049"
         ],
         "observe": {
           "method": "GET",
@@ -364,9 +1168,9 @@
     "name": "Real device \u2014 a deployment is added and withdrawn",
     "description": "The mock WFM adds a deployment to the desired state and later withdraws it. The device reads each new manifest and reports the status of that deployment after each change.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-007",
-      "MARGO-DEV-MANAGEMENTINTERFACE-016",
-      "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+      "MARGO-DEV-MGMT-001",
+      "MARGO-DEV-MGMT-040",
+      "MARGO-DEV-MGMT-085"
     ],
     "steps": [
       {
@@ -420,7 +1224,7 @@
         "id": "rd-04-deployment-lifecycle-read",
         "name": "The device reads the new manifest",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016"
+          "MARGO-DEV-MGMT-001"
         ],
         "observe": {
           "method": "GET",
@@ -442,8 +1246,8 @@
         "id": "rd-04-deployment-lifecycle-status",
         "name": "The device reports status for the added deployment with the new manifest version",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-007",
-          "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+          "MARGO-DEV-MGMT-040",
+          "MARGO-DEV-MGMT-085"
         ],
         "observe": {
           "method": "POST",
@@ -489,7 +1293,7 @@
         "id": "rd-04-deployment-lifecycle-removed",
         "name": "The device reports the withdrawn deployment as removing or removed",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-007"
+          "MARGO-DEV-MGMT-040"
         ],
         "observe": {
           "method": "POST",

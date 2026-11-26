@@ -324,7 +324,7 @@
         "itemsInclude": [
           "oci"
         ],
-        "description": "A device must provide an OCI container runtime: properties.supportedRuntimes must include \"oci\""
+        "description": "A device supporting the Compose deployment type must provide an OCI container runtime: properties.supportedRuntimes must include \"oci\""
       },
       {
         "rule_id": "device-otel-collector",
@@ -392,6 +392,351 @@
         "minItems": 1,
         "itemsType": "object",
         "description": "The device states the CPU cores it provides (properties.cpus)"
+      },
+      {
+        "rule_id": "device-properties",
+        "field": "properties",
+        "type": "object",
+        "required": true,
+        "description": "The capabilities include properties"
+      },
+      {
+        "rule_id": "device-vendor",
+        "field": "properties.vendor",
+        "type": "string",
+        "required": true,
+        "minLength": 1,
+        "description": "The capabilities name the vendor (properties.vendor)"
+      },
+      {
+        "rule_id": "device-model-number",
+        "field": "properties.modelNumber",
+        "type": "string",
+        "required": true,
+        "minLength": 1,
+        "description": "The capabilities name the model number (properties.modelNumber)"
+      },
+      {
+        "rule_id": "device-serial-number",
+        "field": "properties.serialNumber",
+        "type": "string",
+        "required": true,
+        "minLength": 1,
+        "description": "The capabilities name the serial number (properties.serialNumber)"
+      },
+      {
+        "rule_id": "device-peripherals",
+        "field": "properties.peripherals",
+        "type": "array",
+        "required": true,
+        "description": "A workload-hosting device reports properties.peripherals"
+      },
+      {
+        "rule_id": "device-interfaces",
+        "field": "properties.interfaces",
+        "type": "array",
+        "required": true,
+        "description": "A workload-hosting device reports properties.interfaces"
+      },
+      {
+        "rule_id": "device-otel-collector-reported",
+        "field": "properties.otelCollector",
+        "type": "boolean",
+        "required": true,
+        "description": "A workload-hosting device reports properties.otelCollector"
+      },
+      {
+        "rule_id": "device-runtimes-reported",
+        "field": "properties.supportedRuntimes",
+        "type": "array",
+        "required": true,
+        "description": "A workload-hosting device reports properties.supportedRuntimes"
+      },
+      {
+        "rule_id": "device-deployment-types-reported",
+        "field": "properties.supportedDeploymentTypes",
+        "type": "array",
+        "required": true,
+        "description": "A workload-hosting device reports properties.supportedDeploymentTypes"
+      },
+      {
+        "rule_id": "device-runtime-at-least-one",
+        "field": "properties.supportedRuntimes",
+        "type": "array",
+        "required": true,
+        "minItems": 1,
+        "description": "A workload-hosting device reports at least one supported runtime"
+      },
+      {
+        "rule_id": "device-cpu-cores",
+        "field": "properties.cpus.*.cores",
+        "type": "number",
+        "required": true,
+        "appliesIf": {
+          "rule_id": "device-cpu-cores-applies",
+          "field": "properties.cpus",
+          "type": "array",
+          "required": true
+        },
+        "description": "Each properties.cpus entry includes cores"
+      },
+      {
+        "rule_id": "device-peripheral-type",
+        "field": "properties.peripherals.*.type",
+        "type": "string",
+        "required": true,
+        "appliesIf": {
+          "rule_id": "device-peripheral-type-applies",
+          "field": "properties.peripherals",
+          "type": "array",
+          "required": true
+        },
+        "description": "Each properties.peripherals entry includes type"
+      },
+      {
+        "rule_id": "device-interface-type",
+        "field": "properties.interfaces.*.type",
+        "type": "string",
+        "required": true,
+        "appliesIf": {
+          "rule_id": "device-interface-type-applies",
+          "field": "properties.interfaces",
+          "type": "array",
+          "required": true
+        },
+        "description": "Each properties.interfaces entry includes type"
+      },
+      {
+        "rule_id": "device-label-values",
+        "field": "labels",
+        "type": "object",
+        "required": true,
+        "valuesOneOf": [
+          "string",
+          "number",
+          "boolean",
+          "string[]",
+          "number[]"
+        ],
+        "appliesIf": {
+          "rule_id": "device-label-values-applies",
+          "field": "labels",
+          "required": true
+        },
+        "description": "Each label value is a string, number, boolean, array of strings or array of numbers"
+      },
+      {
+        "rule_id": "device-custom-runtime-labels",
+        "field": "labels",
+        "type": "object",
+        "required": true,
+        "minItems": 1,
+        "appliesIf": {
+          "rule_id": "device-custom-runtime-labels-applies",
+          "field": "properties.supportedRuntimes",
+          "type": "array",
+          "required": true,
+          "itemsInclude": [
+            "custom"
+          ]
+        },
+        "description": "A device reporting the custom runtime also reports labels for eligibility rules"
+      },
+      {
+        "rule_id": "device-custom-deployment-type-labels",
+        "field": "labels",
+        "type": "object",
+        "required": true,
+        "minItems": 1,
+        "appliesIf": {
+          "rule_id": "device-custom-deployment-type-labels-applies",
+          "field": "properties.supportedDeploymentTypes",
+          "type": "array",
+          "required": true,
+          "itemsInclude": [
+            "custom"
+          ]
+        },
+        "description": "A device reporting the custom deployment type also reports labels for eligibility rules"
+      },
+      {
+        "rule_id": "device-extension-name",
+        "field": "",
+        "keyPrefix": "x-",
+        "pattern": "^x-[a-z][a-z0-9-]*-extensions$",
+        "description": "A specification extension at the capabilities root is named x-<unique-name>-extensions, unique-name matching [a-z][a-z0-9-]*"
+      },
+      {
+        "rule_id": "device-extension-value",
+        "field": "",
+        "keyPrefix": "x-",
+        "type": "object",
+        "description": "The value of a specification extension at the capabilities root is an object"
+      }
+    ],
+    "POST_status": [
+      {
+        "rule_id": "status-deployment-id",
+        "field": "deploymentId",
+        "type": "string",
+        "required": true,
+        "minLength": 1,
+        "description": "The status report includes deploymentId"
+      },
+      {
+        "rule_id": "status-adopted-manifest-version",
+        "field": "adoptedManifestVersion",
+        "type": "number",
+        "required": true,
+        "description": "The status report includes adoptedManifestVersion"
+      },
+      {
+        "rule_id": "status-status",
+        "field": "status",
+        "type": "object",
+        "required": true,
+        "description": "The status report includes status"
+      },
+      {
+        "rule_id": "status-components",
+        "field": "components",
+        "type": "array",
+        "required": true,
+        "description": "The status report includes components"
+      },
+      {
+        "rule_id": "status-state",
+        "field": "status.state",
+        "type": "string",
+        "required": true,
+        "description": "status includes state"
+      },
+      {
+        "rule_id": "status-state-value",
+        "field": "status.state",
+        "type": "string",
+        "required": true,
+        "enum": [
+          "pending",
+          "installing",
+          "installed",
+          "removing",
+          "removed",
+          "failed"
+        ],
+        "appliesIf": {
+          "rule_id": "status-state-value-applies",
+          "field": "status.state",
+          "required": true
+        },
+        "description": "status.state is pending, installing, installed, removing, removed or failed"
+      },
+      {
+        "rule_id": "status-component-name",
+        "field": "components.*.name",
+        "type": "string",
+        "required": true,
+        "minLength": 1,
+        "appliesIf": {
+          "rule_id": "status-component-name-applies",
+          "field": "components",
+          "required": true,
+          "type": "array"
+        },
+        "description": "Each components entry includes name"
+      },
+      {
+        "rule_id": "status-component-state",
+        "field": "components.*.state",
+        "type": "string",
+        "required": true,
+        "appliesIf": {
+          "rule_id": "status-component-state-applies",
+          "field": "components",
+          "required": true,
+          "type": "array"
+        },
+        "description": "Each components entry includes state"
+      },
+      {
+        "rule_id": "status-component-state-value",
+        "field": "components.*.state",
+        "type": "string",
+        "required": false,
+        "enum": [
+          "pending",
+          "installing",
+          "installed",
+          "removing",
+          "removed",
+          "failed"
+        ],
+        "appliesIf": {
+          "rule_id": "status-component-state-value-applies",
+          "field": "components",
+          "required": true,
+          "type": "array"
+        },
+        "description": "Each components[].state is pending, installing, installed, removing, removed or failed"
+      },
+      {
+        "rule_id": "status-components-match-deployment",
+        "field": "components.*.name",
+        "matchesServed": "componentNames",
+        "appliesIf": {
+          "rule_id": "status-components-match-deployment-applies",
+          "field": "components",
+          "required": true,
+          "type": "array"
+        },
+        "description": "components has one entry for each component of the ApplicationDeployment the WFM served"
+      },
+      {
+        "rule_id": "status-error-code",
+        "field": "status.error.code",
+        "type": "string",
+        "required": true,
+        "appliesIf": {
+          "rule_id": "status-error-code-applies",
+          "field": "status.error",
+          "required": true
+        },
+        "description": "status.error includes code"
+      },
+      {
+        "rule_id": "status-error-source",
+        "field": "status.error.source",
+        "type": "string",
+        "required": true,
+        "appliesIf": {
+          "rule_id": "status-error-source-applies",
+          "field": "status.error",
+          "required": true
+        },
+        "description": "status.error includes source"
+      },
+      {
+        "rule_id": "status-error-message",
+        "field": "status.error.message",
+        "type": "string",
+        "required": true,
+        "appliesIf": {
+          "rule_id": "status-error-message-applies",
+          "field": "status.error",
+          "required": true
+        },
+        "description": "status.error includes message"
+      },
+      {
+        "rule_id": "status-error-source-deployment-name",
+        "field": "status.error.source",
+        "matchesServed": "metadataName",
+        "appliesIf": {
+          "rule_id": "status-error-source-deployment-name-applies",
+          "field": "status.error.source",
+          "required": true
+        },
+        "description": "status.error.source is the metadata.name of the ApplicationDeployment (error not generated by a see-thru gateway)"
       }
     ]
   },

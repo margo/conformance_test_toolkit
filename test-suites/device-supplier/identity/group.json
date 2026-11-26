@@ -6,10 +6,17 @@
   "FolderPath": [
     "../test-suites/device-supplier/identity/test-cases"
   ],
+  "flexibleOrder": false,
   "testCases": [
     "rd-01-identity",
     "rd-01-identity-accepted",
+    "rd-01-identity-http11",
+    "rd-01-identity-key-ecdsa",
+    "rd-01-identity-key-eddsa",
+    "rd-01-identity-key-rsa",
+    "rd-01-identity-p256-validation",
     "rd-01-identity-svid-profile",
+    "rd-01-identity-tls13",
     "rd-10-wfm-trust",
     "rd-10-wfm-trust-arm",
     "rd-10-wfm-trust-connected",
@@ -17,6 +24,14 @@
     "rd-10-wfm-trust-resumed",
     "rd-12-svid-rotation",
     "rd-12-svid-rotation-accepted",
-    "rd-12-svid-rotation-connected"
+    "rd-12-svid-rotation-connected",
+    "rd-14-tls-versions",
+    "rd-14-tls-versions-arm-legacy",
+    "rd-14-tls-versions-arm-rc4",
+    "rd-14-tls-versions-connected",
+    "rd-14-tls-versions-legacy-refused",
+    "rd-14-tls-versions-legacy-resumed",
+    "rd-14-tls-versions-rc4-refused",
+    "rd-14-tls-versions-rc4-resumed"
   ]
 }

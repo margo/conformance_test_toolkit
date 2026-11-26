@@ -4,20 +4,26 @@
     "name": "Real device \u2014 identity",
     "description": "The device under test connects to the mock WFM over mutual TLS with its own X.509-SVID. Nothing is sent to the device: every step checks what the device sent, as the mock WFM received and judged it.",
     "crIds": [
-      "MARGO-DEV-DEPLOYMENT-003",
-      "MARGO-DEV-MANAGEMENTINTERFACE-004",
-      "MARGO-DEV-MANAGEMENTINTERFACE-005",
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-001",
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-004"
+      "MARGO-DEV-DEVREQ-003",
+      "MARGO-DEV-IDENT-001",
+      "MARGO-DEV-IDENT-002",
+      "MARGO-DEV-IDENT-003",
+      "MARGO-DEV-IDENT-004",
+      "MARGO-DEV-IDENT-007",
+      "MARGO-DEV-IDENT-026",
+      "MARGO-DEV-IDENT-027",
+      "MARGO-DEV-IDENT-028",
+      "MARGO-DEV-MGMT-002"
     ],
     "steps": [
       {
         "id": "rd-01-identity-accepted",
-        "name": "The device connects over mTLS with its X.509-SVID and the mock WFM accepts it",
+        "name": "The device connects over mTLS with its X.509-SVID and the mock WFM accepts it (the chain it presents builds to the MIS trust anchor on its own)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-005",
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-001",
-          "MARGO-DEV-DEPLOYMENT-003"
+          "MARGO-DEV-IDENT-001",
+          "MARGO-DEV-IDENT-026",
+          "MARGO-DEV-IDENT-027",
+          "MARGO-DEV-DEVREQ-003"
         ],
         "observe": {
           "path_regex": "^/api/v1/",
@@ -46,8 +52,7 @@
         "id": "rd-01-identity-svid-profile",
         "name": "The device's certificate is an SVID leaf: one URI SAN, not a CA",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-004",
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-004"
+          "MARGO-DEV-IDENT-027"
         ],
         "observe": {
           "path_regex": "^/api/v1/",
@@ -76,6 +81,218 @@
             }
           ]
         }
+      },
+      {
+        "id": "rd-01-identity-key-ecdsa",
+        "name": "An ECDSA SVID key uses curve P-256 or P-384",
+        "crIds": [
+          "MARGO-DEV-IDENT-002"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [
+            {
+              "field": "cert.key",
+              "operation": "one_of",
+              "value": [
+                "ECDSA P-256",
+                "ECDSA P-384"
+              ]
+            }
+          ],
+          "where": [
+            {
+              "field": "cert.key_type",
+              "operation": "equals",
+              "value": "ECDSA"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device SVID key is not ECDSA"
+        }
+      },
+      {
+        "id": "rd-01-identity-key-eddsa",
+        "name": "An EdDSA SVID key uses Ed25519",
+        "crIds": [
+          "MARGO-DEV-IDENT-003"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [
+            {
+              "field": "cert.key",
+              "operation": "equals",
+              "value": "Ed25519"
+            }
+          ],
+          "where": [
+            {
+              "field": "cert.key_type",
+              "operation": "equals",
+              "value": "EdDSA"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device SVID key is not EdDSA"
+        }
+      },
+      {
+        "id": "rd-01-identity-key-rsa",
+        "name": "An RSA SVID key has a modulus of at least 3072 bits",
+        "crIds": [
+          "MARGO-DEV-IDENT-004"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [
+            {
+              "field": "cert.key_bits",
+              "operation": "gte",
+              "value": 3072
+            }
+          ],
+          "where": [
+            {
+              "field": "cert.key_type",
+              "operation": "equals",
+              "value": "RSA"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device SVID key is not RSA"
+        }
+      },
+      {
+        "id": "rd-01-identity-p256-validation",
+        "name": "The device validates a WFM SVID with an ECDSA P-256 key signed with ECDSA-SHA256",
+        "crIds": [
+          "MARGO-DEV-IDENT-007"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 10,
+          "check": [],
+          "where": [
+            {
+              "field": "tls.server_key",
+              "operation": "equals",
+              "value": "ECDSA P-256"
+            },
+            {
+              "field": "tls.server_sig_alg",
+              "operation": "equals",
+              "value": "ECDSA-SHA256"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the mock WFM SVID is not ECDSA P-256 signed with ECDSA-SHA256"
+        }
+      },
+      {
+        "id": "rd-01-identity-tls13",
+        "name": "The device uses TLS 1.3 when the WFM offers TLS 1.2 and 1.3",
+        "crIds": [
+          "MARGO-DEV-IDENT-028"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "tls.version",
+              "operation": "equals",
+              "value": "TLS 1.3"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-01-identity-http11",
+        "name": "The device sends Management Interface requests over HTTP/1.1",
+        "crIds": [
+          "MARGO-DEV-MGMT-002"
+        ],
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "proto",
+              "operation": "equals",
+              "value": "HTTP/1.1"
+            }
+          ]
+        }
       }
     ]
   },
@@ -84,18 +301,31 @@
     "name": "Real device \u2014 capabilities",
     "description": "The device reports its capabilities. The mock WFM validates the report against the rules of assertions.json (endpoint rules and device_expectations); each step reads one of those verdicts.",
     "crIds": [
-      "MARGO-DEV-APPLICATIONDESCRIPTION-001",
-      "MARGO-DEV-APPLICATIONDESCRIPTION-002",
-      "MARGO-DEV-APPLICATIONDESCRIPTION-003",
-      "MARGO-DEV-DEPLOYMENT-002",
-      "MARGO-DEV-DEPLOYMENT-004",
-      "MARGO-DEV-DEPLOYMENT-005",
-      "MARGO-DEV-DEPLOYMENT-006",
-      "MARGO-DEV-DEPLOYMENT-007",
-      "MARGO-DEV-DEPLOYMENT-008",
-      "MARGO-DEV-DEPLOYMENT-009",
-      "MARGO-DEV-MANAGEMENTINTERFACE-016",
-      "MARGO-DEV-MANAGEMENTINTERFACE-RC3-001"
+      "MARGO-DEV-DEVREQ-004",
+      "MARGO-DEV-DEVREQ-005",
+      "MARGO-DEV-DEVREQ-006",
+      "MARGO-DEV-DEVREQ-007",
+      "MARGO-DEV-DEVREQ-008",
+      "MARGO-DEV-DEVREQ-010",
+      "MARGO-DEV-DEVREQ-011",
+      "MARGO-DEV-EXT-001",
+      "MARGO-DEV-EXT-003",
+      "MARGO-DEV-EXT-004",
+      "MARGO-DEV-MGMT-016",
+      "MARGO-DEV-MGMT-018",
+      "MARGO-DEV-MGMT-019",
+      "MARGO-DEV-MGMT-020",
+      "MARGO-DEV-MGMT-021",
+      "MARGO-DEV-MGMT-022",
+      "MARGO-DEV-MGMT-023",
+      "MARGO-DEV-MGMT-024",
+      "MARGO-DEV-MGMT-025",
+      "MARGO-DEV-MGMT-027",
+      "MARGO-DEV-MGMT-029",
+      "MARGO-DEV-MGMT-030",
+      "MARGO-DEV-MGMT-031",
+      "MARGO-DEV-MGMT-032",
+      "MARGO-DEV-MGMT-035"
     ],
     "steps": [
       {
@@ -125,7 +355,7 @@
         "id": "rd-02-capabilities-accepted",
         "name": "The device reports its capabilities and the report passes the mock WFM's validation",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016"
+          "MARGO-DEV-MGMT-016"
         ],
         "observe": {
           "method": "PUT",
@@ -145,7 +375,7 @@
         "id": "rd-02-capabilities-device-id",
         "name": "The device ID in the request path is the ID in the report",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-RC3-001"
+          "MARGO-DEV-MGMT-018"
         ],
         "observe": {
           "method": "PUT",
@@ -171,39 +401,51 @@
       },
       {
         "id": "rd-02-capabilities-runtime",
-        "name": "The device provides an OCI container runtime",
+        "name": "A device supporting Compose provides an OCI container runtime",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-004"
+          "MARGO-DEV-DEVREQ-011"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
-          "within_seconds": 60,
+          "within_seconds": 5,
           "check": [
             {
               "field": "expectations.device-runtime-oci",
               "operation": "equals",
               "value": "pass"
             }
-          ]
+          ],
+          "where": [
+            {
+              "field": "expectations.device-role-standalone-device",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device does not report the compose deployment type"
         }
       },
       {
         "id": "rd-02-capabilities-otel",
         "name": "The device provides an OpenTelemetry collector",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-005"
+          "MARGO-DEV-MGMT-023",
+          "MARGO-DEV-DEVREQ-006"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 60,
           "check": [
@@ -219,14 +461,16 @@
         "id": "rd-02-capabilities-deployment-type",
         "name": "The device declares a deployment type of a Margo device role",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-002"
+          "MARGO-DEV-MGMT-025",
+          "MARGO-DEV-DEVREQ-004"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 60,
           "check": [
@@ -242,15 +486,15 @@
         "id": "rd-02-capabilities-role-device",
         "name": "Standalone device role: the device deploys Compose applications",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-008",
-          "MARGO-DEV-DEPLOYMENT-009"
+          "MARGO-DEV-DEVREQ-010"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 5,
           "check": [],
@@ -269,15 +513,16 @@
         "id": "rd-02-capabilities-role-cluster",
         "name": "Standalone cluster role: the device deploys Helm charts",
         "crIds": [
-          "MARGO-DEV-DEPLOYMENT-006",
-          "MARGO-DEV-DEPLOYMENT-007"
+          "MARGO-DEV-DEVREQ-007",
+          "MARGO-DEV-DEVREQ-008"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 5,
           "check": [],
@@ -294,21 +539,25 @@
       },
       {
         "id": "rd-02-capabilities-resources",
-        "name": "The device states the memory, storage and CPU cores it provides",
+        "name": "The device reports every workload-hosting field (cpus, memory, storage, peripherals, interfaces, otelCollector, supportedRuntimes, supportedDeploymentTypes)",
         "crIds": [
-          "MARGO-DEV-APPLICATIONDESCRIPTION-001",
-          "MARGO-DEV-APPLICATIONDESCRIPTION-002",
-          "MARGO-DEV-APPLICATIONDESCRIPTION-003"
+          "MARGO-DEV-MGMT-022"
         ],
         "observe": {
           "method": "PUT",
           "path_regex": "^/api/v1/capabilities/[^/]+$",
           "status": [
             200,
-            201
+            201,
+            422
           ],
           "within_seconds": 60,
           "check": [
+            {
+              "field": "expectations.device-cpus",
+              "operation": "equals",
+              "value": "pass"
+            },
             {
               "field": "expectations.device-memory",
               "operation": "equals",
@@ -320,11 +569,397 @@
               "value": "pass"
             },
             {
-              "field": "expectations.device-cpus",
+              "field": "expectations.device-peripherals",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-interfaces",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-otel-collector-reported",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-runtimes-reported",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-deployment-types-reported",
               "operation": "equals",
               "value": "pass"
             }
           ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-properties",
+        "name": "The capabilities include properties",
+        "crIds": [
+          "MARGO-DEV-MGMT-019"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 60,
+          "check": [
+            {
+              "field": "expectations.device-properties",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-identity-fields",
+        "name": "properties includes id, vendor, modelNumber and serialNumber",
+        "crIds": [
+          "MARGO-DEV-MGMT-021"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 60,
+          "check": [
+            {
+              "field": "expectations.device-id",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-vendor",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-model-number",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.device-serial-number",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-runtime-reported",
+        "name": "The device reports at least one supported runtime",
+        "crIds": [
+          "MARGO-DEV-MGMT-024",
+          "MARGO-DEV-DEVREQ-005"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 60,
+          "check": [
+            {
+              "field": "expectations.device-runtime-at-least-one",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-02-capabilities-cpu-cores",
+        "name": "Each cpus entry includes cores",
+        "crIds": [
+          "MARGO-DEV-MGMT-027"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-cpu-cores",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-cpu-cores",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no cpus"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-peripheral-type",
+        "name": "Each peripherals entry includes type",
+        "crIds": [
+          "MARGO-DEV-MGMT-029"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-peripheral-type",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-peripheral-type",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no peripherals"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-interface-type",
+        "name": "Each interfaces entry includes type",
+        "crIds": [
+          "MARGO-DEV-MGMT-030"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-interface-type",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-interface-type",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no interfaces"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-label-values",
+        "name": "Each label value is a string, number, boolean, array of strings or array of numbers",
+        "crIds": [
+          "MARGO-DEV-MGMT-020"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-label-values",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-label-values",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no labels"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-custom-runtime-labels",
+        "name": "A device reporting the custom runtime reports labels for eligibility rules",
+        "crIds": [
+          "MARGO-DEV-MGMT-035",
+          "MARGO-DEV-EXT-001"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-custom-runtime-labels",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-custom-runtime-labels",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device does not report the custom runtime"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-custom-deployment-type-labels",
+        "name": "A device reporting the custom deployment type reports labels for eligibility rules",
+        "crIds": [
+          "MARGO-DEV-MGMT-035",
+          "MARGO-DEV-EXT-001"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-custom-deployment-type-labels",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-custom-deployment-type-labels",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device does not report the custom deployment type"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-extension-name",
+        "name": "A specification extension at the capabilities root is named x-<unique-name>-extensions",
+        "crIds": [
+          "MARGO-DEV-EXT-003"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-extension-name",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-extension-name",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no specification extension"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-extension-value",
+        "name": "A specification extension at the capabilities root has an object as its value",
+        "crIds": [
+          "MARGO-DEV-EXT-004"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.device-extension-value",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.device-extension-value",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no specification extension"
+        }
+      },
+      {
+        "id": "rd-02-capabilities-gateway-order",
+        "name": "See-thru gateway: each child device is reported in its own call, after the gateway itself",
+        "crIds": [
+          "MARGO-DEV-MGMT-031",
+          "MARGO-DEV-MGMT-032"
+        ],
+        "observe": {
+          "method": "PUT",
+          "path_regex": "^/api/v1/capabilities/[^/]+/.+$",
+          "status": [
+            200,
+            201
+          ],
+          "within_seconds": 5,
+          "check": [],
+          "if_absent": "skip",
+          "skip_reason": "the device reports no child device (it is not a see-thru gateway)"
         }
       }
     ]
@@ -334,11 +969,22 @@
     "name": "Real device \u2014 desired state, fetch and status",
     "description": "The device reads its desired-state manifest, fetches the bundle or the deployment it lists by digest, reports the status of the deployment with the manifest version it adopted, and re-reads with the ETag of that manifest.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-007",
-      "MARGO-DEV-MANAGEMENTINTERFACE-015",
-      "MARGO-DEV-MANAGEMENTINTERFACE-016",
-      "MARGO-DEV-MANAGEMENTINTERFACE-019",
-      "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+      "MARGO-DEV-MGMT-001",
+      "MARGO-DEV-MGMT-049",
+      "MARGO-DEV-MGMT-066",
+      "MARGO-DEV-MGMT-067",
+      "MARGO-DEV-MGMT-068",
+      "MARGO-DEV-MGMT-070",
+      "MARGO-DEV-MGMT-071",
+      "MARGO-DEV-MGMT-072",
+      "MARGO-DEV-MGMT-073",
+      "MARGO-DEV-MGMT-074",
+      "MARGO-DEV-MGMT-076",
+      "MARGO-DEV-MGMT-077",
+      "MARGO-DEV-MGMT-078",
+      "MARGO-DEV-MGMT-079",
+      "MARGO-DEV-MGMT-080",
+      "MARGO-DEV-MGMT-082"
     ],
     "steps": [
       {
@@ -368,7 +1014,7 @@
         "id": "rd-03-desired-state-read",
         "name": "The device reads the desired-state manifest",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016"
+          "MARGO-DEV-MGMT-001"
         ],
         "observe": {
           "method": "GET",
@@ -384,8 +1030,7 @@
         "id": "rd-03-desired-state-fetch",
         "name": "The device fetches the bundle or a deployment by its digest",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016",
-          "MARGO-DEV-MANAGEMENTINTERFACE-019"
+          "MARGO-DEV-MGMT-001"
         ],
         "observe": {
           "method": "GET",
@@ -401,9 +1046,7 @@
         "id": "rd-03-desired-state-status",
         "name": "The device reports the deployment status and the report passes the mock WFM's validation",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-007",
-          "MARGO-DEV-MANAGEMENTINTERFACE-016",
-          "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+          "MARGO-DEV-MGMT-066"
         ],
         "observe": {
           "method": "POST",
@@ -416,10 +1059,388 @@
         }
       },
       {
+        "id": "rd-03-desired-state-status-route-uuid",
+        "name": "The status route carries the deployment UUID",
+        "crIds": [
+          "MARGO-DEV-MGMT-067"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "path",
+              "operation": "matches_regex",
+              "value": "^/api/v1/deployments/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/status$"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-deployment-id",
+        "name": "The status report includes deploymentId",
+        "crIds": [
+          "MARGO-DEV-MGMT-068"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-deployment-id",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-adopted-version",
+        "name": "The status report includes adoptedManifestVersion",
+        "crIds": [
+          "MARGO-DEV-MGMT-070"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-adopted-manifest-version",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-status",
+        "name": "The status report includes status",
+        "crIds": [
+          "MARGO-DEV-MGMT-071"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-status",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-components",
+        "name": "The status report includes components",
+        "crIds": [
+          "MARGO-DEV-MGMT-072"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-components",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-state",
+        "name": "status includes state",
+        "crIds": [
+          "MARGO-DEV-MGMT-073"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 30,
+          "check": [
+            {
+              "field": "expectations.status-state",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-state-value",
+        "name": "status.state is one of pending, installing, installed, removing, removed, failed",
+        "crIds": [
+          "MARGO-DEV-MGMT-074"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-state-value",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-state-value",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no status.state"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-component-name",
+        "name": "Each components entry includes name",
+        "crIds": [
+          "MARGO-DEV-MGMT-076"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-component-name",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-component-name",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no components array"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-component-state",
+        "name": "Each components entry includes state",
+        "crIds": [
+          "MARGO-DEV-MGMT-077"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-component-state",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-component-state",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no components array"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-component-state-value",
+        "name": "Each components[].state is one of pending, installing, installed, removing, removed, failed",
+        "crIds": [
+          "MARGO-DEV-MGMT-078"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-component-state-value",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-component-state-value",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the status report has no components array"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-components-match",
+        "name": "components has one entry for each component of the ApplicationDeployment",
+        "crIds": [
+          "MARGO-DEV-MGMT-079"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-components-match-deployment",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-components-match-deployment",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "no status report for a deployment the mock WFM served"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-error-fields",
+        "name": "status.error includes code, source and message",
+        "crIds": [
+          "MARGO-DEV-MGMT-080"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-error-code",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.status-error-source",
+              "operation": "equals",
+              "value": "pass"
+            },
+            {
+              "field": "expectations.status-error-message",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-error-code",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reported no status.error"
+        }
+      },
+      {
+        "id": "rd-03-desired-state-status-error-source",
+        "name": "status.error.source is the metadata.name of the deployment",
+        "crIds": [
+          "MARGO-DEV-MGMT-082"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/[^/]+/status$",
+          "status": [
+            200,
+            201,
+            422
+          ],
+          "within_seconds": 5,
+          "check": [
+            {
+              "field": "expectations.status-error-source-deployment-name",
+              "operation": "equals",
+              "value": "pass"
+            }
+          ],
+          "where": [
+            {
+              "field": "expectations.status-error-source-deployment-name",
+              "operation": "exists"
+            }
+          ],
+          "if_absent": "skip",
+          "skip_reason": "the device reported no status.error.source"
+        }
+      },
+      {
         "id": "rd-03-desired-state-etag",
         "name": "The device re-reads the manifest with the ETag of the manifest it adopted (304 Not Modified)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-015"
+          "MARGO-DEV-MGMT-049"
         ],
         "observe": {
           "method": "GET",
@@ -444,9 +1465,9 @@
     "name": "Real device \u2014 a deployment is added and withdrawn",
     "description": "The mock WFM adds a deployment to the desired state and later withdraws it. The device reads each new manifest and reports the status of that deployment after each change.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-007",
-      "MARGO-DEV-MANAGEMENTINTERFACE-016",
-      "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+      "MARGO-DEV-MGMT-001",
+      "MARGO-DEV-MGMT-040",
+      "MARGO-DEV-MGMT-085"
     ],
     "steps": [
       {
@@ -500,7 +1521,7 @@
         "id": "rd-04-deployment-lifecycle-read",
         "name": "The device reads the new manifest",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-016"
+          "MARGO-DEV-MGMT-001"
         ],
         "observe": {
           "method": "GET",
@@ -522,8 +1543,8 @@
         "id": "rd-04-deployment-lifecycle-status",
         "name": "The device reports status for the added deployment with the new manifest version",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-007",
-          "MARGO-DEV-MANAGEMENTINTERFACE-RC3-002"
+          "MARGO-DEV-MGMT-040",
+          "MARGO-DEV-MGMT-085"
         ],
         "observe": {
           "method": "POST",
@@ -569,7 +1590,7 @@
         "id": "rd-04-deployment-lifecycle-removed",
         "name": "The device reports the withdrawn deployment as removing or removed",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-007"
+          "MARGO-DEV-MGMT-040"
         ],
         "observe": {
           "method": "POST",
@@ -598,8 +1619,7 @@
     "name": "Real device \u2014 a manifest version that does not increase is rejected",
     "description": "The mock WFM serves a changed manifest whose manifestVersion is 1, not greater than the version the device has adopted. The device must reject it and keep its state.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-010",
-      "MARGO-DEV-MANAGEMENTINTERFACE-015"
+      "MARGO-DEV-MGMT-048"
     ],
     "steps": [
       {
@@ -654,7 +1674,7 @@
         "id": "rd-05-manifest-version-rejected",
         "name": "The device does not act on the rejected manifest (no status report for its new deployment)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-010"
+          "MARGO-DEV-MGMT-048"
         ],
         "observe": {
           "expect": "absent",
@@ -669,8 +1689,7 @@
         "id": "rd-05-manifest-version-state-kept",
         "name": "The device keeps its previous state (it does not send the ETag of the rejected manifest back)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-010",
-          "MARGO-DEV-MANAGEMENTINTERFACE-015"
+          "MARGO-DEV-MGMT-048"
         ],
         "observe": {
           "expect": "absent",
@@ -718,8 +1737,7 @@
     "name": "Real device \u2014 an unsupported digest algorithm is rejected",
     "description": "The mock WFM serves a manifest whose digests use sha512. The device must treat the manifest as invalid, stop processing it and keep its state.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-008",
-      "MARGO-DEV-MANAGEMENTINTERFACE-015"
+      "MARGO-DEV-MGMT-047"
     ],
     "steps": [
       {
@@ -774,7 +1792,7 @@
         "id": "rd-06-digest-algorithm-rejected",
         "name": "The device does not act on the rejected manifest (no status report for its new deployment)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-008"
+          "MARGO-DEV-MGMT-047"
         ],
         "observe": {
           "expect": "absent",
@@ -789,7 +1807,7 @@
         "id": "rd-06-digest-algorithm-no-fetch",
         "name": "The device does not fetch anything by a digest of the unsupported algorithm",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-008"
+          "MARGO-DEV-MGMT-047"
         ],
         "observe": {
           "expect": "absent",
@@ -804,8 +1822,7 @@
         "id": "rd-06-digest-algorithm-state-kept",
         "name": "The device keeps its previous state (it does not send the ETag of the rejected manifest back)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-008",
-          "MARGO-DEV-MANAGEMENTINTERFACE-015"
+          "MARGO-DEV-MGMT-047"
         ],
         "observe": {
           "expect": "absent",
@@ -853,10 +1870,10 @@
     "name": "Real device \u2014 a bundle that does not match its digest is rejected",
     "description": "The mock WFM serves a correct manifest, but the bundle archive it delivers does not hash to the bundle digest. A device that downloads the bundle must abort the update and keep its previous state.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-006",
-      "MARGO-DEV-MANAGEMENTINTERFACE-009",
-      "MARGO-DEV-MANAGEMENTINTERFACE-015",
-      "MARGO-DEV-MANAGEMENTINTERFACE-019"
+      "MARGO-DEV-MGMT-041",
+      "MARGO-DEV-MGMT-042",
+      "MARGO-DEV-MGMT-045",
+      "MARGO-DEV-MGMT-046"
     ],
     "steps": [
       {
@@ -911,9 +1928,9 @@
         "id": "rd-07-bundle-content-rejected",
         "name": "The device does not act on the rejected manifest (no status report for its new deployment)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-006",
-          "MARGO-DEV-MANAGEMENTINTERFACE-009",
-          "MARGO-DEV-MANAGEMENTINTERFACE-019"
+          "MARGO-DEV-MGMT-041",
+          "MARGO-DEV-MGMT-045",
+          "MARGO-DEV-MGMT-046"
         ],
         "observe": {
           "expect": "absent",
@@ -940,8 +1957,7 @@
         "id": "rd-07-bundle-content-state-kept",
         "name": "The device keeps its previous state (it does not send the ETag of the rejected manifest back)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-009",
-          "MARGO-DEV-MANAGEMENTINTERFACE-015"
+          "MARGO-DEV-MGMT-042"
         ],
         "observe": {
           "expect": "absent",
@@ -1001,10 +2017,10 @@
     "name": "Real device \u2014 a deployment file that does not match its digest is rejected",
     "description": "The mock WFM serves a correct manifest, but the deployment files it delivers do not hash to their digests. A device that downloads the file of the new deployment must abort the update and keep its previous state.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-006",
-      "MARGO-DEV-MANAGEMENTINTERFACE-009",
-      "MARGO-DEV-MANAGEMENTINTERFACE-015",
-      "MARGO-DEV-MANAGEMENTINTERFACE-019"
+      "MARGO-DEV-MGMT-041",
+      "MARGO-DEV-MGMT-042",
+      "MARGO-DEV-MGMT-045",
+      "MARGO-DEV-MGMT-046"
     ],
     "steps": [
       {
@@ -1059,8 +2075,9 @@
         "id": "rd-08-deployment-content-rejected",
         "name": "The device does not act on the rejected manifest (no status report for its new deployment)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-006",
-          "MARGO-DEV-MANAGEMENTINTERFACE-019"
+          "MARGO-DEV-MGMT-041",
+          "MARGO-DEV-MGMT-045",
+          "MARGO-DEV-MGMT-046"
         ],
         "observe": {
           "expect": "absent",
@@ -1087,8 +2104,7 @@
         "id": "rd-08-deployment-content-state-kept",
         "name": "The device keeps its previous state (it does not send the ETag of the rejected manifest back)",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-009",
-          "MARGO-DEV-MANAGEMENTINTERFACE-015"
+          "MARGO-DEV-MGMT-042"
         ],
         "observe": {
           "expect": "absent",
@@ -1148,8 +2164,8 @@
     "name": "Real device \u2014 sizeBytes is not used for integrity",
     "description": "The mock WFM serves a manifest with a wrong sizeBytes and correct digests. The device must still accept it.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-025",
-      "MARGO-DEV-MANAGEMENTINTERFACE-026"
+      "MARGO-DEV-MGMT-055",
+      "MARGO-DEV-MGMT-056"
     ],
     "steps": [
       {
@@ -1204,8 +2220,8 @@
         "id": "rd-09-size-bytes-accepted",
         "name": "The device accepts the manifest and reports status for its new deployment",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-025",
-          "MARGO-DEV-MANAGEMENTINTERFACE-026"
+          "MARGO-DEV-MGMT-055",
+          "MARGO-DEV-MGMT-056"
         ],
         "observe": {
           "method": "POST",
@@ -1247,8 +2263,10 @@
     "name": "Real device \u2014 a WFM the MIS did not certify is refused",
     "description": "For 50 seconds the mock WFM presents a certificate with its own SPIFFE ID that the MIS did not issue. The device must refuse the connection: it must not send any request over it. Afterwards the mock WFM presents its SVID again and the device continues.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-018",
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-002"
+      "MARGO-DEV-IDENT-012",
+      "MARGO-DEV-IDENT-067",
+      "MARGO-DEV-IDENT-070",
+      "MARGO-DEV-IDENT-080"
     ],
     "steps": [
       {
@@ -1292,8 +2310,9 @@
         "id": "rd-10-wfm-trust-refused",
         "name": "The device sends no request to a WFM whose certificate the MIS did not issue",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-018",
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-002"
+          "MARGO-DEV-IDENT-067",
+          "MARGO-DEV-IDENT-070",
+          "MARGO-DEV-IDENT-080"
         ],
         "observe": {
           "expect": "absent",
@@ -1307,8 +2326,6 @@
           ],
           "for_seconds": 58,
           "only_if": {
-            "method": "TLS",
-            "path_regex": "^/handshake-error$",
             "where": [
               {
                 "field": "server_identity",
@@ -1324,7 +2341,7 @@
         "id": "rd-10-wfm-trust-resumed",
         "name": "The device continues when the WFM presents its SVID again",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-018"
+          "MARGO-DEV-IDENT-012"
         ],
         "observe": {
           "path_regex": "^/api/v1/",
@@ -1347,12 +2364,180 @@
     ]
   },
   {
+    "id": "rd-14-tls-versions",
+    "name": "Real device \u2014 TLS versions and cipher suites RFC 9325 forbids are refused",
+    "description": "For 50 seconds the mock WFM offers only TLS 1.0/1.1, then for 50 seconds only TLS 1.2 with RC4 cipher suites. The device must not complete a connection in either window. Each window is judged only when the device tried to connect in it; the RC4 window only when the device offered TLS 1.2.",
+    "steps": [
+      {
+        "id": "rd-14-tls-versions-connected",
+        "name": "The device is connected to the mock WFM",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 120
+        },
+        "extract_context": {
+          "deviceClient": "client",
+          "deviceCert": "cert.sha256"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-arm-legacy",
+        "name": "Mock WFM: offer only TLS 1.0 and 1.1 for 50 seconds",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/server-identity",
+        "mtls": true,
+        "request_body": {
+          "legacyTLSSeconds": 50
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "rd-14-tls-versions-legacy-refused",
+        "name": "The device sends no request over TLS 1.0 or 1.1",
+        "crIds": [
+          "MARGO-DEV-IDENT-037"
+        ],
+        "observe": {
+          "expect": "absent",
+          "path_regex": "^/api/v1/",
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "legacy-tls"
+            }
+          ],
+          "for_seconds": 58,
+          "only_if": {
+            "where": [
+              {
+                "field": "server_identity",
+                "operation": "equals",
+                "value": "legacy-tls"
+              }
+            ]
+          },
+          "only_if_reason": "the device did not try to connect while the mock WFM offered only TLS 1.0/1.1"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-legacy-resumed",
+        "name": "The device continues when the WFM offers TLS 1.2 and 1.3 again",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            304
+          ],
+          "within_seconds": 180,
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "svid"
+            }
+          ],
+          "since": "now"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-arm-rc4",
+        "name": "Mock WFM: offer only TLS 1.2 with RC4 cipher suites for 50 seconds",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/server-identity",
+        "mtls": true,
+        "request_body": {
+          "rc4Seconds": 50
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {}
+      },
+      {
+        "id": "rd-14-tls-versions-rc4-refused",
+        "name": "Over TLS 1.2 the device refuses RC4 cipher suites (RFC 9325)",
+        "crIds": [
+          "MARGO-DEV-IDENT-029",
+          "MARGO-DEV-IDENT-081"
+        ],
+        "observe": {
+          "expect": "absent",
+          "path_regex": "^/api/v1/",
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "rc4"
+            }
+          ],
+          "for_seconds": 58,
+          "only_if": {
+            "where": [
+              {
+                "field": "server_identity",
+                "operation": "equals",
+                "value": "rc4"
+              },
+              {
+                "field": "tls.offered_versions",
+                "operation": "contains",
+                "value": "TLS 1.2"
+              }
+            ]
+          },
+          "only_if_reason": "the device did not offer TLS 1.2 while the mock WFM offered only TLS 1.2 with RC4 (no TLS 1.2 fallback to judge)"
+        }
+      },
+      {
+        "id": "rd-14-tls-versions-rc4-resumed",
+        "name": "The device continues when the WFM offers TLS 1.2 and 1.3 again",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            304
+          ],
+          "within_seconds": 180,
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "svid"
+            }
+          ],
+          "since": "now"
+        }
+      }
+    ],
+    "crIds": [
+      "MARGO-DEV-IDENT-029",
+      "MARGO-DEV-IDENT-037",
+      "MARGO-DEV-IDENT-081"
+    ]
+  },
+  {
     "id": "rd-11-restart",
     "name": "Real device \u2014 state survives a restart",
     "description": "The operator restarts the device during this scenario. After the restart the device must still know the manifest it adopted (it sends its ETag) and must still reject a manifest version that does not increase. Reported as SKIP when the device is not restarted.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-015",
-      "MARGO-DEV-MANAGEMENTINTERFACE-017"
+      "MARGO-DEV-MGMT-043"
     ],
     "steps": [
       {
@@ -1400,8 +2585,7 @@
         "id": "rd-11-restart-etag",
         "name": "After the restart the device still sends the ETag of the manifest it adopted",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-015",
-          "MARGO-DEV-MANAGEMENTINTERFACE-017"
+          "MARGO-DEV-MGMT-043"
         ],
         "observe": {
           "method": "GET",
@@ -1448,7 +2632,7 @@
         "id": "rd-11-restart-rollback",
         "name": "After the restart the device still rejects a manifest version that does not increase",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-017"
+          "MARGO-DEV-MGMT-043"
         ],
         "observe": {
           "expect": "absent",
@@ -1489,7 +2673,7 @@
     "name": "Real device \u2014 access continues after SVID rotation",
     "description": "When the device's SVID is replaced by a re-issued one for the same SPIFFE ID, the device keeps working without registering again. Reported as SKIP when the SVID was not replaced during the run.",
     "crIds": [
-      "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-003"
+      "MARGO-DEV-IDENT-045"
     ],
     "steps": [
       {
@@ -1519,7 +2703,7 @@
         "id": "rd-12-svid-rotation-accepted",
         "name": "The device presents a re-issued SVID for the same SPIFFE ID and its requests are accepted",
         "crIds": [
-          "MARGO-DEV-MANAGEMENTINTERFACE-MIAF-003"
+          "MARGO-DEV-IDENT-045"
         ],
         "observe": {
           "path_regex": "^/api/v1/",
@@ -1547,9 +2731,8 @@
     "name": "Real device \u2014 observability",
     "description": "The device's OpenTelemetry collector pushes telemetry to the CTT (OTLP on port 4318, Prometheus remote write on port 9090). Reported as SKIP when no telemetry arrives: point the device's collector at the CTT host to run it.",
     "crIds": [
-      "MARGO-DEV-OBSERVABILITY-006",
-      "MARGO-DEV-OBSERVABILITY-010",
-      "MARGO-DEV-OBSERVABILITY-023"
+      "MARGO-DEV-OBS-001",
+      "MARGO-DEV-OBS-024"
     ],
     "optional": true,
     "steps": [
@@ -1557,9 +2740,8 @@
         "id": "rd-13-observability-otlp",
         "name": "Wait for Device OTEL Collector to Push Telemetry (traces or metrics)",
         "crIds": [
-          "MARGO-DEV-OBSERVABILITY-006",
-          "MARGO-DEV-OBSERVABILITY-010",
-          "MARGO-DEV-OBSERVABILITY-023"
+          "MARGO-DEV-OBS-001",
+          "MARGO-DEV-OBS-024"
         ],
         "method": "GET",
         "endpoint": "/health/telemetry",
@@ -1594,7 +2776,7 @@
         "id": "rd-13-observability-remote-write",
         "name": "Confirm Prometheus Remote Write Also Received",
         "crIds": [
-          "MARGO-DEV-OBSERVABILITY-006"
+          "MARGO-DEV-OBS-024"
         ],
         "method": "GET",
         "endpoint": "/health/telemetry",

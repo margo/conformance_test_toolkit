@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -44,9 +46,12 @@ type JournalEntry struct {
 	Client string       `json:"client"` // caller's SPIFFE ID; "" when it presented no usable SVID
 	Remote string       `json:"remote"` // caller's IP address
 	Cert   *JournalCert `json:"cert,omitempty"`
-	// ServerIdentity is "untrusted" when this connection was served with the
-	// test certificate the MIS did not issue — a device must never get this far.
-	ServerIdentity string `json:"server_identity"`
+	// ServerIdentity is "svid", or the test window this connection was served
+	// in: "untrusted" (a certificate the MIS did not issue), "legacy-tls" (only
+	// TLS 1.0/1.1) or "rc4" (TLS 1.2 with RC4 only) — a device must never get this far.
+	ServerIdentity string      `json:"server_identity"`
+	Proto          string      `json:"proto,omitempty"` // HTTP version of the request, e.g. HTTP/1.1
+	TLS            *JournalTLS `json:"tls,omitempty"`
 	// Expectations: the verdict of each assertions.json device_expectations rule
 	// for this request — "pass", or what is wrong.
 	Expectations map[string]string `json:"expectations,omitempty"`
@@ -64,7 +69,63 @@ type JournalCert struct {
 	URISANs  int    `json:"uri_sans"`
 	IsCA     bool   `json:"is_ca"`
 	NotAfter string `json:"not_after"`
+	Key      string `json:"key"`       // e.g. "ECDSA P-256", "Ed25519", "RSA 3072"
+	KeyType  string `json:"key_type"`  // "ECDSA", "EdDSA", "RSA"
+	KeyBits  int    `json:"key_bits"`  // key size in bits
+	SigAlg   string `json:"sig_alg"`   // signature algorithm of the certificate, e.g. ECDSA-SHA256
+	ChainLen int    `json:"chain_len"` // certificates the device presented (leaf first)
 }
+
+// JournalTLS describes the TLS connection a request (or a failed handshake) came over.
+type JournalTLS struct {
+	Version         string   `json:"version,omitempty"`          // negotiated, e.g. "TLS 1.3"
+	Cipher          string   `json:"cipher,omitempty"`           // negotiated cipher suite
+	OfferedVersions []string `json:"offered_versions,omitempty"` // versions in the device's ClientHello
+	ServerKey       string   `json:"server_key,omitempty"`       // key of the SVID the mock WFM presented
+	ServerSigAlg    string   `json:"server_sig_alg,omitempty"`   // signature algorithm of that SVID
+}
+
+// describeKey names a certificate's public key the way JournalCert reports it.
+func describeKey(cert *x509.Certificate) (key, keyType string, bits int) {
+	switch k := cert.PublicKey.(type) {
+	case *ecdsa.PublicKey:
+		return "ECDSA " + k.Curve.Params().Name, "ECDSA", k.Curve.Params().BitSize
+	case ed25519.PublicKey:
+		return "Ed25519", "EdDSA", 256
+	case *rsa.PublicKey:
+		return "RSA " + strconv.Itoa(k.N.BitLen()), "RSA", k.N.BitLen()
+	}
+	return cert.PublicKeyAlgorithm.String(), cert.PublicKeyAlgorithm.String(), 0
+}
+
+// ── TLS versions each connection's ClientHello offered, by remote "ip:port" ──
+
+var (
+	offersMu sync.Mutex
+	offers   = map[string][]string{}
+)
+
+func recordOffer(addr string, versions []uint16) {
+	names := make([]string, 0, len(versions))
+	for _, v := range versions {
+		names = append(names, tls.VersionName(v))
+	}
+	offersMu.Lock()
+	if len(offers) > 10000 {
+		offers = map[string][]string{}
+	}
+	offers[addr] = names
+	offersMu.Unlock()
+}
+
+func offerOf(addr string) []string {
+	offersMu.Lock()
+	defer offersMu.Unlock()
+	return offers[addr]
+}
+
+// wfmCertKey / wfmCertSigAlg describe the mock WFM's own SVID (set at start).
+var wfmCertKey, wfmCertSigAlg string
 
 var (
 	journalMu      sync.Mutex
@@ -122,22 +183,32 @@ func journaled(next http.Handler) http.Handler {
 		client, _ := spiffeIDFromRequest(r)
 		remote, _, _ := net.SplitHostPort(r.RemoteAddr)
 		serverIdentity := "svid"
-		if _, bad := untrustedConns.Load(r.RemoteAddr); bad {
-			serverIdentity = "untrusted"
+		if v, ok := connIdentity.Load(r.RemoteAddr); ok {
+			serverIdentity = v.(string)
 		}
 		var cert *JournalCert
+		var tlsInfo *JournalTLS
+		if r.TLS != nil {
+			tlsInfo = &JournalTLS{Version: tls.VersionName(r.TLS.Version), Cipher: tls.CipherSuiteName(r.TLS.CipherSuite), OfferedVersions: offerOf(r.RemoteAddr)}
+			if serverIdentity == "svid" {
+				tlsInfo.ServerKey, tlsInfo.ServerSigAlg = wfmCertKey, wfmCertSigAlg
+			}
+		}
 		if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
 			leaf := r.TLS.PeerCertificates[0]
 			sum := sha256.Sum256(leaf.Raw)
-			cert = &JournalCert{SHA256: hex.EncodeToString(sum[:]), URISANs: len(leaf.URIs), IsCA: leaf.IsCA, NotAfter: leaf.NotAfter.UTC().Format(time.RFC3339)}
+			key, keyType, bits := describeKey(leaf)
+			cert = &JournalCert{SHA256: hex.EncodeToString(sum[:]), URISANs: len(leaf.URIs), IsCA: leaf.IsCA, NotAfter: leaf.NotAfter.UTC().Format(time.RFC3339),
+				Key: key, KeyType: keyType, KeyBits: bits, SigAlg: leaf.SignatureAlgorithm.String(), ChainLen: len(r.TLS.PeerCertificates)}
 		}
 		var expectations map[string]string
 		if obj, ok := jsonOrNil(reqBody).(map[string]interface{}); ok {
 			switch {
 			case r.Method == "PUT" && strings.HasPrefix(path, "/api/v1/capabilities/"):
-				expectations = evaluateExpectations("PUT_capabilities", obj)
+				expectations = evaluateExpectations("PUT_capabilities", obj, nil)
 			case r.Method == "POST" && strings.HasSuffix(path, "/status"):
-				expectations = evaluateExpectations("POST_status", obj)
+				deploymentID := strings.TrimSuffix(strings.TrimPrefix(path, "/api/v1/deployments/"), "/status")
+				expectations = evaluateExpectations("POST_status", obj, servedDeploymentFacts(deploymentID))
 			}
 		}
 		entry := JournalEntry{
@@ -147,6 +218,8 @@ func journaled(next http.Handler) http.Handler {
 			Remote:         remote,
 			Cert:           cert,
 			ServerIdentity: serverIdentity,
+			Proto:          r.Proto,
+			TLS:            tlsInfo,
 			Method:         r.Method,
 			Path:           path,
 			Status:         rec.status,
@@ -177,21 +250,26 @@ func appendJournal(entry JournalEntry) {
 // entry of its own (method "TLS", path "/handshake-error"), so the runner can
 // tell "the device refused the connection" from "the device did not try". ──
 
-var handshakeErrorLine = regexp.MustCompile(`TLS handshake error from ([^:]+|\[[^\]]+\]):\d+: (.*)`)
+var handshakeErrorLine = regexp.MustCompile(`TLS handshake error from (([^:]+|\[[^\]]+\]):\d+): (.*)`)
 
 type handshakeErrorRecorder struct{}
 
 func (handshakeErrorRecorder) Write(p []byte) (int, error) {
 	os.Stderr.Write(p)
 	if m := handshakeErrorLine.FindSubmatch(p); m != nil {
+		addr := string(m[1])
 		identity := "svid"
-		if untrustedIdentityActive() {
-			identity = "untrusted"
+		if v, ok := connIdentity.Load(addr); ok {
+			identity = v.(string)
+		}
+		var tlsInfo *JournalTLS
+		if offered := offerOf(addr); offered != nil {
+			tlsInfo = &JournalTLS{OfferedVersions: offered}
 		}
 		appendJournal(JournalEntry{
-			Time: time.Now().UTC().Format(time.RFC3339), Remote: strings.Trim(string(m[1]), "[]"),
-			Method: "TLS", Path: "/handshake-error", ServerIdentity: identity,
-			Headers: map[string]string{}, Body: strings.TrimSpace(string(m[2])),
+			Time: time.Now().UTC().Format(time.RFC3339), Remote: strings.Trim(string(m[2]), "[]"),
+			Method: "TLS", Path: "/handshake-error", ServerIdentity: identity, TLS: tlsInfo,
+			Headers: map[string]string{}, Body: strings.TrimSpace(string(m[3])),
 		})
 	}
 	return len(p), nil
@@ -202,14 +280,28 @@ func (handshakeErrorRecorder) Write(p []byte) (int, error) {
 var (
 	untrustedMu    sync.Mutex
 	untrustedUntil time.Time
+	legacyTLSUntil time.Time // only TLS 1.0/1.1 is offered
+	rc4Until       time.Time // only TLS 1.2 with RC4 cipher suites is offered
 	untrustedCert  *tls.Certificate
-	untrustedConns sync.Map // remote "ip:port" of connections served with the untrusted certificate
+	connIdentity   sync.Map // remote "ip:port" → test window it was served in ("untrusted", "legacy-tls", "rc4")
 )
 
 func untrustedIdentityActive() bool {
 	untrustedMu.Lock()
 	defer untrustedMu.Unlock()
 	return time.Now().Before(untrustedUntil)
+}
+
+func legacyTLSActive() bool {
+	untrustedMu.Lock()
+	defer untrustedMu.Unlock()
+	return time.Now().Before(legacyTLSUntil)
+}
+
+func rc4Active() bool {
+	untrustedMu.Lock()
+	defer untrustedMu.Unlock()
+	return time.Now().Before(rc4Until)
 }
 
 // untrustedServerCertificate is self-signed and carries the WFM's own SPIFFE
@@ -242,22 +334,30 @@ func untrustedServerCertificate(spiffeID string) (tls.Certificate, error) {
 	return *untrustedCert, nil
 }
 
-// PUT /v1alpha2/margo/api/v1/test/server-identity {"untrustedSeconds": N} —
-// for the next N seconds new connections get the untrusted certificate.
+// PUT /v1alpha2/margo/api/v1/test/server-identity
+// {"untrustedSeconds": N} | {"legacyTLSSeconds": N} | {"rc4Seconds": N} —
+// for the next N seconds new connections get the untrusted certificate, only
+// TLS 1.0/1.1, or only TLS 1.2 with RC4 cipher suites.
 func handleTestServerIdentity(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		UntrustedSeconds int `json:"untrustedSeconds"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UntrustedSeconds < 0 || body.UntrustedSeconds > 600 {
-		respondMalformedBody(w, r, `expected {"untrustedSeconds": 0..600}`)
+	var body map[string]int
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body) != 1 {
+		respondMalformedBody(w, r, `expected one of {"untrustedSeconds": 0..600}, {"legacyTLSSeconds": 0..600}, {"rc4Seconds": 0..600}`)
 		return
 	}
-	untrustedMu.Lock()
-	untrustedUntil = time.Now().Add(time.Duration(body.UntrustedSeconds) * time.Second)
-	until := untrustedUntil
-	untrustedMu.Unlock()
-	log.Printf("[MIAF/TestControl] untrusted WFM certificate presented for %ds (until %s)", body.UntrustedSeconds, until.Format(time.RFC3339))
-	respondJSON(w, 200, map[string]interface{}{"untrustedSeconds": body.UntrustedSeconds, "untrustedUntil": until.UTC().Format(time.RFC3339)})
+	windows := map[string]*time.Time{"untrustedSeconds": &untrustedUntil, "legacyTLSSeconds": &legacyTLSUntil, "rc4Seconds": &rc4Until}
+	for key, seconds := range body {
+		target, known := windows[key]
+		if !known || seconds < 0 || seconds > 600 {
+			respondMalformedBody(w, r, `expected one of {"untrustedSeconds": 0..600}, {"legacyTLSSeconds": 0..600}, {"rc4Seconds": 0..600}`)
+			return
+		}
+		untrustedMu.Lock()
+		*target = time.Now().Add(time.Duration(seconds) * time.Second)
+		until := *target
+		untrustedMu.Unlock()
+		log.Printf("[MIAF/TestControl] %s=%d: test window until %s", key, seconds, until.Format(time.RFC3339))
+		respondJSON(w, 200, map[string]interface{}{key: seconds, "until": until.UTC().Format(time.RFC3339)})
+	}
 }
 
 // GET /v1alpha2/margo/api/v1/test/requests?since=<seq> — entries after <seq>.
