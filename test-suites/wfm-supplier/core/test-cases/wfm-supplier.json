@@ -1246,6 +1246,7 @@
       "MARGO-WFM-MGMT-061",
       "MARGO-WFM-MGMT-062",
       "MARGO-WFM-MGMT-063",
+      "MARGO-WFM-MGMT-064",
       "MARGO-WFM-MGMT-065",
       "MARGO-WFM-MGMT-067",
       "MARGO-WFM-MGMT-069",
@@ -1615,6 +1616,37 @@
           {
             "field": "_yaml.spec",
             "operation": "is_object"
+          }
+        ],
+        "extract_context": {}
+      },
+      {
+        "id": "wfm-mc-appdep-metadata",
+        "name": "Deployment YAML metadata Has name, namespace And deviceId (rc.3 field names)",
+        "crIds": [
+          "MARGO-WFM-MGMT-064"
+        ],
+        "method": "GET",
+        "endpoint": "/api/v1/deployments/{deploymentId}/{deploymentDigest}",
+        "mtls": true,
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "_yaml.metadata.name",
+            "operation": "is_string"
+          },
+          {
+            "field": "_yaml.metadata.namespace",
+            "operation": "is_string"
+          },
+          {
+            "field": "_yaml.metadata.deviceId",
+            "operation": "is_string"
+          },
+          {
+            "field": "_yaml.metadata.deviceId",
+            "operation": "not_empty"
           }
         ],
         "extract_context": {}
