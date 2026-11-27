@@ -170,6 +170,49 @@ func wfmClientID(spiffeID string) string {
 	return spiffeID[strings.LastIndex(spiffeID, "/")+1:]
 }
 
+// MIAFClientsFile keeps each client's desired state (deployments, manifest
+// version, device) across restarts of the mock WFM. A device keeps the
+// manifest version it adopted across its own restarts (MARGO-DEV-MGMT-043);
+// a mock WFM that started again from version 1 would only serve manifests the
+// device must reject. A WFM never lowers the version, so neither does the mock.
+const MIAFClientsFile = "./data/miaf-clients.json"
+
+// loadMIAFClients restores the saved clients. A negative fixture is not
+// restored: after a restart the mock serves conformant content again.
+func loadMIAFClients() error {
+	data, err := os.ReadFile(MIAFClientsFile)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	loaded := map[string]ClientData{}
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		return err
+	}
+	miafClientsMu.Lock()
+	defer miafClientsMu.Unlock()
+	for id, c := range loaded {
+		c.NegativeFixture = FixtureNone
+		miafClients[id] = c
+	}
+	log.Printf("[MIAF] restored %d client(s) from %s", len(loaded), MIAFClientsFile)
+	return nil
+}
+
+// saveMIAFClientsLocked writes the clients to MIAFClientsFile; the caller
+// holds miafClientsMu.
+func saveMIAFClientsLocked() {
+	data, err := json.MarshalIndent(miafClients, "", "  ")
+	if err == nil {
+		err = os.WriteFile(MIAFClientsFile, data, 0644)
+	}
+	if err != nil {
+		log.Printf("[MIAF] ⚠ could not save clients to %s: %v", MIAFClientsFile, err)
+	}
+}
+
 // newMIAFClient is a client's starting state. Its deployments are assigned to
 // deviceID — the device it is reporting capabilities for on first contact, or
 // its wfm-client-id when its first request names no device. The assignment
@@ -194,6 +237,7 @@ func getOrCreateMIAFClient(spiffeID, deviceID string) ClientData {
 		client.DeploymentsData = []string{defaultDeploymentID}
 		client.ManifestVersion = 1
 		miafClients[spiffeID] = client
+		saveMIAFClientsLocked()
 		mu.Lock()
 		ensureDefaultDeployment(spiffeID)
 		mu.Unlock()
@@ -287,6 +331,7 @@ func handleMIAFPutCapabilities(w http.ResponseWriter, r *http.Request) {
 	client.Capabilities = body
 	miafClientsMu.Lock()
 	miafClients[spiffeID] = client
+	saveMIAFClientsLocked()
 	miafClientsMu.Unlock()
 
 	miafKnownDeviceIDsMu.Lock()
@@ -558,6 +603,7 @@ func handleMIAFTestSetDeployments(w http.ResponseWriter, r *http.Request) {
 	}
 	client.NegativeFixture = body.NegativeFixture
 	miafClients[spiffeID] = client
+	saveMIAFClientsLocked()
 	version := client.ManifestVersion
 	miafClientsMu.Unlock()
 

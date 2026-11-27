@@ -19,3 +19,4 @@ spec:
             matchExpressions:
               - key: ctt.margo.org/no-device-reports-this-label
                 operator: Exists
+  parameters: {}

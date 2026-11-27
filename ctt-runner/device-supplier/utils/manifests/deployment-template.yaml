@@ -13,3 +13,4 @@ spec:
           repository: {{repository}}
           revision: {{revision}}
           wait: true
+  parameters: {}

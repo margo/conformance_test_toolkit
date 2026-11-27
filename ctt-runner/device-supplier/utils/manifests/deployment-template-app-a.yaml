@@ -13,3 +13,4 @@ spec:
           repository: oci://registry.example.com/margo-ctt/sample-app-a
           revision: 1.0.0
           wait: true
+  parameters: {}

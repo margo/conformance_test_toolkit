@@ -2033,6 +2033,9 @@ func main() {
 	if err := loadDeploymentsFromFile(); err != nil {
 		log.Printf("⚠ Failed to load deployments: %v", err)
 	}
+	if err := loadMIAFClients(); err != nil {
+		log.Printf("⚠ Failed to load MIAF clients: %v", err)
+	}
 
 	// Load assertions from JSON (DATA-DRIVEN)
 	var err error
