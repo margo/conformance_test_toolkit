@@ -377,17 +377,23 @@ func handleMIAFGetBundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expectedDigest := sha256Hex(bundleBytes)
-	if strings.TrimPrefix(digest, "sha256:") != expectedDigest {
+	if strings.TrimPrefix(digest, "sha256:") != expectedDigest || client.NegativeFixture == FixtureContentNotFound {
 		respondProblem(w, r, 404, "invalid-bundle", "Invalid Bundle", fmt.Sprintf("Bundle not found for digest: %s", digest))
 		return
 	}
-	if normalizeETag(r.Header.Get("If-None-Match")) == digest && client.NegativeFixture != FixtureBundleContentTampered {
+	// The fixtures that change the served bytes always send them (a 200 is always allowed).
+	if normalizeETag(r.Header.Get("If-None-Match")) == digest && client.NegativeFixture != FixtureBundleContentTampered && client.NegativeFixture != FixtureGzipContentEncoding {
 		w.Header().Set("ETag", quoteETag(digest))
 		w.WriteHeader(304)
 		return
 	}
 	if client.NegativeFixture == FixtureBundleContentTampered {
 		bundleBytes = tamper(bundleBytes)
+	}
+	if client.NegativeFixture == FixtureGzipContentEncoding && acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		bundleBytes = gzipBytes(bundleBytes)
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
 	}
 	w.Header().Set("Content-Type", "application/vnd.margo.bundle.v1+tar+gzip")
 	w.Header().Set("ETag", quoteETag(digest))
@@ -417,17 +423,22 @@ func handleMIAFGetDeploymentManifest(w http.ResponseWriter, r *http.Request) {
 
 	yamlBytes := buildDeploymentYAML(client.DeviceID, deploymentID, requestBaseURL(r))
 	expectedDigest := sha256Hex(yamlBytes)
-	if strings.TrimPrefix(digest, "sha256:") != expectedDigest {
+	if strings.TrimPrefix(digest, "sha256:") != expectedDigest || client.NegativeFixture == FixtureContentNotFound {
 		respondProblem(w, r, 404, "deployment-not-found", "Deployment Not Found", fmt.Sprintf("Deployment not found for digest: %s", digest))
 		return
 	}
-	if normalizeETag(r.Header.Get("If-None-Match")) == digest && client.NegativeFixture != FixtureDeploymentContentTampered {
+	// The fixtures that change the served bytes always send them (a 200 is always allowed).
+	if normalizeETag(r.Header.Get("If-None-Match")) == digest && client.NegativeFixture != FixtureDeploymentContentTampered && client.NegativeFixture != FixtureGzipContentEncoding {
 		w.Header().Set("ETag", quoteETag(digest))
 		w.WriteHeader(304)
 		return
 	}
 	if client.NegativeFixture == FixtureDeploymentContentTampered {
 		yamlBytes = tamper(yamlBytes)
+	}
+	if client.NegativeFixture == FixtureGzipContentEncoding && acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		yamlBytes = gzipBytes(yamlBytes)
+		w.Header().Set("Content-Encoding", "gzip")
 	}
 	w.Header().Set("Content-Type", "application/yaml")
 	w.Header().Set("ETag", quoteETag(digest))

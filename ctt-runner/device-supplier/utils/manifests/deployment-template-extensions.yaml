@@ -1,0 +1,25 @@
+id: {{deploymentId}}
+metadata:
+  name: ctt-compose-sample
+  namespace: margo-ctt
+  deviceId: {{deviceId}}
+spec:
+  applicationId: ctt-compose-sample
+  x-ctt-unknown-extensions:
+    note: unknown to every device; it must be ignored
+    level: spec
+  deploymentProfile:
+    type: compose
+    x-ctt-unknown-extensions:
+      level: deploymentProfile
+      settings:
+        enabled: true
+        items: [1, 2]
+    components:
+      - name: compose-sample
+        x-ctt-unknown-extensions:
+          level: component
+        properties:
+          repository: {{repository}}
+          revision: {{revision}}
+          wait: true

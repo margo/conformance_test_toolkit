@@ -1010,6 +1010,8 @@ func buildDeploymentYAML(deviceID, deploymentID, baseURL string) []byte {
 	templateFile := "manifests/deployment-template.yaml"
 	if app, ok := sampleApps[deploymentID]; ok {
 		templateFile = app.TemplateFile
+	} else if f, ok := fixtureDeployments[deploymentID]; ok {
+		templateFile = f
 	}
 
 	templateBytes, err := os.ReadFile(templateFile)

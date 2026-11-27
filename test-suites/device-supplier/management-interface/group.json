@@ -31,7 +31,9 @@
     "rd-02-capabilities-runtime",
     "rd-02-capabilities-runtime-reported",
     "rd-03-desired-state",
+    "rd-03-desired-state-accept",
     "rd-03-desired-state-connected",
+    "rd-03-desired-state-digest-exact",
     "rd-03-desired-state-etag",
     "rd-03-desired-state-fetch",
     "rd-03-desired-state-read",
@@ -55,6 +57,16 @@
     "rd-04-deployment-lifecycle-read",
     "rd-04-deployment-lifecycle-removed",
     "rd-04-deployment-lifecycle-status",
-    "rd-04-deployment-lifecycle-withdraw"
+    "rd-04-deployment-lifecycle-withdraw",
+    "rd-16-unknown-extensions",
+    "rd-16-unknown-extensions-accepted",
+    "rd-16-unknown-extensions-arm",
+    "rd-16-unknown-extensions-connected",
+    "rd-16-unknown-extensions-restore",
+    "rd-17-eligibility",
+    "rd-17-eligibility-arm",
+    "rd-17-eligibility-connected",
+    "rd-17-eligibility-not-deployed",
+    "rd-17-eligibility-restore"
   ]
 }

@@ -435,9 +435,12 @@ func runStep(step TestStep, ctx *TestContext) TestResult {
 		return TestResult{StepID: step.ID, StepName: step.Name, Method: step.Method, Endpoint: step.Endpoint,
 			Timestamp: time.Now().UTC().Format(time.RFC3339), Status: "skip", Reason: "not applicable: " + reason}
 	}
-	// A change made through the test-control endpoints starts a new observation window.
+	// A change made through the test-control endpoints starts a new observation
+	// window. The mark is taken once the change is made: a device request
+	// answered just before it belongs to the old state and must not be judged
+	// against the new one.
 	if strings.Contains(step.Endpoint, "/api/v1/test/") {
-		markJournal(ctx)
+		defer markJournal(ctx)
 	}
 	if step.Poll == nil {
 		return executeStep(step, ctx)

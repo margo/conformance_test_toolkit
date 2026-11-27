@@ -60,8 +60,10 @@ type JournalEntry struct {
 	Path         string            `json:"path"` // without the /v1alpha2/margo prefix
 	Status       int               `json:"status"`
 	Headers      map[string]string `json:"headers"`
-	Body         interface{}       `json:"body,omitempty"`     // request body (JSON when it parses)
-	Response     interface{}       `json:"response,omitempty"` // response body when it is JSON (manifest, problem details)
+	// ContentEncoding: the Content-Encoding the answer was sent with (e.g. gzip).
+	ContentEncoding string      `json:"content_encoding,omitempty"`
+	Body            interface{} `json:"body,omitempty"`     // request body (JSON when it parses)
+	Response        interface{} `json:"response,omitempty"` // response body when it is JSON (manifest, problem details)
 }
 
 // JournalCert describes the client certificate a request was sent with.
@@ -225,12 +227,14 @@ func journaled(next http.Handler) http.Handler {
 			Path:           path,
 			Status:         rec.status,
 			Headers: map[string]string{
-				"Accept":        r.Header.Get("Accept"),
-				"If-None-Match": r.Header.Get("If-None-Match"),
-				"Content-Type":  r.Header.Get("Content-Type"),
+				"Accept":          r.Header.Get("Accept"),
+				"If-None-Match":   r.Header.Get("If-None-Match"),
+				"Content-Type":    r.Header.Get("Content-Type"),
+				"Accept-Encoding": r.Header.Get("Accept-Encoding"),
 			},
-			Body:     jsonOrNil(reqBody),
-			Response: jsonOrNil(rec.body.Bytes()),
+			ContentEncoding: rec.Header().Get("Content-Encoding"),
+			Body:            jsonOrNil(reqBody),
+			Response:        jsonOrNil(rec.body.Bytes()),
 		}
 		appendJournal(entry)
 	})

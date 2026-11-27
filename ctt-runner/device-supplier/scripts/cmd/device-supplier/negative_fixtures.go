@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"bytes"
+	"compress/gzip"
+	"strings"
+)
 
 // Negative fixtures — a FIRST-CLASS conformance capability, not test scaffolding.
 //
@@ -66,6 +70,65 @@ var knownFixtures = map[NegativeFixture]bool{
 	FixtureWrongSizeBytes:               true,
 	FixtureBundleContentTampered:        true,
 	FixtureDeploymentContentTampered:    true,
+	FixtureContentNotFound:              true,
+	FixtureGzipContentEncoding:          true,
+}
+
+// The next two fixtures also leave the manifest correct and change only how
+// the content-addressed endpoints answer.
+const (
+	// FixtureContentNotFound: the bundle and deployment endpoints answer 404
+	// for every digest while the manifest still lists the deployments. A 404
+	// MUST NOT be taken as a deletion signal. MARGO-DEV-MGMT-057 / -058.
+	FixtureContentNotFound NegativeFixture = "content_not_found"
+
+	// FixtureGzipContentEncoding: the bundle and deployment endpoints apply
+	// Content-Encoding: gzip when the request accepts it. Digests refer to the
+	// decoded body, so a conformant client still adopts. MARGO-DEV-MGMT-044.
+	FixtureGzipContentEncoding NegativeFixture = "gzip_content_encoding"
+)
+
+// fixtureDeployments: deployments whose ApplicationDeployment is not the
+// default one. Each template is the default template plus the one part a
+// requirement is about, so the device's reaction can only come from that part.
+var fixtureDeployments = map[string]string{
+	// x-ctt-unknown-extensions at spec, deploymentProfile and component level:
+	// the device must ignore them. MARGO-DEV-MGMT-053/054/060/061, EXT-002/005.
+	"5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e08": "manifests/deployment-template-extensions.yaml",
+	// An eligibility rule no device meets (a label nobody reports): the device
+	// must not deploy it. MARGO-DEV-MGMT-051.
+	"5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e09": "manifests/deployment-template-ineligible.yaml",
+}
+
+// acceptsGzip reports whether an Accept-Encoding header allows gzip (RFC 9110
+// 12.5.3: listed, or "*", and not with q=0).
+func acceptsGzip(header string) bool {
+	for _, part := range strings.Split(header, ",") {
+		fields := strings.Split(part, ";")
+		coding := strings.ToLower(strings.TrimSpace(fields[0]))
+		if coding != "gzip" && coding != "x-gzip" && coding != "*" {
+			continue
+		}
+		q := "1"
+		for _, p := range fields[1:] {
+			if kv := strings.SplitN(strings.TrimSpace(p), "=", 2); len(kv) == 2 && strings.EqualFold(kv[0], "q") {
+				q = strings.TrimSpace(kv[1])
+			}
+		}
+		if strings.Trim(q, "0.") != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// gzipBytes compresses b for Content-Encoding: gzip.
+func gzipBytes(b []byte) []byte {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	zw.Write(b)
+	zw.Close()
+	return buf.Bytes()
 }
 
 // The two "content tampered" fixtures leave the manifest correct and change

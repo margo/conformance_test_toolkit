@@ -971,6 +971,8 @@
     "crIds": [
       "MARGO-DEV-MGMT-001",
       "MARGO-DEV-MGMT-049",
+      "MARGO-DEV-MGMT-059",
+      "MARGO-DEV-MGMT-062",
       "MARGO-DEV-MGMT-066",
       "MARGO-DEV-MGMT-067",
       "MARGO-DEV-MGMT-068",
@@ -1027,6 +1029,29 @@
         }
       },
       {
+        "id": "rd-03-desired-state-accept",
+        "name": "The device requests the manifest with Accept: application/vnd.margo.manifest.v1+json",
+        "crIds": [
+          "MARGO-DEV-MGMT-062"
+        ],
+        "observe": {
+          "method": "GET",
+          "path_regex": "^/api/v1/deployments$",
+          "status": [
+            200,
+            304
+          ],
+          "check": [
+            {
+              "field": "headers.Accept",
+              "operation": "contains",
+              "value": "application/vnd.margo.manifest.v1+json"
+            }
+          ],
+          "within_seconds": 180
+        }
+      },
+      {
         "id": "rd-03-desired-state-fetch",
         "name": "The device fetches the bundle or a deployment by its digest",
         "crIds": [
@@ -1038,6 +1063,29 @@
           "status": [
             200,
             304
+          ],
+          "within_seconds": 240
+        }
+      },
+      {
+        "id": "rd-03-desired-state-digest-exact",
+        "name": "The device fetches by the digest exactly as the manifest gives it (no prefix, suffix or whitespace)",
+        "crIds": [
+          "MARGO-DEV-MGMT-059"
+        ],
+        "observe": {
+          "method": "GET",
+          "path_regex": "^/api/v1/(bundles|deployments/[^/]+)/",
+          "status": [
+            200,
+            304
+          ],
+          "check": [
+            {
+              "field": "path",
+              "operation": "matches_regex",
+              "value": "^/api/v1/(bundles|deployments/[0-9a-fA-F-]+)/sha256:[0-9a-f]{64}$"
+            }
           ],
           "within_seconds": 240
         }
@@ -2235,6 +2283,506 @@
       },
       {
         "id": "rd-09-size-bytes-restore",
+        "name": "Mock WFM: restore the default desired state",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06"
+          ]
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      }
+    ]
+  },
+  {
+    "id": "rd-16-unknown-extensions",
+    "name": "Real device \u2014 unknown specification extensions in a deployment are ignored",
+    "description": "The mock WFM assigns a deployment whose ApplicationDeployment carries an x-ctt-unknown-extensions property at spec, deploymentProfile and component level. No device knows this extension. The device must ignore it, import the deployment and report its status. The deployment is otherwise the default one; whether it reaches installed depends on the sample repository the device can pull.",
+    "crIds": [
+      "MARGO-DEV-EXT-002",
+      "MARGO-DEV-EXT-005",
+      "MARGO-DEV-MGMT-053",
+      "MARGO-DEV-MGMT-054",
+      "MARGO-DEV-MGMT-060",
+      "MARGO-DEV-MGMT-061"
+    ],
+    "steps": [
+      {
+        "id": "rd-16-unknown-extensions-connected",
+        "name": "The device is connected to the mock WFM",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 120
+        },
+        "extract_context": {
+          "deviceClient": "client",
+          "deviceCert": "cert.sha256"
+        }
+      },
+      {
+        "id": "rd-16-unknown-extensions-arm",
+        "name": "Mock WFM: assign deployment 5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e08 whose ApplicationDeployment carries unknown specification extensions",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06",
+            "5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e08"
+          ]
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      },
+      {
+        "id": "rd-16-unknown-extensions-accepted",
+        "name": "The device imports the deployment with unknown extensions and reports its status",
+        "crIds": [
+          "MARGO-DEV-MGMT-053",
+          "MARGO-DEV-MGMT-054",
+          "MARGO-DEV-MGMT-060",
+          "MARGO-DEV-MGMT-061",
+          "MARGO-DEV-EXT-002",
+          "MARGO-DEV-EXT-005"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e08/status$",
+          "status": [
+            200,
+            201
+          ],
+          "within_seconds": 300
+        }
+      },
+      {
+        "id": "rd-16-unknown-extensions-restore",
+        "name": "Mock WFM: restore the default desired state",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06"
+          ]
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      }
+    ]
+  },
+  {
+    "id": "rd-17-eligibility",
+    "name": "Real device \u2014 a deployment whose eligibility rules the device does not meet is not deployed",
+    "description": "The mock WFM assigns a deployment whose deviceConstraints.eligibilityRules require the label ctt.margo.org/no-device-reports-this-label, which no device reports. The device must evaluate the rule before deploying and must not deploy the workload: it must not report installing or installed for it. Judged only when the device reports installing or installed for a deployment at all; a device that reports only pending or failed gives no evidence either way.",
+    "crIds": [
+      "MARGO-DEV-MGMT-051"
+    ],
+    "steps": [
+      {
+        "id": "rd-17-eligibility-connected",
+        "name": "The device is connected to the mock WFM",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 120
+        },
+        "extract_context": {
+          "deviceClient": "client",
+          "deviceCert": "cert.sha256"
+        }
+      },
+      {
+        "id": "rd-17-eligibility-arm",
+        "name": "Mock WFM: assign deployment 5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e09 whose eligibility rules the device does not meet",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06",
+            "5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e09"
+          ]
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      },
+      {
+        "id": "rd-17-eligibility-not-deployed",
+        "name": "The device does not deploy the workload (no installing or installed status for it)",
+        "crIds": [
+          "MARGO-DEV-MGMT-051"
+        ],
+        "observe": {
+          "expect": "absent",
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e09/status$",
+          "where": [
+            {
+              "field": "body.status.state",
+              "operation": "one_of",
+              "value": [
+                "installing",
+                "installed"
+              ]
+            }
+          ],
+          "only_if": {
+            "method": "POST",
+            "path_regex": "^/api/v1/deployments/[^/]+/status$",
+            "where": [
+              {
+                "field": "body.status.state",
+                "operation": "one_of",
+                "value": [
+                  "installing",
+                  "installed"
+                ]
+              }
+            ]
+          },
+          "only_if_reason": "the device reported no deployment as installing or installed in this window, so whether it deployed the ineligible one cannot be seen",
+          "after_polls": 2,
+          "within_seconds": 300,
+          "settle_seconds": 30
+        }
+      },
+      {
+        "id": "rd-17-eligibility-restore",
+        "name": "Mock WFM: restore the default desired state",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06"
+          ]
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      }
+    ]
+  },
+  {
+    "id": "rd-18-content-not-found",
+    "name": "Real device \u2014 a 404 from the content endpoints is not a deletion signal",
+    "description": "The mock WFM assigns a deployment in a correct manifest, but the bundle and deployment endpoints answer 404 Not Found for every digest. Both deployments are still listed in the manifest, so the device must not remove either of them: it must not report removing or removed. Each endpoint is judged only when the device requested it and was answered 404.",
+    "crIds": [
+      "MARGO-DEV-MGMT-057",
+      "MARGO-DEV-MGMT-058"
+    ],
+    "steps": [
+      {
+        "id": "rd-18-content-not-found-connected",
+        "name": "The device is connected to the mock WFM",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 120
+        },
+        "extract_context": {
+          "deviceClient": "client",
+          "deviceCert": "cert.sha256"
+        }
+      },
+      {
+        "id": "rd-18-content-not-found-arm",
+        "name": "Mock WFM: assign deployment 5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e0a while the bundle and deployment endpoints answer 404",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06",
+            "5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e0a"
+          ],
+          "negativeFixture": "content_not_found"
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      },
+      {
+        "id": "rd-18-content-not-found-deployment-404",
+        "name": "A 404 from the deployment endpoint does not make the device remove a listed deployment",
+        "crIds": [
+          "MARGO-DEV-MGMT-057"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/(a3e2f5dc-912e-494f-8395-52cf3769bc06|5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e0a)/status$",
+          "where": [
+            {
+              "field": "body.status.state",
+              "operation": "one_of",
+              "value": [
+                "removing",
+                "removed"
+              ]
+            }
+          ],
+          "expect": "absent",
+          "only_if": {
+            "method": "GET",
+            "path_regex": "^/api/v1/deployments/[^/]+/sha256:",
+            "where": [
+              {
+                "field": "status",
+                "operation": "equals",
+                "value": 404
+              }
+            ]
+          },
+          "only_if_reason": "the device did not request a deployment by its digest in this window",
+          "after_polls": 3,
+          "within_seconds": 300,
+          "settle_seconds": 20
+        }
+      },
+      {
+        "id": "rd-18-content-not-found-bundle-404",
+        "name": "A 404 from the bundle endpoint does not make the device remove a listed deployment",
+        "crIds": [
+          "MARGO-DEV-MGMT-058"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/(a3e2f5dc-912e-494f-8395-52cf3769bc06|5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e0a)/status$",
+          "where": [
+            {
+              "field": "body.status.state",
+              "operation": "one_of",
+              "value": [
+                "removing",
+                "removed"
+              ]
+            }
+          ],
+          "expect": "absent",
+          "only_if": {
+            "method": "GET",
+            "path_regex": "^/api/v1/bundles/",
+            "where": [
+              {
+                "field": "status",
+                "operation": "equals",
+                "value": 404
+              }
+            ]
+          },
+          "only_if_reason": "the device did not request the bundle in this window",
+          "after_polls": 3,
+          "within_seconds": 300,
+          "settle_seconds": 20
+        }
+      },
+      {
+        "id": "rd-18-content-not-found-restore",
+        "name": "Mock WFM: restore the default desired state",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06"
+          ]
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      }
+    ]
+  },
+  {
+    "id": "rd-19-content-encoding",
+    "name": "Real device \u2014 digests are computed over the decoded body",
+    "description": "The mock WFM assigns a deployment and sends the bundle and deployment files with Content-Encoding: gzip to a device that accepts gzip. The digests in the manifest refer to the decoded bytes, so the device must decode the body before it verifies the digest, and adopt the deployment. NOT RUN when the device does not accept gzip.",
+    "crIds": [
+      "MARGO-DEV-MGMT-044"
+    ],
+    "steps": [
+      {
+        "id": "rd-19-content-encoding-connected",
+        "name": "The device is connected to the mock WFM",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 120
+        },
+        "extract_context": {
+          "deviceClient": "client",
+          "deviceCert": "cert.sha256"
+        }
+      },
+      {
+        "id": "rd-19-content-encoding-arm",
+        "name": "Mock WFM: assign deployment 5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e0b and send its content with Content-Encoding: gzip",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/deployments?client={deviceClient}",
+        "mtls": true,
+        "request_body": {
+          "deploymentIds": [
+            "a3e2f5dc-912e-494f-8395-52cf3769bc06",
+            "5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e0b"
+          ],
+          "negativeFixture": "gzip_content_encoding"
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [
+          {
+            "field": "manifestVersion",
+            "operation": "is_number"
+          }
+        ],
+        "extract_context": {
+          "newVersion": "manifestVersion"
+        }
+      },
+      {
+        "id": "rd-19-content-encoding-gzip-sent",
+        "name": "The device accepts gzip and receives the content gzip-encoded",
+        "observe": {
+          "method": "GET",
+          "path_regex": "^/api/v1/(bundles|deployments/[^/]+)/sha256:",
+          "where": [
+            {
+              "field": "content_encoding",
+              "operation": "equals",
+              "value": "gzip"
+            }
+          ],
+          "status": [
+            200
+          ],
+          "within_seconds": 240,
+          "if_absent": "skip_scenario",
+          "skip_reason": "the device did not accept gzip on its content requests (no Accept-Encoding: gzip), so no encoded answer was sent"
+        }
+      },
+      {
+        "id": "rd-19-content-encoding-adopted",
+        "name": "The device verifies the digest over the decoded body and reports status for the deployment",
+        "crIds": [
+          "MARGO-DEV-MGMT-044"
+        ],
+        "observe": {
+          "method": "POST",
+          "path_regex": "^/api/v1/deployments/5f0c1c1e-2b7a-4c58-9d3e-1a2b3c4d5e0b/status$",
+          "status": [
+            200,
+            201
+          ],
+          "within_seconds": 300
+        }
+      },
+      {
+        "id": "rd-19-content-encoding-restore",
         "name": "Mock WFM: restore the default desired state",
         "method": "PUT",
         "endpoint": "/api/v1/test/deployments?client={deviceClient}",

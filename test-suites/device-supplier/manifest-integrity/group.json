@@ -6,6 +6,7 @@
   "FolderPath": [
     "../test-suites/device-supplier/manifest-integrity/test-cases"
   ],
+  "flexibleOrder": false,
   "testCases": [
     "rd-05-manifest-version",
     "rd-05-manifest-version-arm",
@@ -43,6 +44,18 @@
     "rd-11-restart-etag",
     "rd-11-restart-restarted",
     "rd-11-restart-restore",
-    "rd-11-restart-rollback"
+    "rd-11-restart-rollback",
+    "rd-18-content-not-found",
+    "rd-18-content-not-found-arm",
+    "rd-18-content-not-found-bundle-404",
+    "rd-18-content-not-found-connected",
+    "rd-18-content-not-found-deployment-404",
+    "rd-18-content-not-found-restore",
+    "rd-19-content-encoding",
+    "rd-19-content-encoding-adopted",
+    "rd-19-content-encoding-arm",
+    "rd-19-content-encoding-connected",
+    "rd-19-content-encoding-gzip-sent",
+    "rd-19-content-encoding-restore"
   ]
 }
