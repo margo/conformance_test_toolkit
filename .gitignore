@@ -28,6 +28,12 @@ ctt-runner/device-supplier/data/
 ctt-runner/device-supplier/manifests
 ctt-runner/device-supplier/sample-apps
 ctt-runner/device-supplier/device-scenarios/
+# Optional MIS-issued SVIDs the device mock WFM presents in its WFM-recognition
+# tests (another wfm-id, an expired WFM SVID) — private keys, never commit.
+ctt-runner/device-supplier/utils/certs/other-wfm-server-svid-cert.pem
+ctt-runner/device-supplier/utils/certs/other-wfm-server-svid-key.pem
+ctt-runner/device-supplier/utils/certs/expired-wfm-server-svid-cert.pem
+ctt-runner/device-supplier/utils/certs/expired-wfm-server-svid-key.pem
 ctt-runner/device-supplier/reports/
 
 # wfm-supplier per-run copies made by ctt-start.sh — never commit.

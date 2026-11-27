@@ -120,6 +120,17 @@
     "rd-14-tls-versions-legacy-refused",
     "rd-14-tls-versions-legacy-resumed",
     "rd-14-tls-versions-rc4-refused",
-    "rd-14-tls-versions-rc4-resumed"
+    "rd-14-tls-versions-rc4-resumed",
+    "rd-15-wfm-recognition",
+    "rd-15-wfm-recognition-arm-client-path",
+    "rd-15-wfm-recognition-arm-expired",
+    "rd-15-wfm-recognition-arm-other-wfm",
+    "rd-15-wfm-recognition-client-path-refused",
+    "rd-15-wfm-recognition-client-path-resumed",
+    "rd-15-wfm-recognition-connected",
+    "rd-15-wfm-recognition-expired-refused",
+    "rd-15-wfm-recognition-expired-resumed",
+    "rd-15-wfm-recognition-other-wfm-refused",
+    "rd-15-wfm-recognition-other-wfm-resumed"
   ]
 }

@@ -666,6 +666,7 @@ func startMIAFServer(router *mux.Router) {
 		recordOffer(addr, hello.SupportedVersions)
 		cfg := tlsConfig.Clone()
 		cfg.GetConfigForClient = nil
+		sw := activeSVIDWindow()
 		switch {
 		case untrustedIdentityActive():
 			cert, err := untrustedServerCertificate(wfmSPIFFEID)
@@ -674,6 +675,9 @@ func startMIAFServer(router *mux.Router) {
 			}
 			cfg.Certificates = []tls.Certificate{cert}
 			connIdentity.Store(addr, "untrusted")
+		case sw != nil:
+			cfg.Certificates = []tls.Certificate{*sw.cert}
+			connIdentity.Store(addr, sw.name)
 		case legacyTLSActive():
 			cfg.MinVersion, cfg.MaxVersion = tls.VersionTLS10, tls.VersionTLS11
 			connIdentity.Store(addr, "legacy-tls")

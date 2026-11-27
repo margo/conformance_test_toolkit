@@ -2264,8 +2264,11 @@
     "description": "For 50 seconds the mock WFM presents a certificate with its own SPIFFE ID that the MIS did not issue. The device must refuse the connection: it must not send any request over it. Afterwards the mock WFM presents its SVID again and the device continues.",
     "crIds": [
       "MARGO-DEV-IDENT-012",
+      "MARGO-DEV-IDENT-032",
       "MARGO-DEV-IDENT-067",
       "MARGO-DEV-IDENT-070",
+      "MARGO-DEV-IDENT-077",
+      "MARGO-DEV-IDENT-078",
       "MARGO-DEV-IDENT-080"
     ],
     "steps": [
@@ -2312,7 +2315,10 @@
         "crIds": [
           "MARGO-DEV-IDENT-067",
           "MARGO-DEV-IDENT-070",
-          "MARGO-DEV-IDENT-080"
+          "MARGO-DEV-IDENT-080",
+          "MARGO-DEV-IDENT-032",
+          "MARGO-DEV-IDENT-077",
+          "MARGO-DEV-IDENT-078"
         ],
         "observe": {
           "expect": "absent",
@@ -2530,6 +2536,256 @@
       "MARGO-DEV-IDENT-029",
       "MARGO-DEV-IDENT-037",
       "MARGO-DEV-IDENT-081"
+    ]
+  },
+  {
+    "id": "rd-15-wfm-recognition",
+    "name": "Real device \u2014 a WFM SVID the MIS issued for another identity, or an expired one, is refused",
+    "description": "For 50 seconds each, the mock WFM presents an X.509-SVID the MIS issued that must still be refused: the SVID of another WFM (spiffe://<td>/margo/wfm/ctt-other-wfm), the SVID of a WFM Client of this WFM (path .../client/ctt-client), and an expired SVID with the mock WFM's own SPIFFE ID. Each chain is valid against the Trust Bundle; only the SPIFFE ID or the validity period is wrong. A window is judged only when the device tried to connect in it. The other-WFM and expired SVIDs are optional files in certs/ (other-wfm-server-svid-*.pem, expired-wfm-server-svid-*.pem); without them those windows are NOT RUN.",
+    "steps": [
+      {
+        "id": "rd-15-wfm-recognition-connected",
+        "name": "The device is connected to the mock WFM",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            204,
+            304,
+            400,
+            403,
+            404,
+            406,
+            422
+          ],
+          "within_seconds": 120
+        },
+        "extract_context": {
+          "deviceClient": "client",
+          "deviceCert": "cert.sha256"
+        }
+      },
+      {
+        "id": "rd-15-wfm-recognition-arm-other-wfm",
+        "name": "Mock WFM: present the SVID the MIS issued to another WFM for 50 seconds",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/server-identity",
+        "mtls": true,
+        "request_body": {
+          "otherWfmSeconds": 50
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          200,
+          404
+        ]
+      },
+      {
+        "id": "rd-15-wfm-recognition-other-wfm-refused",
+        "name": "The device sends no request to a WFM whose SVID carries another wfm-id",
+        "crIds": [
+          "MARGO-DEV-IDENT-066",
+          "MARGO-DEV-IDENT-069",
+          "MARGO-DEV-IDENT-082"
+        ],
+        "observe": {
+          "expect": "absent",
+          "path_regex": "^/api/v1/",
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "other-wfm"
+            }
+          ],
+          "for_seconds": 58,
+          "only_if": {
+            "where": [
+              {
+                "field": "server_identity",
+                "operation": "equals",
+                "value": "other-wfm"
+              }
+            ]
+          },
+          "only_if_reason": "the device did not try to connect while the mock WFM presented this SVID (or certs/other-wfm-server-svid-cert.pem is not installed)"
+        }
+      },
+      {
+        "id": "rd-15-wfm-recognition-other-wfm-resumed",
+        "name": "The device continues when the WFM presents its own SVID again",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            304
+          ],
+          "within_seconds": 180,
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "svid"
+            }
+          ],
+          "since": "now"
+        }
+      },
+      {
+        "id": "rd-15-wfm-recognition-arm-client-path",
+        "name": "Mock WFM: present the SVID of a WFM Client of this WFM for 50 seconds",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/server-identity",
+        "mtls": true,
+        "request_body": {
+          "clientPathSeconds": 50
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          200,
+          404
+        ]
+      },
+      {
+        "id": "rd-15-wfm-recognition-client-path-refused",
+        "name": "The device sends no request to a peer whose SPIFFE ID is not of the form spiffe://<td>/margo/wfm/<wfm-id>",
+        "crIds": [
+          "MARGO-DEV-IDENT-068",
+          "MARGO-DEV-IDENT-069",
+          "MARGO-DEV-IDENT-074"
+        ],
+        "observe": {
+          "expect": "absent",
+          "path_regex": "^/api/v1/",
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "client-path"
+            }
+          ],
+          "for_seconds": 58,
+          "only_if": {
+            "where": [
+              {
+                "field": "server_identity",
+                "operation": "equals",
+                "value": "client-path"
+              }
+            ]
+          },
+          "only_if_reason": "the device did not try to connect while the mock WFM presented this SVID"
+        }
+      },
+      {
+        "id": "rd-15-wfm-recognition-client-path-resumed",
+        "name": "The device continues when the WFM presents its own SVID again",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            304
+          ],
+          "within_seconds": 180,
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "svid"
+            }
+          ],
+          "since": "now"
+        }
+      },
+      {
+        "id": "rd-15-wfm-recognition-arm-expired",
+        "name": "Mock WFM: present an expired SVID with the WFM's own SPIFFE ID for 50 seconds",
+        "method": "PUT",
+        "endpoint": "/api/v1/test/server-identity",
+        "mtls": true,
+        "request_body": {
+          "expiredSeconds": 50
+        },
+        "headers": {},
+        "expected_status": 200,
+        "validations": [],
+        "extract_context": {},
+        "accepted_statuses": [
+          200,
+          404
+        ]
+      },
+      {
+        "id": "rd-15-wfm-recognition-expired-refused",
+        "name": "The device sends no request to a WFM whose SVID has expired",
+        "crIds": [
+          "MARGO-DEV-IDENT-013",
+          "MARGO-DEV-IDENT-033",
+          "MARGO-DEV-IDENT-034"
+        ],
+        "observe": {
+          "expect": "absent",
+          "path_regex": "^/api/v1/",
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "expired"
+            }
+          ],
+          "for_seconds": 58,
+          "only_if": {
+            "where": [
+              {
+                "field": "server_identity",
+                "operation": "equals",
+                "value": "expired"
+              }
+            ]
+          },
+          "only_if_reason": "the device did not try to connect while the mock WFM presented this SVID (or certs/expired-wfm-server-svid-cert.pem is not installed)"
+        }
+      },
+      {
+        "id": "rd-15-wfm-recognition-expired-resumed",
+        "name": "The device continues when the WFM presents its own SVID again",
+        "observe": {
+          "path_regex": "^/api/v1/",
+          "status": [
+            200,
+            201,
+            304
+          ],
+          "within_seconds": 180,
+          "where": [
+            {
+              "field": "server_identity",
+              "operation": "equals",
+              "value": "svid"
+            }
+          ],
+          "since": "now"
+        }
+      }
+    ],
+    "crIds": [
+      "MARGO-DEV-IDENT-013",
+      "MARGO-DEV-IDENT-033",
+      "MARGO-DEV-IDENT-034",
+      "MARGO-DEV-IDENT-066",
+      "MARGO-DEV-IDENT-068",
+      "MARGO-DEV-IDENT-069",
+      "MARGO-DEV-IDENT-074",
+      "MARGO-DEV-IDENT-082"
     ]
   },
   {

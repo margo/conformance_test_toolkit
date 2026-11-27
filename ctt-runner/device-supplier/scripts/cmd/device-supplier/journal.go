@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -283,8 +284,36 @@ var (
 	legacyTLSUntil time.Time // only TLS 1.0/1.1 is offered
 	rc4Until       time.Time // only TLS 1.2 with RC4 cipher suites is offered
 	untrustedCert  *tls.Certificate
-	connIdentity   sync.Map // remote "ip:port" → test window it was served in ("untrusted", "legacy-tls", "rc4")
+	connIdentity   sync.Map // remote "ip:port" → test window it was served in ("untrusted", "legacy-tls", "rc4", or a svidWindows name)
 )
+
+// svidWindow presents another MIS-issued SVID: valid chain, wrong WFM identity.
+type svidWindow struct {
+	name     string // server_identity recorded in the journal
+	key      string // test-control key
+	certFile string // in the certs folder (next to MIAF_SERVER_CERT)
+	keyFile  string
+	until    time.Time
+	cert     *tls.Certificate
+}
+
+var svidWindows = []*svidWindow{
+	{name: "other-wfm", key: "otherWfmSeconds", certFile: "other-wfm-server-svid-cert.pem", keyFile: "other-wfm-server-svid-key.pem"},
+	{name: "client-path", key: "clientPathSeconds", certFile: "svid-cert.pem", keyFile: "svid-key.pem"},
+	{name: "expired", key: "expiredSeconds", certFile: "expired-wfm-server-svid-cert.pem", keyFile: "expired-wfm-server-svid-key.pem"},
+}
+
+// activeSVIDWindow returns the SVID window open now, if any.
+func activeSVIDWindow() *svidWindow {
+	untrustedMu.Lock()
+	defer untrustedMu.Unlock()
+	for _, w := range svidWindows {
+		if time.Now().Before(w.until) && w.cert != nil {
+			return w
+		}
+	}
+	return nil
+}
 
 func untrustedIdentityActive() bool {
 	untrustedMu.Lock()
@@ -335,21 +364,41 @@ func untrustedServerCertificate(spiffeID string) (tls.Certificate, error) {
 }
 
 // PUT /v1alpha2/margo/api/v1/test/server-identity
-// {"untrustedSeconds": N} | {"legacyTLSSeconds": N} | {"rc4Seconds": N} —
+// {"untrustedSeconds": N} | {"legacyTLSSeconds": N} | {"rc4Seconds": N} |
+// {"otherWfmSeconds": N} | {"clientPathSeconds": N} | {"expiredSeconds": N} —
 // for the next N seconds new connections get the untrusted certificate, only
-// TLS 1.0/1.1, or only TLS 1.2 with RC4 cipher suites.
+// TLS 1.0/1.1, only TLS 1.2 with RC4 cipher suites, or one of the svidWindows
+// SVIDs (404 when that SVID is not installed in the certs folder).
 func handleTestServerIdentity(w http.ResponseWriter, r *http.Request) {
+	const usage = `expected one key: untrustedSeconds, legacyTLSSeconds, rc4Seconds, otherWfmSeconds, clientPathSeconds or expiredSeconds (0..600)`
 	var body map[string]int
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body) != 1 {
-		respondMalformedBody(w, r, `expected one of {"untrustedSeconds": 0..600}, {"legacyTLSSeconds": 0..600}, {"rc4Seconds": 0..600}`)
+		respondMalformedBody(w, r, usage)
 		return
 	}
 	windows := map[string]*time.Time{"untrustedSeconds": &untrustedUntil, "legacyTLSSeconds": &legacyTLSUntil, "rc4Seconds": &rc4Until}
+	for _, sw := range svidWindows {
+		windows[sw.key] = &sw.until
+	}
 	for key, seconds := range body {
 		target, known := windows[key]
 		if !known || seconds < 0 || seconds > 600 {
-			respondMalformedBody(w, r, `expected one of {"untrustedSeconds": 0..600}, {"legacyTLSSeconds": 0..600}, {"rc4Seconds": 0..600}`)
+			respondMalformedBody(w, r, usage)
 			return
+		}
+		for _, sw := range svidWindows {
+			if sw.key != key {
+				continue
+			}
+			dir := filepath.Dir(os.Getenv("MIAF_SERVER_CERT"))
+			pair, err := tls.LoadX509KeyPair(filepath.Join(dir, sw.certFile), filepath.Join(dir, sw.keyFile))
+			if err != nil {
+				respondProblem(w, r, 404, "", "Not Found", "This test needs an optional MIS-issued SVID that is not installed: "+filepath.Join(dir, sw.certFile))
+				return
+			}
+			untrustedMu.Lock()
+			sw.cert = &pair
+			untrustedMu.Unlock()
 		}
 		untrustedMu.Lock()
 		*target = time.Now().Add(time.Duration(seconds) * time.Second)
